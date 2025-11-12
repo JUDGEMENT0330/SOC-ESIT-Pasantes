@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { DualTerminalView } from './components/DualTerminalView';
 import { Auth } from './components/Auth';
@@ -18,15 +17,20 @@ export default function App() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        // Check the initial session state
         supabase.auth.getSession().then(({ data: { session } }) => {
+            console.log("Initial session check:", session);
             setSession(session);
             setLoading(false);
         });
 
+        // Listen for authentication state changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            console.log("Auth state changed:", _event, session);
             setSession(session);
         });
 
+        // Cleanup subscription on unmount
         return () => subscription.unsubscribe();
     }, []);
 
@@ -82,10 +86,11 @@ export default function App() {
     };
     
     if (loading) {
-        return <div className="flex items-center justify-center min-h-screen text-white">Cargando...</div>;
+        return <div className="flex items-center justify-center min-h-screen text-white">Cargando sesión...</div>;
     }
 
-    if (!session) {
+    // More robust check: show login page if there is no session OR no user in the session.
+    if (!session || !session.user) {
         return <Auth />;
     }
 
@@ -150,7 +155,16 @@ const Header: React.FC<{ activeTab: string; userEmail?: string }> = ({ activeTab
     const progressWidth = ((tabIndex + 1) / tabs.length) * 100;
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
+        console.log("Attempting to sign out...");
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            console.error('Error logging out:', error);
+            // Provide feedback to the user in case of an error.
+            alert(`Error al cerrar sesión: ${error.message}`);
+        } else {
+            console.log("Sign out successful. The onAuthStateChange listener should now redirect to the login page.");
+            // No need to manually set session to null, the listener in App.tsx will handle it.
+        }
     };
 
     return (
