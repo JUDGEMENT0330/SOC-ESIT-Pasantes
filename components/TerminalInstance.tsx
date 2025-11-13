@@ -13,16 +13,14 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team, isCont
     const { 
         serverState, 
         userTeam, 
-        redOutput, 
-        blueOutput, 
-        redPrompt, 
-        bluePrompt, 
-        processAndBroadcastCommand 
+        processCommand 
     } = useContext(SimulationContext);
     
     const isSpectator = userTeam === 'spectator';
-    const output = team === 'Red' ? redOutput : blueOutput;
-    const promptState = team === 'Red' ? redPrompt : bluePrompt;
+    
+    const output = team === 'Red' ? serverState?.red_terminal_output || [] : serverState?.blue_terminal_output || [];
+    const promptState = team === 'Red' ? serverState?.red_prompt : (serverState?.blue_prompt || { user: 'pasante-blue', host: 'soc-valtorix', dir: '~' });
+
 
     const [history, setHistory] = useState<string[]>([]);
     const [historyIndex, setHistoryIndex] = useState(0);
@@ -45,10 +43,10 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team, isCont
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter' && input.trim()) {
             e.preventDefault();
-            const command = input.trim();
-            setHistory(prev => [...prev, command]);
+            const commandToProcess = input.trim();
+            setHistory(prev => [...prev, commandToProcess]);
             setHistoryIndex(history.length + 1);
-            processAndBroadcastCommand(team, command, isControlling);
+            processCommand(team, commandToProcess, isControlling);
             setInput('');
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
@@ -86,7 +84,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team, isCont
             <div className="flex-grow overflow-y-auto text-sm pr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
                 {output.map((line, index) => (
                     <div key={index} className="mb-1">
-                        {line.type === 'prompt' && <Prompt {...promptState} />}
+                        {line.type === 'prompt' && <Prompt {...(team === 'Red' ? serverState?.red_prompt : serverState?.blue_prompt)!} />}
                         {line.type === 'command' && <span className="text-white break-all">{line.text}</span>}
                         {line.type === 'output' && <pre className="whitespace-pre-wrap text-slate-300">{line.text}</pre>}
                         {line.type === 'html' && <div className="text-slate-300" dangerouslySetInnerHTML={{ __html: line.html || '' }} />}
