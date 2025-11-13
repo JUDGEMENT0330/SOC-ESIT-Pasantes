@@ -7,6 +7,7 @@ import { Icon } from '../constants';
 interface SessionManagerProps {
     user: User;
     setSessionData: (sessionData: SessionData) => void;
+    isAdmin: boolean;
 }
 
 const defaultSimulationState = {
@@ -22,16 +23,12 @@ const defaultSimulationState = {
 };
 
 
-export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSessionData }) => {
+export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSessionData, isAdmin }) => {
     const [sessions, setSessions] = useState<SimulationSession[]>([]);
     const [loading, setLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
     const [newSessionName, setNewSessionName] = useState('');
     const [error, setError] = useState('');
-
-    useEffect(() => {
-        fetchSessions();
-    }, []);
 
     const fetchSessions = async () => {
         setLoading(true);
@@ -39,7 +36,13 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
         try {
             const { data, error: fetchError } = await supabase
                 .from('simulation_sessions')
-                .select('*')
+                .select(`
+                    *,
+                    session_participants (
+                        user_id,
+                        team_role
+                    )
+                `)
                 .eq('is_active', true)
                 .order('created_at', { ascending: false });
 
@@ -53,10 +56,22 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
             setLoading(false);
         }
     };
+    
+    useEffect(() => {
+        fetchSessions();
+
+        const channel = supabase.channel('session-manager-realtime')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'simulation_sessions' }, () => fetchSessions())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'session_participants' }, () => fetchSessions())
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
 
     const createNewSession = async (name: string): Promise<SimulationSession | null> => {
         try {
-            // 1. Create the session, including the user's ID as the creator
             const { data: sessionData, error: sessionError } = await supabase
                 .from('simulation_sessions')
                 .insert({ session_name: name.trim(), created_by: user.id })
@@ -65,18 +80,21 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
 
             if (sessionError) throw sessionError;
 
-            // 2. Create the initial state for the session
             const { error: stateError } = await supabase
                 .from('simulation_state')
                 .insert({ session_id: sessionData.id, ...defaultSimulationState });
             
-            if (stateError) throw stateError;
+            if (stateError) {
+                // Attempt to clean up the session if state creation fails
+                await supabase.from('simulation_sessions').delete().eq('id', sessionData.id);
+                throw stateError;
+            }
             
-            return sessionData;
+            return { ...sessionData, session_participants: [] };
         } catch (err: any) {
             let userMessage = `Error creando la sesión: ${err.message}`;
             if (err.message?.includes('violates row-level security policy')) {
-                userMessage = "Error creando la sesión: La política de seguridad (RLS) de la base de datos lo impidió. Asegúrese de que la política de inserción en 'simulation_sessions' sea correcta y que la columna 'created_by' esté siendo asignada.";
+                userMessage = "Error creando la sesión: La política de seguridad (RLS) de la base de datos lo impidió. Asegúrese de que la política de inserción en 'simulation_sessions' sea correcta.";
             }
             setError(userMessage);
             console.error(err);
@@ -86,10 +104,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
 
     const handleCreateSession = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newSessionName.trim()) {
-            setError('El nombre de la sesión no puede estar vacío.');
-            return;
-        }
+        if (!newSessionName.trim()) return;
         if (sessions.some(s => s.session_name.toLowerCase() === newSessionName.trim().toLowerCase())) {
             setError('Ya existe una sesión con este nombre.');
             return;
@@ -98,22 +113,38 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
         setIsCreating(true);
         setError('');
         
-        const newSession = await createNewSession(newSessionName);
-
-        if (newSession) {
-            setNewSessionName('');
-            setSessions(prev => [newSession, ...prev]);
-        }
-        
+        await createNewSession(newSessionName);
+        // The realtime subscription will update the UI, no need to manually set state.
+        setNewSessionName('');
         setIsCreating(false);
     };
 
+    const handleDeleteSession = async (sessionId: string) => {
+        if (!isAdmin) return;
+        if (window.confirm('¿Está seguro de que desea eliminar esta sesión para todos los usuarios? Esta acción es irreversible.')) {
+            setLoading(true);
+            // Delete related records first to avoid foreign key constraints
+            await supabase.from('session_participants').delete().eq('session_id', sessionId);
+            await supabase.from('simulation_state').delete().eq('session_id', sessionId);
+            await supabase.from('simulation_logs').delete().eq('session_id', sessionId);
+            const { error } = await supabase.from('simulation_sessions').delete().eq('id', sessionId);
+            if (error) setError(`Error al eliminar: ${error.message}`);
+            // Realtime will update the list
+            setLoading(false);
+        }
+    };
+
     const handleJoinSession = async (sessionId: string, sessionName: string, team: 'red' | 'blue') => {
+        if (isAdmin) {
+            setSessionData({ sessionId, sessionName, team: 'spectator' });
+            return;
+        }
+
         setLoading(true);
         setError('');
 
         try {
-            // Check if role is already taken
+            // Re-check just before joining to be safe
             const { data: participants, error: checkError } = await supabase
                 .from('session_participants')
                 .select('team_role')
@@ -135,55 +166,37 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
             setSessionData({ sessionId, sessionName, team });
 
         } catch (err: any) {
-            let userMessage = `No se pudo unir a la sesión: ${err.message}`;
-            if (err.message?.includes('security policy') || err.message?.includes('recursion')) {
-                userMessage = "Error de la base de datos debido a una política de seguridad (RLS). Por favor, revise y aplique los scripts SQL de corrección recomendados en su editor de Supabase.";
-            }
-            setError(userMessage);
+            setError(`No se pudo unir a la sesión: ${err.message}`);
             console.error(err);
             setLoading(false);
         }
     };
     
     const handleJoinDefaultSession = async (team: 'red' | 'blue') => {
-        const sessionName = team === 'red' ? 'Red Team Training' : 'Blue Team Training';
+        const sessionName = team === 'red' ? 'Entrenamiento Equipo Rojo' : 'Entrenamiento Equipo Azul';
         setLoading(true);
         setError('');
 
         try {
-            // Check if a session with this default name already exists
-            let { data: existingSessions, error: findError } = await supabase
+            let { data: existingSessions } = await supabase
                 .from('simulation_sessions')
-                .select('*')
+                .select('id, session_name')
                 .eq('session_name', sessionName)
                 .limit(1);
-
-            if (findError) throw findError;
 
             let sessionToJoin = existingSessions?.[0] || null;
 
             if (!sessionToJoin) {
-                // Create it on-demand
                 const newSession = await createNewSession(sessionName);
-                if (!newSession) {
-                    // createNewSession sets the error, so just stop.
-                    setLoading(false);
-                    return; 
-                }
+                if (!newSession) { setLoading(false); return; }
                 sessionToJoin = newSession;
-                // Add new session to the list for UI to update
-                setSessions(prev => [newSession, ...prev]);
             }
             
             await handleJoinSession(sessionToJoin.id, sessionToJoin.session_name, team);
 
         } catch (err: any) {
             console.error('Error joining default session:', err);
-            let userMessage = `Error al unirse a la sesión por defecto: ${err.message}`;
-            if (err.message?.includes('security policy') || err.message?.includes('recursion')) {
-                userMessage = "Error de la base de datos debido a una política de seguridad (RLS). Por favor, revise y aplique los scripts SQL de corrección recomendados en su editor de Supabase.";
-            }
-            setError(userMessage);
+            setError(`Error al unirse a la sesión por defecto: ${err.message}`);
             setLoading(false);
         }
     };
@@ -203,15 +216,15 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
                         <button onClick={() => handleJoinDefaultSession('red')} className="p-6 text-left bg-red-900/30 border border-red-500/50 rounded-lg hover:bg-red-900/60 transition-all duration-300 disabled:opacity-50 flex items-center space-x-4" disabled={loading}>
                             <Icon name="sword" className="h-10 w-10 text-red-400 flex-shrink-0"/>
                             <div>
-                                <h3 className="font-bold text-red-300 text-lg">Entrenamiento Equipo Rojo</h3>
-                                <p className="text-red-400/80 text-sm">Únete como atacante para auditar sistemas.</p>
+                                <h3 className="font-bold text-red-300 text-lg">{isAdmin ? 'Ver' : 'Entrenamiento'} Equipo Rojo</h3>
+                                <p className="text-red-400/80 text-sm">{isAdmin ? 'Observar la sesión de ataque.' : 'Únete como atacante para auditar sistemas.'}</p>
                             </div>
                         </button>
                          <button onClick={() => handleJoinDefaultSession('blue')} className="p-6 text-left bg-blue-900/30 border border-blue-500/50 rounded-lg hover:bg-blue-900/60 transition-all duration-300 disabled:opacity-50 flex items-center space-x-4" disabled={loading}>
                             <Icon name="shield" className="h-10 w-10 text-blue-400 flex-shrink-0"/>
                             <div>
-                                <h3 className="font-bold text-blue-300 text-lg">Entrenamiento Equipo Azul</h3>
-                                <p className="text-blue-400/80 text-sm">Únete como defensor para asegurar y monitorear.</p>
+                                <h3 className="font-bold text-blue-300 text-lg">{isAdmin ? 'Ver' : 'Entrenamiento'} Equipo Azul</h3>
+                                <p className="text-blue-400/80 text-sm">{isAdmin ? 'Observar la sesión de defensa.' : 'Únete como defensor para asegurar y monitorear.'}</p>
                             </div>
                         </button>
                     </div>
@@ -237,19 +250,28 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
                     <div className="space-y-3 max-h-[30vh] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
                         <h3 className="font-semibold text-lg text-yellow-300 mb-3 sticky top-0 bg-[rgba(45,80,22,0.95)] backdrop-blur-sm py-2">Sesiones Personalizadas Activas</h3>
                         {loading && !isCreating && <p className="text-center text-gray-300">Cargando sesiones...</p>}
-                        {!loading && sessions.filter(s => !s.session_name.includes('Training')).length === 0 && <p className="text-center text-gray-400">No hay sesiones personalizadas. ¡Crea una!</p>}
-                        {sessions.filter(s => !s.session_name.includes('Training')).map(session => (
-                            <div key={session.id} className="bg-black/20 p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3 animate-fade-in-fast">
-                                <div>
-                                    <p className="font-bold text-white">{session.session_name}</p>
-                                    <p className="text-xs text-gray-400">Creada: {new Date(session.created_at).toLocaleString()}</p>
+                        {!loading && sessions.filter(s => !s.session_name.includes('Entrenamiento')).length === 0 && <p className="text-center text-gray-400">No hay sesiones personalizadas. ¡Crea una!</p>}
+                        {sessions.filter(s => !s.session_name.includes('Entrenamiento')).map(session => {
+                            const redParticipant = session.session_participants.find(p => p.team_role === 'red');
+                            const blueParticipant = session.session_participants.find(p => p.team_role === 'blue');
+                            return (
+                                <div key={session.id} className="bg-black/20 p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3 animate-fade-in-fast">
+                                    <div className="flex-grow text-center sm:text-left">
+                                        <p className="font-bold text-white">{session.session_name}</p>
+                                        <p className="text-xs text-gray-400">Creada: {new Date(session.created_at).toLocaleString()}</p>
+                                    </div>
+                                    <div className="flex gap-3 flex-shrink-0">
+                                        {isAdmin && (
+                                            <button onClick={() => handleDeleteSession(session.id)} className="px-3 py-2 font-bold text-white bg-gray-600/80 rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 flex items-center" disabled={loading}>
+                                                <Icon name="trash" className="h-4 w-4"/>
+                                            </button>
+                                        )}
+                                        <button onClick={() => handleJoinSession(session.id, session.session_name, 'red')} className="px-4 py-2 font-bold text-white bg-red-600/80 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50" disabled={loading || (!!redParticipant && !isAdmin)}>{isAdmin ? 'Ver Rojo' : (redParticipant ? 'Ocupado' : 'Unirse (Rojo)')}</button>
+                                        <button onClick={() => handleJoinSession(session.id, session.session_name, 'blue')} className="px-4 py-2 font-bold text-white bg-blue-600/80 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50" disabled={loading || (!!blueParticipant && !isAdmin)}>{isAdmin ? 'Ver Azul' : (blueParticipant ? 'Ocupado' : 'Unirse (Azul)')}</button>
+                                    </div>
                                 </div>
-                                <div className="flex gap-3">
-                                    <button onClick={() => handleJoinSession(session.id, session.session_name, 'red')} className="px-4 py-2 font-bold text-white bg-red-600/80 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50" disabled={loading}>Unirse (Rojo)</button>
-                                    <button onClick={() => handleJoinSession(session.id, session.session_name, 'blue')} className="px-4 py-2 font-bold text-white bg-blue-600/80 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50" disabled={loading}>Unirse (Azul)</button>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             </div>
