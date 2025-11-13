@@ -40,7 +40,9 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
     const attackerIp = '188.45.67.123';
     const portalAdminPassword = 'portal@admin123';
     const isAttackerBanned = serverState.banned_ips.includes(attackerIp);
-    const promptState = team === 'Red' ? serverState.prompt_red : serverState.prompt_blue;
+    const promptState = team === 'Red' 
+        ? (serverState.prompt_red || DEFAULT_SIMULATION_STATE.prompt_red)
+        : (serverState.prompt_blue || DEFAULT_SIMULATION_STATE.prompt_blue);
 
     const args = command.trim().split(' ');
     const cmd = args[0].toLowerCase();
