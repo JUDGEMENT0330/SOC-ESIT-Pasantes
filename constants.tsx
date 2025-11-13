@@ -415,8 +415,9 @@ export const RESOURCE_MODULES: ResourceModule[] = [
 ];
 
 // Terminal Help Text
-export const GENERAL_HELP_TEXT = `<pre class="whitespace-pre-wrap font-mono text-xs">Bienvenido a la terminal de simulación. Cada equipo tiene comandos específicos.
-Escriba 'help' en su terminal para ver su lista de comandos y objetivos.
+export const GENERAL_HELP_TEXT = `<pre class="whitespace-pre-wrap font-mono text-xs">Bienvenido a la terminal de simulación.
+Use 'help' para comandos de equipo, o 'help [id_escenario]' para guías.
+Ej: <strong class="text-amber-300">help escenario7</strong>
 
   clear                    - Limpia la pantalla de la terminal.
   marca                    - Muestra la marca de Cyber Valtorix.
@@ -425,46 +426,88 @@ Escriba 'help' en su terminal para ver su lista de comandos y objetivos.
 
 export const RED_TEAM_HELP_TEXT = `<pre class="whitespace-pre-wrap font-mono text-xs">
 <strong class="text-red-400">EQUIPO ROJO - OBJETIVOS Y COMANDOS</strong>
+Use <strong class="text-amber-300">help escenario7</strong> para una guía detallada.
 
-Su misión es auditar el servidor 'BOVEDA-WEB' para encontrar y explotar vulnerabilidades
-antes de que lo haga un adversario real. Genere "ruido" para que el Equipo Azul lo detecte.
+Su misión es auditar 'BOVEDA-WEB' para encontrar y explotar vulnerabilidades.
 
 <strong>Fase 1: Reconocimiento (Mapear el objetivo)</strong>
   <strong class="text-amber-300">nmap -sV -sC BOVEDA-WEB</strong>   - Escanea puertos, servicios y versiones.
   <strong class="text-amber-300">dirb http://BOVEDA-WEB</strong>     - Busca directorios web ocultos (ej. /admin).
-  <strong class="text-amber-300">curl -I http://BOVEDA-WEB</strong>  - Inspecciona cabeceras HTTP en busca de info.
+  <strong class="text-amber-300">curl http://BOVEDA-WEB/db_config.php</strong> - Intenta leer archivos sensibles.
   <strong class="text-amber-300">nikto -h http://BOVEDA-WEB</strong> - Escáner de vulnerabilidades web.
 
 <strong>Fase 2: Intrusión y Explotación</strong>
-  <strong class="text-amber-300">tcpdump port 80</strong>          - Captura tráfico para buscar credenciales en texto plano.
   <strong class="text-amber-300">hydra ssh://BOVEDA-WEB</strong>     - Lanza un ataque de fuerza bruta a SSH. <strong class="text-red-500">(¡RUIDOSO!)</strong>
-  <strong class="text-amber-300">nc -lvp 4444</strong>             - Inicia un listener para una shell inversa.
-
-<strong>Fase 3: Post-Explotación (Si obtiene acceso)</strong>
-  <strong class="text-amber-300">ssh user@BOVEDA-WEB</strong>      - Intenta acceder con credenciales encontradas.
-  <strong class="text-amber-300">passwd [usuario]</strong>         - (En el host víctima) Cambia contraseñas.
-  <strong class="text-amber-300">mv [origen] [destino]</strong>    - (En el host víctima) Suplanta archivos web.
+  <strong class="text-amber-300">ssh root@BOVEDA-WEB</strong>      - Intenta acceder con credenciales encontradas.
 </pre>`;
 
 export const BLUE_TEAM_HELP_TEXT = `<pre class="whitespace-pre-wrap font-mono text-xs">
 <strong class="text-blue-400">EQUIPO AZUL - OBJETIVOS Y COMANDOS</strong>
+Use <strong class="text-amber-300">help escenario7</strong> para una guía detallada.
 
-Su misión es asegurar ("harden") el servidor 'BOVEDA-WEB' y detectar
-cualquier actividad sospechosa del Equipo Rojo.
+Su misión es asegurar ("harden") 'BOVEDA-WEB' y detectar al Equipo Rojo.
 
-<strong>Fase 1: Hardening (Asegurar el servidor)</strong>
+<strong>Fase 1: Conexión y Hardening</strong>
   <strong class="text-amber-300">ssh blue-team@BOVEDA-WEB</strong>     - Conéctese al servidor para asegurarlo.
   <strong class="text-amber-300">sudo ufw status</strong>            - Verifica el estado del firewall.
   <strong class="text-amber-300">sudo ufw allow [ssh|http]</strong>  - Permite servicios esenciales.
   <strong class="text-amber-300">sudo ufw enable</strong>            - ¡ACTIVA EL FIREWALL!
-  <strong class="text-amber-300">sudo nano sshd_config</strong>      - Simula editar la configuración de SSH.
+  <strong class="text-amber-300">sudo nano sshd_config</strong>      - Simula editar la config de SSH (PermitRootLogin no).
   <strong class="text-amber-300">sudo systemctl restart sshd</strong>- Aplica los cambios a SSH.
   <strong class="text-amber-300">ls -l [archivo]</strong>            - Lista permisos de archivos.
-  <strong class="text-amber-300">chmod [perm] [archivo]</strong>     - Cambia permisos de archivos (Principio de Menor Privilegio).
+  <strong class="text-amber-300">chmod [perm] [archivo]</strong>     - Cambia permisos de archivos.
 
-<strong>Fase 2: Monitoreo y Detección (Cazar al Equipo Rojo)</strong>
-  <strong class="text-amber-300">sudo ss -tulnp</strong>               - Muestra qué servicios están escuchando en qué puertos.
-  <strong class="text-amber-300">grep "Failed" auth.log</strong>     - Busca intentos de login fallidos. ¡Use esto mientras
-                               el Equipo Rojo usa 'hydra'!
-  <strong class="text-amber-300">openssl s_client BOVEDA-WEB</strong>- Valida la configuración del certificado SSL/TLS.
+<strong>Fase 2: Monitoreo y Detección</strong>
+  <strong class="text-amber-300">sudo ss -tulnp</strong>               - Muestra servicios escuchando en puertos.
+  <strong class="text-amber-300">grep "Failed" auth.log</strong>     - Busca intentos de login fallidos.
+  <strong class="text-amber-300">openssl s_client -connect BOVEDA-WEB:443</strong> - Valida el certificado SSL/TLS.
 </pre>`;
+
+export const SCENARIO_HELP_TEXTS: { [key: string]: string } = {
+  'escenario7': `<pre class="whitespace-pre-wrap font-mono text-xs">
+<strong class="text-yellow-300">GUÍA DETALLADA - ESCENARIO 7: Fortaleza Digital</strong>
+
+Este es un ejercicio práctico de ataque y defensa en tiempo real.
+
+<strong class="text-blue-400">EQUIPO AZUL (DEFENSOR) - EN TERMINAL 'BOVEDA-WEB'</strong>
+Tu misión es asegurar el servidor ANTES de que el Equipo Rojo encuentre una vulnerabilidad.
+El orden es crítico.
+
+1.  <strong>Activar Firewall (UFW):</strong> Es tu primera línea de defensa.
+    <strong class="text-amber-300">sudo ufw status</strong>      (Verifica que está inactivo)
+    <strong class="text-amber-300">sudo ufw allow ssh</strong>     (¡CRÍTICO! O te quedarás fuera)
+    <strong class="text-amber-300">sudo ufw allow http</strong>      (Permite el tráfico web)
+    <strong class="text-amber-300">sudo ufw enable</strong>        (¡Actívalo!)
+
+2.  <strong>Asegurar SSH:</strong> Deshabilita el login directo de 'root'.
+    <strong class="text-amber-300">sudo nano sshd_config</strong>  (Simula la edición, cambiarás PermitRootLogin a 'no')
+    <strong class="text-amber-300">sudo systemctl restart sshd</strong> (Aplica los cambios)
+
+3.  <strong>Principio de Menor Privilegio:</strong> Protege archivos sensibles.
+    <strong class="text-amber-300">ls -l /var/www/html/db_config.php</strong> (Verás permisos peligrosos como 644)
+    <strong class="text-amber-300">chmod 640 /var/www/html/db_config.php</strong>  (Quita permisos de lectura a 'otros')
+
+4.  <strong>Monitoreo Activo:</strong> Caza al Equipo Rojo.
+    <strong class="text-amber-300">grep "Failed" auth.log</strong> (Ejecuta esto repetidamente mientras el Equipo Rojo
+                           usa 'hydra' para ver los ataques en tiempo real)
+    <strong class="text-amber-300">sudo ss -tulnp</strong>       (Verifica qué puertos están abiertos. Deberían ser
+                           menos después de activar el firewall)
+
+<strong class="text-red-400">EQUIPO ROJO (ATACANTE) - EN TERMINAL 'soc-valtorix'</strong>
+Tu misión es encontrar una ventana de oportunidad antes de que el Equipo Azul la cierre.
+
+1.  <strong>Reconocimiento:</strong> ¿Qué está abierto?
+    <strong class="text-amber-300">nmap -sV -sC BOVEDA-WEB</strong> (Si el firewall está apagado, verás muchos
+                           puertos. Si está encendido, solo los permitidos)
+
+2.  <strong>Intento de Fuerza Bruta:</strong> El ataque más ruidoso.
+    <strong class="text-amber-300">hydra ssh://BOVEDA-WEB</strong> (Esto SOLO FUNCIONARÁ si el Equipo Azul no ha
+                           asegurado SSH para deshabilitar el login de root)
+                           Si tienes éxito, entra con <strong class="text-amber-300">ssh root@BOVEDA-WEB</strong>
+
+3.  <strong>Explotación Web (Simulada):</strong>
+    <strong class="text-amber-300">dirb http://BOVEDA-WEB</strong>     (Busca directorios. ¿Hay un /backup?)
+    <strong class="text-amber-300">curl http://BOVEDA-WEB/db_config.php</strong> (Si los permisos no han sido
+                                     corregidos, podrías leer el archivo)
+</pre>`
+};
