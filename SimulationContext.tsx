@@ -1,20 +1,8 @@
-import React, { createContext, useState, useEffect, ReactNode, useRef } from 'react';
+import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from './supabaseClient';
 import type { SimulationState, LogEntry, SessionData, TerminalLine, PromptState } from './types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { DEFAULT_SIMULATION_STATE, RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, SCENARIO_HELP_TEXTS, GENERAL_HELP_TEXT } from './constants';
-
-const getInitialPrompt = (team: 'Red' | 'Blue'): PromptState => {
-    if (team === 'Blue') {
-        return { user: 'pasante-blue', host: 'soc-valtorix', dir: '~' };
-    }
-    return { user: 'pasante-red', host: 'soc-valtorix', dir: '~' };
-};
-
-const getWelcomeMessage = (team: 'Red' | 'Blue'): TerminalLine[] => [
-    { text: `Bienvenido a la terminal del Equipo ${team}.`, type: 'output' },
-    { html: "Escriba <strong class='text-amber-300'>help</strong> para ver sus objetivos y comandos.", type: 'html' },
-];
 
 interface SimulationContextType {
     serverState: SimulationState | null;
@@ -22,11 +10,7 @@ interface SimulationContextType {
     addLog: (log: Omit<LogEntry, 'id' | 'timestamp' | 'session_id'>) => Promise<void>;
     updateServerState: (newState: Partial<SimulationState>) => Promise<void>;
     userTeam: 'red' | 'blue' | 'spectator' | null;
-    redOutput: TerminalLine[];
-    blueOutput: TerminalLine[];
-    redPrompt: PromptState;
-    bluePrompt: PromptState;
-    processAndBroadcastCommand: (team: 'Red' | 'Blue', command: string, isFromAdminControl?: boolean) => Promise<void>;
+    processCommand: (team: 'Red' | 'Blue', command: string, isFromAdminControl?: boolean) => Promise<void>;
 }
 
 export const SimulationContext = createContext<SimulationContextType>({
@@ -35,25 +19,19 @@ export const SimulationContext = createContext<SimulationContextType>({
     addLog: async () => {},
     updateServerState: async () => {},
     userTeam: null,
-    redOutput: [],
-    blueOutput: [],
-    redPrompt: getInitialPrompt('Red'),
-    bluePrompt: getInitialPrompt('Blue'),
-    processAndBroadcastCommand: async () => {},
+    processCommand: async () => {},
 });
 
 interface CommandLogicParams {
     command: string;
     team: 'Red' | 'Blue';
     serverState: SimulationState;
-    promptState: PromptState;
     addLog: (log: Omit<LogEntry, 'id' | 'timestamp' | 'session_id'>) => Promise<void>;
     updateServerState: (newState: Partial<SimulationState>) => Promise<void>;
     addDelayedOutput: (lines: TerminalLine[]) => void;
 }
 
-// This function contains all the logic moved from TerminalInstance
-const processCommandLogic = async ({ command, team, serverState, promptState, addLog, updateServerState, addDelayedOutput }: CommandLogicParams): Promise<{ outputLines: TerminalLine[], newPrompt?: PromptState, clear?: boolean }> => {
+const processCommandLogic = async ({ command, team, serverState, addLog, updateServerState, addDelayedOutput }: CommandLogicParams): Promise<{ outputLines: TerminalLine[], newPrompt?: PromptState, clear?: boolean }> => {
     let outputLines: TerminalLine[] = [];
     let newPrompt: PromptState | undefined;
     let clear = false;
@@ -61,6 +39,7 @@ const processCommandLogic = async ({ command, team, serverState, promptState, ad
     const attackerIp = '188.45.67.123';
     const portalAdminPassword = 'portal@admin123';
     const isAttackerBanned = serverState.banned_ips.includes(attackerIp);
+    const promptState = team === 'Red' ? serverState.red_prompt : serverState.blue_prompt;
 
     const args = command.trim().split(' ');
     const cmd = args[0].toLowerCase();
@@ -93,7 +72,10 @@ const processCommandLogic = async ({ command, team, serverState, promptState, ad
         case 'exit': 
             if (currentHost !== 'SOC-VALTORIX') {
                 outputLines.push({ text: `(SIMULACIÓN) Conexión a ${promptState.host} cerrada.`, type: 'output' });
-                newPrompt = getInitialPrompt(team);
+                const initialPrompt = team === 'Red' 
+                    ? DEFAULT_SIMULATION_STATE.red_prompt 
+                    : DEFAULT_SIMULATION_STATE.blue_prompt;
+                newPrompt = initialPrompt;
             } else {
                 outputLines.push({ text: 'Error: No hay sesión SSH activa para cerrar.', type: 'error' });
             }
@@ -151,10 +133,9 @@ const processCommandLogic = async ({ command, team, serverState, promptState, ad
                 }, 1000);
                 break;
             case 'hydra':
-                // Fix: Dynamically set the user based on the target to fix the unintentional comparison error.
                 const user = targetHost === 'PORTAL-WEB' ? 'admin' : 'root';
                 outputLines.push({ text: `(SIMULACIÓN) Ejecutando Hydra contra SSH en ${targetHost} para el usuario '${user}'...`, type: 'output' });
-                await updateServerState({ ...serverState, hydra_run_count: serverState.hydra_run_count + 100 });
+                await updateServerState({ hydra_run_count: serverState.hydra_run_count + 100 });
                 await addLog({ source: 'Red Team', message: `[!!] Múltiples intentos de login SSH fallidos para '${user}' desde ${attackerIp}. (Posible ataque de fuerza bruta)`, teamVisible: 'blue' });
                 setTimeout(async () => {
                      let hydraResult: TerminalLine;
@@ -162,7 +143,7 @@ const processCommandLogic = async ({ command, team, serverState, promptState, ad
                         hydraResult = { text: `[ÉXITO] Contraseña encontrada para 'root': '123456'`, type: 'output' };
                         await addLog({ source: 'Red Team', message: `[CRÍTICO] Login de 'root' exitoso en BOVEDA-WEB desde ${attackerIp}.`, teamVisible: 'blue' });
                      } else if (targetHost === 'PORTAL-WEB') {
-                        await updateServerState({ ...serverState, admin_password_found: true });
+                        await updateServerState({ admin_password_found: true });
                         hydraResult = { text: `[ÉXITO] Contraseña encontrada para 'admin': '${portalAdminPassword}'`, type: 'output' };
                         await addLog({ source: 'Red Team', message: `[CRÍTICO] Contraseña de 'admin' para PORTAL-WEB obtenida por fuerza bruta desde ${attackerIp}.`, teamVisible: 'all' });
                      } else {
@@ -196,11 +177,11 @@ const processCommandLogic = async ({ command, team, serverState, promptState, ad
                 break;
             case 'john':
                 outputLines.push({ text: `(SIMULACIÓN) Ejecutando John the Ripper... Contraseña crackeada: '${portalAdminPassword}'`, type: 'output' });
-                await updateServerState({ ...serverState, admin_password_found: true });
+                await updateServerState({ admin_password_found: true });
                 await addLog({ source: 'Red Team', message: `Contraseña de 'admin' obtenida offline.`, teamVisible: 'red' });
                 break;
             case 'hping3':
-                await updateServerState({ ...serverState, is_dos_active: true, server_load: 99.9 });
+                await updateServerState({ is_dos_active: true, server_load: 99.9 });
                 outputLines.push({ text: `(SIMULACIÓN) Inundación SYN iniciada contra ${targetHost}. Presione Ctrl+C para detener.`, type: 'output' });
                 await addLog({ source: 'Red Team', message: `[ALERTA] Patrón de tráfico anómalo consistente con un ataque DoS detectado desde ${attackerIp} contra ${targetHost}.`, teamVisible: 'blue' });
                 break;
@@ -240,7 +221,7 @@ const processCommandLogic = async ({ command, team, serverState, promptState, ad
             switch(effectiveCmd) {
                 case 'ufw':
                      if (effectiveArgs[1] === 'enable') {
-                         await updateServerState({ ...serverState, firewall_enabled: true });
+                         await updateServerState({ firewall_enabled: true });
                          outputLines.push({ text: `(SIMULACIÓN) Firewall activado en ${currentHost}.`, type: 'output' });
                          await addLog({ source: 'Blue Team', message: `Firewall (UFW) HABILITADO en ${currentHost}.`, teamVisible: 'all' });
                      } else if (effectiveArgs[1] === 'status') {
@@ -249,14 +230,14 @@ const processCommandLogic = async ({ command, team, serverState, promptState, ad
                         outputLines.push({ text: `(SIMULACIÓN) Regla UFW añadida para ${effectiveArgs[2]}.`, type: 'output' });
                      } else if (effectiveArgs[1] === 'deny' && effectiveArgs[3]) {
                         const newBannedIps = [...serverState.banned_ips, effectiveArgs[3]];
-                        await updateServerState({ ...serverState, banned_ips: newBannedIps });
+                        await updateServerState({ banned_ips: newBannedIps });
                          outputLines.push({ text: `(SIMULACIÓN) IP ${effectiveArgs[3]} bloqueada.`, type: 'output' });
                          await addLog({ source: 'Blue Team', message: `IP ${effectiveArgs[3]} ha sido bloqueada manualmente en el firewall de ${currentHost}.`, teamVisible: 'all' });
                      }
                      break;
                 case 'nano':
                     if (effectiveArgs[1] === 'sshd_config') {
-                         await updateServerState({ ...serverState, ssh_hardened: true });
+                         await updateServerState({ ssh_hardened: true });
                          outputLines.push({ text: `(SIMULACIÓN) 'PermitRootLogin' cambiado a 'no'. Recuerde reiniciar el servicio sshd.`, type: 'output' });
                          await addLog({ source: 'Blue Team', message: `Configuración de SSH modificada en ${currentHost} (hardening).`, teamVisible: 'all' });
                     }
@@ -284,7 +265,7 @@ const processCommandLogic = async ({ command, team, serverState, promptState, ad
                     break;
                 case 'chmod':
                     if (effectiveArgs[1] === '640' && effectiveArgs[2]?.includes('db_config.php')) {
-                        await updateServerState({ ...serverState, db_config_permissions: '640' });
+                        await updateServerState({ db_config_permissions: '640' });
                         outputLines.push({ text: `(SIMULACIÓN) Permisos de '/var/www/html/db_config.php' cambiados a 640.`, type: 'output' });
                         await addLog({ source: 'Blue Team', message: `Permisos restringidos en db_config.php. Buen trabajo.`, teamVisible: 'all' });
                     } else {
@@ -311,7 +292,7 @@ const processCommandLogic = async ({ command, team, serverState, promptState, ad
                 case 'fail2ban-client':
                      if (effectiveArgs[2] === 'banip' && effectiveArgs[3]) {
                         const newBannedIps = [...serverState.banned_ips, effectiveArgs[3]];
-                        await updateServerState({ ...serverState, banned_ips: newBannedIps });
+                        await updateServerState({ banned_ips: newBannedIps });
                         outputLines.push({ text: `(SIMULACIÓN) IP ${effectiveArgs[3]} baneada por Fail2Ban.`, type: 'output' });
                         await addLog({ source: 'Blue Team', message: `IP ${effectiveArgs[3]} ha sido bloqueada vía Fail2Ban en ${currentHost}.`, teamVisible: 'all' });
                      }
@@ -335,7 +316,7 @@ const processCommandLogic = async ({ command, team, serverState, promptState, ad
 
     async function handleCompromisedHostCommands() {
         if (cmd === 'wget') {
-             await updateServerState({ ...serverState, payload_deployed: true });
+             await updateServerState({ payload_deployed: true });
              outputLines.push({ text: `(SIMULACIÓN) --10:05:10--  http://malware-repo.bad/payload.sh\nConectando a malware-repo.bad... conectado.\n... Guardado.`, type: 'output' });
              await addLog({ source: 'Red Team', message: `[ALERTA] Tráfico de red saliente sospechoso detectado desde ${currentHost} a un repositorio de malware conocido.`, teamVisible: 'blue' });
              return;
@@ -346,7 +327,6 @@ const processCommandLogic = async ({ command, team, serverState, promptState, ad
     return { outputLines, newPrompt, clear };
 };
 
-// Fix: Define SimulationProviderProps interface
 interface SimulationProviderProps {
     children: ReactNode;
     sessionData: SessionData;
@@ -355,22 +335,11 @@ interface SimulationProviderProps {
 export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children, sessionData }) => {
     const [serverState, setServerState] = useState<SimulationState | null>(null);
     const [logs, setLogs] = useState<LogEntry[]>([]);
-    const [redOutput, setRedOutput] = useState<TerminalLine[]>([]);
-    const [blueOutput, setBlueOutput] = useState<TerminalLine[]>([]);
-    const [redPrompt, setRedPrompt] = useState<PromptState>(getInitialPrompt('Red'));
-    const [bluePrompt, setBluePrompt] = useState<PromptState>(getInitialPrompt('Blue'));
-    const [terminalChannel, setTerminalChannel] = useState<RealtimeChannel | null>(null);
-    const clientId = useRef(crypto.randomUUID());
     const { sessionId, team } = sessionData;
 
     useEffect(() => {
         if (!sessionId) return;
         
-        setRedOutput(getWelcomeMessage('Red'));
-        setBlueOutput(getWelcomeMessage('Blue'));
-        setRedPrompt(getInitialPrompt('Red'));
-        setBluePrompt(getInitialPrompt('Blue'));
-
         let stateChannel: RealtimeChannel;
         let logsChannel: RealtimeChannel;
 
@@ -403,29 +372,9 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             setLogs(prevLogs => [...prevLogs, payload.new as LogEntry]);
         }).subscribe();
 
-        const termChannel = supabase.channel(`terminal-updates-${sessionId}`);
-        termChannel.on('broadcast', { event: 'terminal_update' }, ({ payload }) => {
-            if (payload.senderId === clientId.current) return;
-
-            const { team, lines, newPrompt, clear } = payload;
-            const setOutput = team === 'Red' ? setRedOutput : setBlueOutput;
-            const setPrompt = team === 'Red' ? setRedPrompt : setBluePrompt;
-
-            if (clear) {
-                setOutput([]);
-            } else if (lines) {
-                setOutput(prev => [...prev, ...lines]);
-            }
-            if (newPrompt) {
-                setPrompt(newPrompt);
-            }
-        }).subscribe();
-        setTerminalChannel(termChannel);
-
         return () => {
             supabase.removeChannel(stateChannel);
             supabase.removeChannel(logsChannel);
-            supabase.removeChannel(termChannel);
         };
     }, [sessionId]);
 
@@ -437,60 +386,86 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
 
     const updateServerState = async (newState: Partial<SimulationState>) => {
         if (!serverState) return;
-        const updatedState = { ...serverState, ...newState, last_updated: new Date().toISOString(), session_id: sessionId };
+        
+        // Fetch the latest state before updating to minimize race conditions
+        const { data: currentState, error: fetchError } = await supabase
+            .from('simulation_state')
+            .select('*')
+            .eq('session_id', sessionId)
+            .single();
+
+        if (fetchError || !currentState) {
+            console.error("Could not fetch current state before update. Aborting update.", fetchError);
+            return;
+        }
+
+        const updatedState = { ...currentState, ...newState, last_updated: new Date().toISOString() };
+        
         const { error } = await supabase.from('simulation_state').upsert(updatedState);
         if (error) {
             console.error('Error upserting server state:', error);
+            // Fallback to updating local state if DB update fails to keep UI responsive
             setServerState(updatedState);
         }
     };
     
-    const addBroadcastedOutput = async (team: 'Red' | 'Blue', lines: TerminalLine[]) => {
-        if (!terminalChannel) return;
-        const setOutput = team === 'Red' ? setRedOutput : setBlueOutput;
-        setOutput(prev => [...prev, ...lines]);
-        await terminalChannel.send({
-            type: 'broadcast', event: 'terminal_update',
-            payload: { team, lines, senderId: clientId.current }
-        });
-    };
-
-    const processAndBroadcastCommand = async (team: 'Red' | 'Blue', command: string, isFromAdminControl: boolean = false) => {
-        if (!terminalChannel || !serverState) return;
+    const processCommand = async (team: 'Red' | 'Blue', command: string, isFromAdminControl: boolean = false) => {
+        if (!serverState) return;
 
         const currentUserTeam = sessionData.team;
         if (currentUserTeam === 'spectator' && !isFromAdminControl) return;
         if (currentUserTeam !== 'spectator' && team.toLowerCase() !== currentUserTeam) return;
 
-        const promptState = team === 'Red' ? redPrompt : bluePrompt;
-        const promptLine: TerminalLine = { type: 'prompt' };
-        const commandLine: TerminalLine = { text: command, type: 'command' };
+        const addDelayedOutput = (lines: TerminalLine[]) => {
+            setTimeout(async () => {
+                const { data: currentState, error } = await supabase
+                    .from('simulation_state')
+                    .select('red_terminal_output, blue_terminal_output')
+                    .eq('session_id', sessionId)
+                    .single();
+
+                if (error || !currentState) {
+                    console.error('Failed to get current state for delayed output:', error);
+                    return;
+                }
+                
+                const outputKey = team === 'Red' ? 'red_terminal_output' : 'blue_terminal_output';
+                const currentOutput = currentState[outputKey] || [];
+                await updateServerState({ [outputKey]: [...currentOutput, ...lines] });
+            }, 0);
+        };
 
         const { outputLines, newPrompt, clear } = await processCommandLogic({
-            command, team, serverState, promptState, addLog, updateServerState,
-            addDelayedOutput: (lines) => addBroadcastedOutput(team, lines)
+            command, team, serverState, addLog, updateServerState, addDelayedOutput
         });
 
-        const setOutput = team === 'Red' ? setRedOutput : setBlueOutput;
-        const setPrompt = team === 'Red' ? setRedPrompt : setBluePrompt;
+        const outputKey = team === 'Red' ? 'red_terminal_output' : 'blue_terminal_output';
+        const promptKey = team === 'Red' ? 'red_prompt' : 'blue_prompt';
+        const currentOutput = serverState[outputKey] || [];
+        
+        const promptLine: TerminalLine = { type: 'prompt' };
+        const commandLine: TerminalLine = { text: command, type: 'command' };
+        const allNewLines = [promptLine, commandLine, ...outputLines];
 
+        const newStateUpdate: Partial<SimulationState> = {};
+        
         if (clear) {
-            setOutput([]);
-            await terminalChannel.send({ type: 'broadcast', event: 'terminal_update', payload: { team, clear: true, senderId: clientId.current } });
+            const welcomeMessage = team === 'Red' ? DEFAULT_SIMULATION_STATE.red_terminal_output : DEFAULT_SIMULATION_STATE.blue_terminal_output;
+            newStateUpdate[outputKey] = welcomeMessage;
         } else {
-            const allNewLines = [promptLine, commandLine, ...outputLines];
-            setOutput(prev => [...prev, ...allNewLines]);
-            if (newPrompt) setPrompt(newPrompt);
-            await terminalChannel.send({
-                type: 'broadcast', event: 'terminal_update',
-                payload: { team, lines: allNewLines, newPrompt, senderId: clientId.current }
-            });
+            newStateUpdate[outputKey] = [...currentOutput, ...allNewLines];
         }
+
+        if (newPrompt) {
+            newStateUpdate[promptKey] = newPrompt;
+        }
+
+        await updateServerState(newStateUpdate);
     };
 
     const value = {
         serverState, logs, addLog, updateServerState, userTeam: team,
-        redOutput, blueOutput, redPrompt, bluePrompt, processAndBroadcastCommand
+        processCommand
     };
 
     return <SimulationContext.Provider value={value}>{children}</SimulationContext.Provider>;
