@@ -1,8 +1,9 @@
 
-import React from 'react';
+import React, { useContext } from 'react';
 import { TerminalInstance } from './TerminalInstance';
 import { LogViewer } from './LogViewer';
 import { Icon } from '../constants';
+import { SimulationContext } from '../SimulationContext';
 
 const TerminalHeader: React.FC<{ team: 'Red' | 'Blue' }> = ({ team }) => {
     const isRed = team === 'Red';
@@ -15,27 +16,34 @@ const TerminalHeader: React.FC<{ team: 'Red' | 'Blue' }> = ({ team }) => {
 };
 
 export const DualTerminalView: React.FC = () => {
+    const { userTeam } = useContext(SimulationContext);
+
+    if (!userTeam) {
+        return (
+            <div className="flex items-center justify-center h-96 text-white">
+                Cargando asignación de equipo...
+            </div>
+        );
+    }
+    
+    const teamName = userTeam === 'red' ? 'Red' : 'Blue';
+    const teamRole = userTeam === 'red' ? 'atacante' : 'defensor';
+    const otherTeamRole = userTeam === 'red' ? 'defensor (Equipo Azul)' : 'atacante (Equipo Rojo)';
+    
     return (
         <div className="bg-[rgba(45,80,22,0.85)] p-4 md:p-6 rounded-2xl border border-[rgba(184,134,11,0.3)]">
             <div className="text-center mb-6">
-                <h2 className="text-2xl md:text-3xl font-bold text-white">Simulación: Equipo Rojo vs. Equipo Azul</h2>
+                <h2 className="text-2xl md:text-3xl font-bold text-white">Terminal de Simulación - {teamName} Team</h2>
                 <p className="text-gray-300 max-w-3xl mx-auto mt-2">
-                    El Equipo Rojo (atacante) debe auditar los servidores. El Equipo Azul (defensor) debe asegurarlos y detectar la intrusión. Las acciones en una terminal generarán logs en tiempo real para ambos equipos.
+                    Tu rol es de {teamRole}. Tus acciones generarán logs visibles para ti y para el equipo {otherTeamRole}. Usa 'help' para ver tus comandos.
                 </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Red Team Column */}
+            <div className="max-w-4xl mx-auto">
+                {/* Single Team Column */}
                 <div className="flex flex-col space-y-4">
-                    <TerminalHeader team="Red" />
-                    <TerminalInstance team="Red" />
-                    <LogViewer team="Red" />
-                </div>
-
-                {/* Blue Team Column */}
-                <div className="flex flex-col space-y-4">
-                    <TerminalHeader team="Blue" />
-                    <TerminalInstance team="Blue" />
-                    <LogViewer team="Blue" />
+                    <TerminalHeader team={teamName} />
+                    <TerminalInstance team={teamName} />
+                    <LogViewer team={teamName} />
                 </div>
             </div>
         </div>
