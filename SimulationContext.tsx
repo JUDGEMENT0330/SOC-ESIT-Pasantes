@@ -377,8 +377,23 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             }
 
             const { data: logsData, error: logsError } = await supabase.from('simulation_logs').select('*').eq('session_id', sessionId).order('timestamp', { ascending: true });
-            if (logsError) console.error('Error fetching initial logs:', logsError);
-            else setLogs(logsData as LogEntry[]);
+            if (logsError) {
+                console.error('Error fetching initial logs:', logsError);
+            } else if (logsData) {
+                // FIX: Correctly map database 'source_team' enum ('Red', 'Blue') to application 'source' string ('Red Team', 'Blue Team').
+                // The previous type assertion was incorrect and hid this type mismatch.
+                const transformedLogs = logsData.map(log => {
+                    let source: LogEntry['source'] = 'System';
+                    if (log.source_team === 'Red') {
+                        source = 'Red Team';
+                    } else if (log.source_team === 'Blue') {
+                        source = 'Blue Team';
+                    }
+                    // The 'source' from the DB is 'System' which matches, so no specific case needed.
+                    return { ...log, source };
+                });
+                setLogs(transformedLogs);
+            }
         };
 
         fetchInitialData();
@@ -390,7 +405,19 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         }).subscribe();
         
         logsChannel = supabase.channel(`simulation-logs-${sessionId}`).on<LogEntry>('postgres_changes', { event: 'INSERT', schema: 'public', table: 'simulation_logs', filter: `session_id=eq.${sessionId}` }, (payload) => {
-            setLogs(prevLogs => [...prevLogs, payload.new as LogEntry]);
+            const newLog = payload.new as LogEntry;
+            // FIX: Map database source_team ('Red', 'Blue') to application source ('Red Team', 'Blue Team').
+            // The previous direct assignment caused a type error.
+            if (newLog.source_team) {
+                if (newLog.source_team === 'Red') {
+                    newLog.source = 'Red Team';
+                } else if (newLog.source_team === 'Blue') {
+                    newLog.source = 'Blue Team';
+                } else {
+                    newLog.source = 'System';
+                }
+            }
+            setLogs(prevLogs => [...prevLogs, newLog]);
         }).subscribe();
 
         return () => {
@@ -400,35 +427,56 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
     }, [sessionId]);
 
     const addLog = async (log: Omit<LogEntry, 'id' | 'timestamp' | 'session_id'>) => {
-        const newLog = { session_id: sessionId, source_team: log.source, message: log.message, team_visible: log.teamVisible };
+        // Map the descriptive source name from the app ('Red Team') 
+        // to the expected database enum value ('Red').
+        const sourceTeamMap = {
+            'Red Team': 'Red',
+            'Blue Team': 'Blue',
+            'System': 'System',
+        } as const;
+    
+        const source_team = sourceTeamMap[log.source] || 'System';
+    
+        const newLog = { 
+            session_id: sessionId, 
+            source_team: source_team, 
+            message: log.message, 
+            team_visible: log.teamVisible 
+        };
         const { error } = await supabase.from('simulation_logs').insert(newLog);
         if (error) console.error('Error adding log:', error);
     };
 
     const updateServerState = async (newState: Partial<SimulationState>) => {
-        if (!serverState) return;
+        if (!serverState) {
+            console.error("updateServerState called before serverState is initialized.");
+            return;
+        }
         
         const { data: currentState, error: fetchError } = await supabase
             .from('simulation_state')
             .select('*')
             .eq('session_id', sessionId)
             .maybeSingle();
-
+    
         if (fetchError) {
             console.error("Could not fetch current state before update. Aborting remote update.", fetchError);
             return;
         }
-
+    
         const baseState = currentState || serverState;
         const updatedState = { ...baseState, ...newState, last_updated: new Date().toISOString() };
         
+        // Non-persistent fields are local to the client state and should not be written to the database.
         const { prompt_red, prompt_blue, ...stateForDb } = updatedState;
         
         const { error } = await supabase.from('simulation_state').upsert(stateForDb);
+    
         if (error) {
+            // Log the error but do not update the local state.
+            // This prevents the UI from becoming out of sync with the database.
+            // State is only updated via the realtime subscription on a successful DB write.
             console.error('Error upserting server state:', error);
-            // Fallback to updating local state if DB update fails to keep UI responsive
-            setServerState(updatedState);
         }
     };
     
