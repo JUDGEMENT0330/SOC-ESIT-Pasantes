@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { DualTerminalView } from './components/DualTerminalView';
 import { Auth } from './components/Auth';
@@ -14,28 +13,48 @@ import { SimulationProvider } from './SimulationContext';
 // Main App Component
 // ============================================================================
 
+const ADMIN_EMAIL = 'manciarodrigez53@gmail.com';
+
 export default function App() {
     const [session, setSession] = useState<Session | null>(null);
     const [sessionData, setSessionData] = useState<SessionData | null>(null);
     const [completedScenarios, setCompletedScenarios] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isAdmin, setIsAdmin] = useState(false);
+
+    const cleanUpParticipant = async () => {
+        // This check is important to avoid running cleanup when there's nothing to clean.
+        if (sessionData && session?.user && sessionData.team !== 'spectator') {
+            const { error } = await supabase
+                .from('session_participants')
+                .delete()
+                .match({ session_id: sessionData.sessionId, user_id: session.user.id });
+
+            if (error) {
+                console.error('Error cleaning up participant:', error);
+            }
+        }
+    };
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
+            setIsAdmin(session?.user?.email === ADMIN_EMAIL);
             setLoading(false);
         });
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             setSession(session);
-            // If user logs out, clear the simulation session data
+            setIsAdmin(session?.user?.email === ADMIN_EMAIL);
+            
             if (_event === 'SIGNED_OUT') {
+                await cleanUpParticipant();
                 setSessionData(null);
             }
         });
 
         return () => subscription.unsubscribe();
-    }, []);
+    }, [sessionData, session]); // Rerun effect if sessionData changes to capture it in cleanup
 
     useEffect(() => {
         if (session) {
@@ -86,6 +105,11 @@ export default function App() {
              setCompletedScenarios(completedScenarios);
         }
     };
+
+    const handleExitSession = async () => {
+        await cleanUpParticipant();
+        setSessionData(null);
+    };
     
     if (loading) {
         return <div className="flex items-center justify-center min-h-screen text-white">Cargando sesión...</div>;
@@ -96,7 +120,7 @@ export default function App() {
     }
 
     if (!sessionData) {
-        return <SessionManager user={session.user} setSessionData={setSessionData} />;
+        return <SessionManager user={session.user} setSessionData={setSessionData} isAdmin={isAdmin} />;
     }
 
     return (
@@ -106,7 +130,7 @@ export default function App() {
                 sessionData={sessionData} 
                 completedScenarios={completedScenarios} 
                 updateProgress={updateProgress}
-                exitSession={() => setSessionData(null)}
+                exitSession={handleExitSession}
             />
         </SimulationProvider>
     );
@@ -161,11 +185,23 @@ const Header: React.FC<HeaderProps> = ({ activeTab, userEmail, sessionData, exit
     const progressWidth = ((tabIndex + 1) / tabs.length) * 100;
 
     const handleLogout = async () => {
+        // The exitSession logic is handled by the onAuthStateChange listener
         const { error } = await supabase.auth.signOut();
         if (error) {
             alert(`Error al cerrar sesión: ${error.message}`);
         }
     };
+
+    const getTeamDisplay = () => {
+        switch (sessionData.team) {
+            case 'red': return { text: 'Rojo (Ataque)', color: 'text-red-400' };
+            case 'blue': return { text: 'Azul (Defensa)', color: 'text-blue-400' };
+            case 'spectator': return { text: 'Espectador (Admin)', color: 'text-yellow-400' };
+            default: return { text: 'N/A', color: 'text-gray-400' };
+        }
+    };
+    const teamDisplay = getTeamDisplay();
+
 
     return (
         <header className="glass-morphism shadow-2xl relative bg-[rgba(45,80,22,0.85)] backdrop-blur-xl border border-[rgba(184,134,11,0.3)]">
@@ -188,8 +224,8 @@ const Header: React.FC<HeaderProps> = ({ activeTab, userEmail, sessionData, exit
                     <div className="flex items-center space-x-2 md:space-x-4">
                         <div className="text-right">
                            <p className="text-white text-sm truncate max-w-[100px] sm:max-w-xs" title={sessionData.sessionName}>Sesión: {sessionData.sessionName}</p>
-                           <p className={`text-xs mt-1 font-bold ${sessionData.team === 'red' ? 'text-red-400' : 'text-blue-400'}`}>
-                                Equipo: {sessionData.team === 'red' ? 'Rojo (Ataque)' : 'Azul (Defensa)'}
+                           <p className={`text-xs mt-1 font-bold ${teamDisplay.color}`}>
+                                Equipo: {teamDisplay.text}
                            </p>
                         </div>
                         <button onClick={exitSession} className="bg-yellow-600/50 hover:bg-yellow-600/80 p-2 rounded-full transition-colors" title="Salir de la Sesión">
