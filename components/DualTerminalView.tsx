@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import { TerminalInstance } from './TerminalInstance';
 import { LogViewer } from './LogViewer';
 import { Icon } from '../constants';
@@ -16,6 +16,7 @@ const TerminalHeader: React.FC<{ team: 'Red' | 'Blue' }> = ({ team }) => {
 
 export const DualTerminalView: React.FC = () => {
     const { userTeam } = useContext(SimulationContext);
+    const [adminView, setAdminView] = useState<'Red' | 'Blue'>('Red');
 
     if (!userTeam) {
         return (
@@ -27,28 +28,41 @@ export const DualTerminalView: React.FC = () => {
     
     // Admin/Spectator View
     if (userTeam === 'spectator') {
+        const viewedTeam = adminView;
+        const isViewingRed = viewedTeam === 'Red';
+
         return (
             <div className="bg-[rgba(45,80,22,0.85)] p-4 md:p-6 rounded-2xl border border-[rgba(184,134,11,0.3)]">
-                <div className="text-center mb-6">
+                <div className="text-center mb-4">
                     <h2 className="text-2xl md:text-3xl font-bold text-white">Vista de Administrador/Espectador</h2>
                     <p className="text-gray-300 max-w-3xl mx-auto mt-2">
-                        Observando la simulación en tiempo real. La interacción está desactivada.
+                        Observando al equipo {isViewingRed ? 'Rojo' : 'Azul'}. La interacción está desactivada.
                     </p>
                 </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Red Team Column */}
+                
+                <div className="flex justify-center items-center gap-4 mb-6">
+                    <button 
+                        onClick={() => setAdminView('Red')}
+                        className={`px-6 py-2 font-bold rounded-lg transition-all flex items-center gap-2 ${isViewingRed ? 'bg-red-800/80 text-white shadow-lg shadow-red-900/50 border border-red-500' : 'bg-gray-700/50 text-gray-300 hover:bg-red-700/50 border border-transparent'}`}
+                    >
+                        <Icon name="sword" className="h-5 w-5" /> Ver Equipo Rojo
+                    </button>
+                    <button 
+                        onClick={() => setAdminView('Blue')}
+                        className={`px-6 py-2 font-bold rounded-lg transition-all flex items-center gap-2 ${!isViewingRed ? 'bg-blue-800/80 text-white shadow-lg shadow-blue-900/50 border border-blue-500' : 'bg-gray-700/50 text-gray-300 hover:bg-blue-700/50 border border-transparent'}`}
+                    >
+                        <Icon name="shield" className="h-5 w-5" /> Ver Equipo Azul
+                    </button>
+                </div>
+
+                <div className="max-w-4xl mx-auto animate-fade-in-fast">
                     <div className="flex flex-col space-y-4">
-                        <TerminalHeader team="Red" />
-                        <TerminalInstance team="Red" />
-                        <LogViewer team="Red" />
-                    </div>
-                    {/* Blue Team Column */}
-                    <div className="flex flex-col space-y-4">
-                        <TerminalHeader team="Blue" />
-                        <TerminalInstance team="Blue" />
-                        <LogViewer team="Blue" />
+                        <TerminalHeader team={viewedTeam} />
+                        <TerminalInstance team={viewedTeam} />
+                        <LogViewer team={viewedTeam} />
                     </div>
                 </div>
+
             </div>
         );
     }
