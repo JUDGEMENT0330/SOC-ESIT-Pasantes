@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import type { TerminalLine, PromptState } from '../types';
 import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, SCENARIO_HELP_TEXTS, GENERAL_HELP_TEXT } from '../constants';
@@ -24,6 +23,7 @@ const getWelcomeMessage = (team: Team): TerminalLine[] => [
 
 export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team }) => {
     const { serverState, addLog, updateServerState, userTeam } = useContext(SimulationContext);
+    const isSpectator = userTeam === 'spectator';
 
     const [output, setOutput] = useState<TerminalLine[]>(getWelcomeMessage(team));
     const [history, setHistory] = useState<string[]>([]);
@@ -53,6 +53,8 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team }) => {
     };
     
     const processCommand = (command: string) => {
+        if (isSpectator) return; // Spectators cannot issue commands
+
         if (team.toLowerCase() !== userTeam) {
             addTerminalOutput({ text: "Acción no permitida: Esta no es la terminal de tu equipo.", type: 'error' });
             return;
@@ -66,7 +68,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team }) => {
         const currentHost = promptState.host.toUpperCase();
 
         if (!serverState) {
-            addTerminalOutput({ text: "Esperando estado de la simulación...", type: 'error' });
+            addTerminalOutput({ text: "Sincronizando estado...", type: 'output' });
             return;
         }
 
@@ -345,6 +347,8 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team }) => {
         }
     };
 
+    const canInteract = !isSpectator && (team.toLowerCase() === userTeam) && !!serverState;
+
     return (
         <div 
             className="bg-[#0a0f1c] border border-gray-700 rounded-b-lg h-[400px] p-3 flex flex-col font-mono"
@@ -375,8 +379,13 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team }) => {
                     autoComplete="off"
                     autoCapitalize="off"
                     spellCheck="false"
-                    disabled={team.toLowerCase() !== userTeam || !serverState}
-                    placeholder={!serverState ? "Sincronizando estado..." : team.toLowerCase() !== userTeam ? "Terminal de otro equipo..." : "Escriba un comando..."}
+                    disabled={!canInteract}
+                    placeholder={
+                        isSpectator ? "Modo Espectador (solo lectura)" :
+                        !serverState ? "Sincronizando estado..." :
+                        (team.toLowerCase() !== userTeam) ? "Terminal de otro equipo..." :
+                        "Escriba un comando..."
+                    }
                 />
             </div>
         </div>
