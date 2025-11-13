@@ -1,4 +1,3 @@
-
 import React, { useContext } from 'react';
 import { TerminalInstance } from './TerminalInstance';
 import { LogViewer } from './LogViewer';
@@ -26,6 +25,35 @@ export const DualTerminalView: React.FC = () => {
         );
     }
     
+    // Admin/Spectator View
+    if (userTeam === 'spectator') {
+        return (
+            <div className="bg-[rgba(45,80,22,0.85)] p-4 md:p-6 rounded-2xl border border-[rgba(184,134,11,0.3)]">
+                <div className="text-center mb-6">
+                    <h2 className="text-2xl md:text-3xl font-bold text-white">Vista de Administrador/Espectador</h2>
+                    <p className="text-gray-300 max-w-3xl mx-auto mt-2">
+                        Observando la simulación en tiempo real. La interacción está desactivada.
+                    </p>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Red Team Column */}
+                    <div className="flex flex-col space-y-4">
+                        <TerminalHeader team="Red" />
+                        <TerminalInstance team="Red" />
+                        <LogViewer team="Red" />
+                    </div>
+                    {/* Blue Team Column */}
+                    <div className="flex flex-col space-y-4">
+                        <TerminalHeader team="Blue" />
+                        <TerminalInstance team="Blue" />
+                        <LogViewer team="Blue" />
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Regular User View
     const teamName = userTeam === 'red' ? 'Red' : 'Blue';
     const teamRole = userTeam === 'red' ? 'atacante' : 'defensor';
     const otherTeamRole = userTeam === 'red' ? 'defensor (Equipo Azul)' : 'atacante (Equipo Rojo)';
@@ -39,7 +67,6 @@ export const DualTerminalView: React.FC = () => {
                 </p>
             </div>
             <div className="max-w-4xl mx-auto">
-                {/* Single Team Column */}
                 <div className="flex flex-col space-y-4">
                     <TerminalHeader team={teamName} />
                     <TerminalInstance team={teamName} />
