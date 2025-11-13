@@ -63,10 +63,10 @@ export interface SimulationState {
     db_config_permissions: string;
     hydra_run_count: number;
     server_load: number;
-    red_terminal_output: TerminalLine[];
-    blue_terminal_output: TerminalLine[];
-    red_prompt: PromptState;
-    blue_prompt: PromptState;
+    terminal_output_red: TerminalLine[];
+    terminal_output_blue: TerminalLine[];
+    prompt_red: PromptState;
+    prompt_blue: PromptState;
     last_updated?: string;
 }
 
