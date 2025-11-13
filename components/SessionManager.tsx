@@ -2,26 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import type { User } from '@supabase/supabase-js';
 import type { SessionData, SimulationSession } from '../types';
-import { Icon } from '../constants';
+import { Icon, DEFAULT_SIMULATION_STATE } from '../constants';
 
 interface SessionManagerProps {
     user: User;
     setSessionData: (sessionData: SessionData) => void;
     isAdmin: boolean;
 }
-
-const defaultSimulationState = {
-    firewall_enabled: false,
-    ssh_hardened: false,
-    banned_ips: [],
-    payload_deployed: false,
-    is_dos_active: false,
-    admin_password_found: false,
-    db_config_permissions: '644',
-    hydra_run_count: 0,
-    server_load: 5.0,
-};
-
 
 export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSessionData, isAdmin }) => {
     const [sessions, setSessions] = useState<SimulationSession[]>([]);
@@ -82,7 +69,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
 
             const { error: stateError } = await supabase
                 .from('simulation_state')
-                .insert({ session_id: sessionData.id, ...defaultSimulationState });
+                .insert({ session_id: sessionData.id, ...DEFAULT_SIMULATION_STATE });
             
             if (stateError) {
                 // Attempt to clean up the session if state creation fails
