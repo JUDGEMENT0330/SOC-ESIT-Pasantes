@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { DualTerminalView } from './components/DualTerminalView';
 import { Auth } from './components/Auth';
 import { supabase } from './supabaseClient';
-import { GLOSSARY_TERMS, TRAINING_SCENARIOS, RESOURCE_MODULES, Icon } from './constants';
+import { GLOSSARY_TERMS, TRAINING_SCENARIOS, RESOURCE_MODULES, Icon, CisoCard } from './constants';
 import type { TrainingScenario, ResourceModule, LogEntry, SessionData } from './types';
 import type { Session } from '@supabase/supabase-js';
 import { SessionManager } from './components/SessionManager';
@@ -382,9 +383,10 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({ completedScenarios, u
                 Instrucciones de los Talleres
             </h3>
             <CisoCard>
-                <p>Tienen tiempo asignado para completar estos escenarios. Los documentos en la pestaña "Recursos" son su base teórica. Esta es la aplicación práctica.</p>
-                <br />
-                <p>No busquen "la respuesta correcta". Quiero su análisis, su proceso de pensamiento y las acciones de contención que proponen. Usen el modelo "Maestro/Estudiante": preparen su solución y estén listos para defenderla.</p>
+                <div className="text-[var(--text-secondary)] text-sm sm:text-base leading-relaxed space-y-4 prose prose-invert prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-pre:my-2 prose-code:text-amber-300 prose-code:bg-black/30 prose-code:p-1 prose-code:rounded-md prose-code:font-mono prose-code:before:content-none prose-code:after:content-none">
+                    <p>Tienen tiempo asignado para completar estos escenarios. Los documentos en la pestaña "Recursos" son su base teórica. Esta es la aplicación práctica.</p>
+                    <p>No busquen "la respuesta correcta". Quiero su análisis, su proceso de pensamiento y las acciones de contención que proponen. Usen el modelo "Maestro/Estudiante": preparen su solución y estén listos para defenderla.</p>
+                </div>
             </CisoCard>
         </div>
         <div className="space-y-4">
@@ -409,25 +411,6 @@ const ResourcesSection: React.FC = () => (
 // ============================================================================
 // Reusable UI Components
 // ============================================================================
-
-interface CisoCardProps {
-    children: React.ReactNode;
-    title?: string;
-    icon?: string;
-}
-const CisoCard: React.FC<CisoCardProps> = ({ children, title, icon }) => (
-    <div className="bg-[rgba(85,107,47,0.25)] backdrop-blur-md border border-[rgba(184,134,11,0.3)] rounded-xl p-4 sm:p-6 mb-6 last:mb-0 transition-all duration-300 hover:bg-[rgba(85,107,47,0.4)] hover:border-[rgba(184,134,11,0.5)]">
-        {title && (
-            <h4 className="text-[var(--cv-gold)] font-bold text-lg mb-3 flex items-center">
-                {icon && <Icon name={icon} className="h-5 w-5 mr-2 flex-shrink-0" />}
-                {title}
-            </h4>
-        )}
-        <div className="text-[var(--text-secondary)] text-sm sm:text-base leading-relaxed space-y-4 prose prose-invert prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-pre:my-2 prose-code:text-amber-300 prose-code:bg-black/30 prose-code:p-1 prose-code:rounded-md prose-code:font-mono prose-code:before:content-none prose-code:after:content-none">
-            {children}
-        </div>
-    </div>
-);
 
 const CollapsibleModule: React.FC<{
     header: React.ReactNode;
