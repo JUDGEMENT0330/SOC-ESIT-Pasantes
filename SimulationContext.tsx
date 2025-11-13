@@ -347,15 +347,33 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         let logsChannel: RealtimeChannel;
 
         const fetchInitialData = async () => {
-            const { data: stateData, error: stateError } = await supabase.from('simulation_state').select('*').eq('session_id', sessionId).maybeSingle();
-            if (stateError && stateError.code !== 'PGRST116') {
+            const { data: stateData, error: stateError } = await supabase
+                .from('simulation_state')
+                .select('*')
+                .eq('session_id', sessionId)
+                .maybeSingle();
+
+            if (stateError) {
                 console.error("Error fetching simulation state, falling back to local state:", stateError);
                 setServerState({ session_id: sessionId, ...DEFAULT_SIMULATION_STATE });
-            } else if (!stateData) {
-                console.warn(`No simulation state found for session ${sessionId}. Initializing with default local state.`);
+                return;
+            }
+
+            if (!stateData) {
+                console.warn(`No simulation state found for session ${sessionId}. Initializing state in database.`);
+                const { prompt_red, prompt_blue, ...initialStateForDb } = DEFAULT_SIMULATION_STATE;
+                const { error: insertError } = await supabase
+                    .from('simulation_state')
+                    .insert({ session_id: sessionId, ...initialStateForDb });
+                
+                if (insertError) {
+                    console.error("Failed to initialize simulation state in DB, will use local state:", insertError);
+                }
+                // Always set local state to the full default state after attempting to initialize.
                 setServerState({ session_id: sessionId, ...DEFAULT_SIMULATION_STATE });
             } else {
-                setServerState(stateData);
+                // If data exists, merge with defaults to ensure prompts are in the local state.
+                setServerState({ ...DEFAULT_SIMULATION_STATE, ...stateData });
             }
 
             const { data: logsData, error: logsError } = await supabase.from('simulation_logs').select('*').eq('session_id', sessionId).order('timestamp', { ascending: true });
@@ -367,7 +385,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
 
         stateChannel = supabase.channel(`simulation-state-${sessionId}`).on<SimulationState>('postgres_changes', { event: '*', schema: 'public', table: 'simulation_state', filter: `session_id=eq.${sessionId}` }, (payload) => {
             if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-                setServerState(payload.new as SimulationState);
+                setServerState(prevState => ({ ...(prevState || DEFAULT_SIMULATION_STATE), ...payload.new as SimulationState }));
             }
         }).subscribe();
         
@@ -390,21 +408,23 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
     const updateServerState = async (newState: Partial<SimulationState>) => {
         if (!serverState) return;
         
-        // Fetch the latest state before updating to minimize race conditions
         const { data: currentState, error: fetchError } = await supabase
             .from('simulation_state')
             .select('*')
             .eq('session_id', sessionId)
-            .single();
+            .maybeSingle();
 
-        if (fetchError || !currentState) {
-            console.error("Could not fetch current state before update. Aborting update.", fetchError);
+        if (fetchError) {
+            console.error("Could not fetch current state before update. Aborting remote update.", fetchError);
             return;
         }
 
-        const updatedState = { ...currentState, ...newState, last_updated: new Date().toISOString() };
+        const baseState = currentState || serverState;
+        const updatedState = { ...baseState, ...newState, last_updated: new Date().toISOString() };
         
-        const { error } = await supabase.from('simulation_state').upsert(updatedState);
+        const { prompt_red, prompt_blue, ...stateForDb } = updatedState;
+        
+        const { error } = await supabase.from('simulation_state').upsert(stateForDb);
         if (error) {
             console.error('Error upserting server state:', error);
             // Fallback to updating local state if DB update fails to keep UI responsive
@@ -425,7 +445,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                     .from('simulation_state')
                     .select('terminal_output_red, terminal_output_blue')
                     .eq('session_id', sessionId)
-                    .single();
+                    .maybeSingle();
 
                 if (error || !currentState) {
                     console.error('Failed to get current state for delayed output:', error);
