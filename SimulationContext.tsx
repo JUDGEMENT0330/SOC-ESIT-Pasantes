@@ -10,7 +10,8 @@ interface SimulationContextType {
     logs: LogEntry[];
     addLog: (log: Omit<LogEntry, 'id' | 'timestamp' | 'session_id'>) => Promise<void>;
     updateServerState: (newState: Partial<SimulationState>) => Promise<void>;
-    userTeam: 'red' | 'blue' | null;
+    // FIX: Add 'spectator' to the userTeam type to match all possible roles from SessionData.
+    userTeam: 'red' | 'blue' | 'spectator' | null;
 }
 
 // Create the context with a default value
