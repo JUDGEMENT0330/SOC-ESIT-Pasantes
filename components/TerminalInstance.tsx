@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import type { TerminalLine, PromptState, LogEntry } from '../types';
-import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, SCENARIO_HELP_TEXTS } from '../constants';
+import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, SCENARIO_HELP_TEXTS, GENERAL_HELP_TEXT } from '../constants';
 
 type Team = 'Red' | 'Blue';
 
@@ -8,17 +9,22 @@ interface TerminalInstanceProps {
     team: Team;
     addLogEntry: (log: Omit<LogEntry, 'id' | 'timestamp'>) => void;
     serverState: React.MutableRefObject<{
-        rootLoginEnabled: boolean; // Retained for compatibility if needed elsewhere
         firewallEnabled: boolean;
         hydraRunCount: number;
         dbConfigPermissions: string;
         sshHardened: boolean;
+        attackerIp: string;
+        isDosActive: boolean;
+        serverLoad: number;
+        bannedIps: string[];
+        portalAdminPassword: string;
+        payloadDeployed: boolean;
+        adminPasswordFound: boolean;
     }>;
 }
 
 const getInitialPrompt = (team: Team): PromptState => {
     if (team === 'Blue') {
-        // Blue team starts on their own machine, needs to SSH into the target
         return { user: 'pasante-blue', host: 'soc-valtorix', dir: '~' };
     }
     return { user: 'pasante-red', host: 'soc-valtorix', dir: '~' };
@@ -26,8 +32,7 @@ const getInitialPrompt = (team: Team): PromptState => {
 
 const getWelcomeMessage = (team: Team): TerminalLine[] => [
     { text: `Bienvenido a la terminal del Equipo ${team}.`, type: 'output' },
-    { text: "Escriba 'help' para ver sus objetivos y comandos.", type: 'output' },
-    { text: "Para guías de escenarios, escriba 'help [id_escenario]', ej: help escenario7", type: 'output' }
+    { html: "Escriba <strong class='text-amber-300'>help</strong> para ver sus objetivos y comandos.", type: 'html' },
 ];
 
 export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team, addLogEntry, serverState }) => {
@@ -59,21 +64,26 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team, addLog
         
         const isRedTeam = team === 'Red';
         const isBlueTeam = team === 'Blue';
-        const onBoveda = promptState.host.toUpperCase() === 'BOVEDA-WEB';
+        const currentHost = promptState.host.toUpperCase();
+        const isAttackerBanned = serverState.current.bannedIps.includes(serverState.current.attackerIp);
 
         // Universal Commands
         switch (cmd) {
             case 'help':
                 if (args[1] && SCENARIO_HELP_TEXTS[args[1]]) {
                     addTerminalOutput({ html: SCENARIO_HELP_TEXTS[args[1]], type: 'html' });
+                } else if (isRedTeam) {
+                    addTerminalOutput({ html: RED_TEAM_HELP_TEXT, type: 'html' });
+                } else if (isBlueTeam) {
+                    addTerminalOutput({ html: BLUE_TEAM_HELP_TEXT, type: 'html' });
                 } else {
-                    addTerminalOutput({ html: isRedTeam ? RED_TEAM_HELP_TEXT : BLUE_TEAM_HELP_TEXT, type: 'html' });
+                     addTerminalOutput({ html: GENERAL_HELP_TEXT, type: 'html' });
                 }
                 return;
             case 'clear': setOutput([]); return;
             case 'marca': addTerminalOutput({ text: 'Marca: CYBER VALTORIX S.A. DE C.V.', type: 'output' }); return;
             case 'exit': 
-                if (onBoveda) {
+                if (currentHost !== 'SOC-VALTORIX') {
                     addTerminalOutput({ text: `(SIMULACIÓN) Conexión a ${promptState.host} cerrada.`, type: 'output' });
                     setPromptState(getInitialPrompt(team));
                 } else {
@@ -83,11 +93,28 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team, addLog
         }
 
         // --- RED TEAM COMMANDS (from soc-valtorix) ---
-        if (isRedTeam && !onBoveda) {
+        if (isRedTeam && currentHost === 'SOC-VALTORIX') {
+            const targetHost = args[args.length - 1].toUpperCase();
+
+            // Check if target is valid
+            if (cmd !== 'ssh' && !['BOVEDA-WEB', 'PORTAL-WEB'].includes(targetHost)) {
+                // For commands that require a target host
+                 const targetCommands = ['nmap', 'hydra', 'hping3', 'dirb', 'nikto', 'curl'];
+                 if (targetCommands.includes(cmd)) {
+                     addTerminalOutput({ text: `Error: Host objetivo no válido o no especificado. (Ej: ${cmd} BOVEDA-WEB)`, type: 'error' });
+                     return;
+                 }
+            }
+            
+            if (isAttackerBanned && ['nmap', 'hydra', 'hping3', 'ssh'].includes(cmd)) {
+                addTerminalOutput({ text: `(SIMULACIÓN) Error: No route to host. El firewall parece estar bloqueando tu IP.`, type: 'error' });
+                return;
+            }
+
             switch(cmd) {
                 case 'nmap':
-                    addTerminalOutput({ text: `(SIMULACIÓN) Ejecutando Nmap en BOVEDA-WEB...` , type: 'output' });
-                    addLogEntry({ source: 'Red Team', message: 'Escaneo Nmap detectado contra BOVEDA-WEB.', teamVisible: 'blue' });
+                    addTerminalOutput({ text: `(SIMULACIÓN) Ejecutando Nmap en ${targetHost}...` , type: 'output' });
+                    addLogEntry({ source: 'Red Team', message: `Escaneo Nmap detectado contra ${targetHost} desde ${serverState.current.attackerIp}.`, teamVisible: 'blue' });
                     setTimeout(() => {
                         const openPorts = serverState.current.firewallEnabled
                             ? 'Puertos abiertos: 22/tcp (ssh), 80/tcp (http)'
@@ -96,26 +123,40 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team, addLog
                     }, 1000);
                     return;
                 case 'hydra':
-                    addTerminalOutput({ text: `(SIMULACIÓN) Ejecutando Hydra contra SSH en BOVEDA-WEB...`, type: 'output' });
+                    const user = args.find(a => a === '-l')?.split(' ')[1] || 'root';
+                    addTerminalOutput({ text: `(SIMULACIÓN) Ejecutando Hydra contra SSH en ${targetHost} para el usuario '${user}'...`, type: 'output' });
                     serverState.current.hydraRunCount += 100; // Simulate many attempts
-                    addLogEntry({ source: 'Red Team', message: `[!!] Múltiples intentos de login SSH fallidos para 'root' desde 192.168.1.100. (Posible ataque de fuerza bruta)`, teamVisible: 'blue' });
+                    addLogEntry({ source: 'Red Team', message: `[!!] Múltiples intentos de login SSH fallidos para '${user}' desde ${serverState.current.attackerIp}. (Posible ataque de fuerza bruta)`, teamVisible: 'blue' });
                     setTimeout(() => {
-                         if (!serverState.current.sshHardened) {
+                         if (targetHost === 'BOVEDA-WEB' && !serverState.current.sshHardened) {
                             addTerminalOutput({ text: `[ÉXITO] Contraseña encontrada para 'root': '123456'`, type: 'output' });
-                             addLogEntry({ source: 'Red Team', message: `[CRÍTICO] Login de 'root' exitoso en BOVEDA-WEB desde 192.168.1.100.`, teamVisible: 'blue' });
+                            addLogEntry({ source: 'Red Team', message: `[CRÍTICO] Login de 'root' exitoso en BOVEDA-WEB desde ${serverState.current.attackerIp}.`, teamVisible: 'blue' });
+                         } else if (targetHost === 'PORTAL-WEB' && user === 'admin') {
+                            serverState.current.adminPasswordFound = true;
+                            addTerminalOutput({ text: `[ÉXITO] Contraseña encontrada para 'admin': '${serverState.current.portalAdminPassword}'`, type: 'output' });
+                            addLogEntry({ source: 'Red Team', message: `[CRÍTICO] Contraseña de 'admin' para PORTAL-WEB obtenida por fuerza bruta desde ${serverState.current.attackerIp}.`, teamVisible: 'all' });
                          } else {
                             addTerminalOutput({ text: `[FALLIDO] No se encontraron contraseñas. El servidor puede haber sido asegurado.`, type: 'error' });
                          }
                     }, 2000);
                     return;
                 case 'ssh':
-                    const user = args[1]?.split('@')[0];
-                    const host = args[1]?.split('@')[1];
-                    if (host?.toUpperCase() === 'BOVEDA-WEB') {
-                        addTerminalOutput({ text: `(SIMULACIÓN) Conectando a ${host}...`, type: 'output' });
-                        if (user === 'root' && serverState.current.hydraRunCount > 0 && !serverState.current.sshHardened) {
-                            addTerminalOutput({ text: `Contraseña ('123456'): [ÉXITO]`, type: 'output' });
+                    const [sshUser, sshHost] = (args[1] || '').split('@');
+                    const targetSshHost = sshHost?.toUpperCase();
+                    if (['BOVEDA-WEB', 'PORTAL-WEB'].includes(targetSshHost)) {
+                        addTerminalOutput({ text: `(SIMULACIÓN) Conectando a ${sshHost}...`, type: 'output' });
+                        let accessGranted = false;
+                        if (targetSshHost === 'BOVEDA-WEB' && sshUser === 'root' && !serverState.current.sshHardened) {
+                            accessGranted = true;
                             setPromptState({ user: 'root', host: 'BOVEDA-WEB', dir: '#' });
+                        } else if (targetSshHost === 'PORTAL-WEB' && sshUser === 'admin' && serverState.current.adminPasswordFound) {
+                             accessGranted = true;
+                             setPromptState({ user: 'admin', host: 'PORTAL-WEB', dir: '~' });
+                        }
+                        
+                        if(accessGranted) {
+                             addTerminalOutput({ text: `Contraseña: [ÉXITO] Bienvenido.`, type: 'output' });
+                             addLogEntry({ source: 'Red Team', message: `[CRÍTICO] Acceso SSH exitoso como '${sshUser}' en ${targetSshHost} desde ${serverState.current.attackerIp}.`, teamVisible: 'blue' });
                         } else {
                              addTerminalOutput({ text: 'Acceso denegado.', type: 'error' });
                         }
@@ -123,11 +164,22 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team, addLog
                         addTerminalOutput({ text: 'Host desconocido.', type: 'error' });
                     }
                     return;
+                case 'john':
+                    addTerminalOutput({ text: `(SIMULACIÓN) Ejecutando John the Ripper... Contraseña crackeada: '${serverState.current.portalAdminPassword}'`, type: 'output' });
+                    serverState.current.adminPasswordFound = true;
+                    addLogEntry({ source: 'Red Team', message: `Contraseña de 'admin' obtenida offline.`, teamVisible: 'red' });
+                    return;
+                case 'hping3':
+                    serverState.current.isDosActive = true;
+                    serverState.current.serverLoad = 99.9;
+                    addTerminalOutput({ text: `(SIMULACIÓN) Inundación SYN iniciada contra ${targetHost}. Presione Ctrl+C para detener.`, type: 'output' });
+                    addLogEntry({ source: 'Red Team', message: `[ALERTA] Patrón de tráfico anómalo consistente con un ataque DoS detectado desde ${serverState.current.attackerIp} contra ${targetHost}.`, teamVisible: 'blue' });
+                    return;
                 case 'curl':
                 case 'dirb':
                 case 'nikto':
-                     addTerminalOutput({ text: `(SIMULACIÓN) Ejecutando ${cmd} contra BOVEDA-WEB...`, type: 'output' });
-                     addLogEntry({ source: 'Red Team', message: `Herramienta de reconocimiento web (${cmd}) detectada contra BOVEDA-WEB.`, teamVisible: 'blue' });
+                     addTerminalOutput({ text: `(SIMULACIÓN) Ejecutando ${cmd} contra ${targetHost}...`, type: 'output' });
+                     addLogEntry({ source: 'Red Team', message: `Herramienta de reconocimiento web (${cmd}) detectada contra ${targetHost}.`, teamVisible: 'blue' });
                      if (cmd === 'curl' && args[1]?.includes('db_config.php')) {
                           setTimeout(() => {
                               if (serverState.current.dbConfigPermissions === '644') {
@@ -144,13 +196,16 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team, addLog
         
         // --- BLUE TEAM COMMANDS ---
         if (isBlueTeam) {
-             if (cmd === 'ssh' && args[1] === 'blue-team@BOVEDA-WEB' && !onBoveda) {
-                addTerminalOutput({ text: `(SIMULACIÓN) Conectando... Bienvenido a BOVEDA-WEB.`, type: 'output' });
-                setPromptState({ user: 'blue-team', host: 'BOVEDA-WEB', dir: '~' });
-                return;
+             if (cmd === 'ssh' && args[1]?.startsWith('blue-team@')) {
+                const host = args[1].split('@')[1].toUpperCase();
+                 if (['BOVEDA-WEB', 'PORTAL-WEB'].includes(host)) {
+                    addTerminalOutput({ text: `(SIMULACIÓN) Conectando... Bienvenido a ${host}.`, type: 'output' });
+                    setPromptState({ user: 'blue-team', host: host, dir: '~' });
+                    return;
+                }
             }
 
-            if (onBoveda) {
+            if (currentHost !== 'SOC-VALTORIX') {
                 const effectiveCmd = cmd === 'sudo' ? args[1] : cmd;
                 const effectiveArgs = cmd === 'sudo' ? args.slice(1) : args;
 
@@ -158,30 +213,34 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team, addLog
                     case 'ufw':
                          if (effectiveArgs[1] === 'enable') {
                              serverState.current.firewallEnabled = true;
-                             addTerminalOutput({ text: `(SIMULACIÓN) Firewall activado.`, type: 'output' });
-                             addLogEntry({ source: 'Blue Team', message: 'Firewall (UFW) HABILITADO en BOVEDA-WEB.', teamVisible: 'all' });
+                             addTerminalOutput({ text: `(SIMULACIÓN) Firewall activado en ${currentHost}.`, type: 'output' });
+                             addLogEntry({ source: 'Blue Team', message: `Firewall (UFW) HABILITADO en ${currentHost}.`, teamVisible: 'all' });
                          } else if (effectiveArgs[1] === 'status') {
                              addTerminalOutput({ text: `Estado: ${serverState.current.firewallEnabled ? 'activo' : 'inactivo'}`, type: 'output' });
                          } else if (effectiveArgs[1] === 'allow') {
                             addTerminalOutput({ text: `(SIMULACIÓN) Regla UFW añadida para ${effectiveArgs[2]}.`, type: 'output' });
+                         } else if (effectiveArgs[1] === 'deny' && effectiveArgs[3]) {
+                            serverState.current.bannedIps.push(effectiveArgs[3]);
+                             addTerminalOutput({ text: `(SIMULACIÓN) IP ${effectiveArgs[3]} bloqueada.`, type: 'output' });
+                             addLogEntry({ source: 'Blue Team', message: `IP ${effectiveArgs[3]} ha sido bloqueada manualmente en el firewall de ${currentHost}.`, teamVisible: 'all' });
                          }
                          return;
                     case 'nano':
                         if (effectiveArgs[1] === 'sshd_config') {
                              serverState.current.sshHardened = true;
                              addTerminalOutput({ text: `(SIMULACIÓN) 'PermitRootLogin' cambiado a 'no'. Recuerde reiniciar el servicio sshd.`, type: 'output' });
-                             addLogEntry({ source: 'Blue Team', message: `Configuración de SSH modificada en BOVEDA-WEB (hardening).`, teamVisible: 'all' });
+                             addLogEntry({ source: 'Blue Team', message: `Configuración de SSH modificada en ${currentHost} (hardening).`, teamVisible: 'all' });
                         }
                         return;
                     case 'systemctl':
                          if (effectiveArgs[1] === 'restart' && effectiveArgs[2] === 'sshd') {
                              addTerminalOutput({ text: `(SIMULACIÓN) Reiniciando servicio sshd... Configuración aplicada.`, type: 'output' });
-                             addLogEntry({ source: 'Blue Team', message: `Servicio SSH reiniciado. Hardening aplicado.`, teamVisible: 'all' });
+                             addLogEntry({ source: 'Blue Team', message: `Servicio SSH reiniciado en ${currentHost}. Hardening aplicado.`, teamVisible: 'all' });
                          }
                         return;
                     case 'grep':
-                         addTerminalOutput({ text: `(SIMULACIÓN) Buscando en auth.log...\n${serverState.current.hydraRunCount > 0 ? `${serverState.current.hydraRunCount} resultados encontrados para "Failed password for root"` : 'No se encontraron resultados.'}`, type: 'output' });
-                         addLogEntry({ source: 'Blue Team', message: 'Revisando logs de autenticación en BOVEDA-WEB.', teamVisible: 'blue' });
+                         addTerminalOutput({ text: `(SIMULACIÓN) Buscando en auth.log...\n${serverState.current.hydraRunCount > 0 ? `${serverState.current.hydraRunCount} resultados encontrados para "Failed password"` : 'No se encontraron resultados.'}`, type: 'output' });
+                         addLogEntry({ source: 'Blue Team', message: `Revisando logs de autenticación en ${currentHost}.`, teamVisible: 'blue' });
                         return;
                     case 'ss':
                         addTerminalOutput({ text: `(SIMULACIÓN) Puertos escuchando:\n22/tcp, 80/tcp${!serverState.current.firewallEnabled ? ', 443/tcp, 3306/tcp' : ''}` , type: 'output' });
@@ -211,8 +270,45 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team, addLog
                             addTerminalOutput({ text: 'Comando openssl no reconocido.', type: 'error' });
                         }
                         return;
+                    // Scenario 8 commands
+                    case 'top': case 'htop':
+                         const load = serverState.current.isDosActive ? 99.9 : 5.0;
+                         serverState.current.serverLoad = load;
+                         addTerminalOutput({ text: `(SIMULACIÓN) Carga del sistema: ${load.toFixed(1)}%`, type: 'output' });
+                         return;
+                    case 'journalctl':
+                         addTerminalOutput({ text: `(SIMULACIÓN) Revisando logs de sshd...\n-- Logs --\n` +
+                            `Jul 15 10:01:03 ${currentHost} sshd[1121]: Failed password for admin from ${serverState.current.attackerIp} port 12345\n`.repeat(5) +
+                            `Jul 15 10:01:04 ${currentHost} sshd[1122]: Failed password for admin from ${serverState.current.attackerIp} port 12346\n`.repeat(5), type: 'output' });
+                         return;
+                    case 'fail2ban-client':
+                         if (effectiveArgs[2] === 'banip' && effectiveArgs[3]) {
+                            serverState.current.bannedIps.push(effectiveArgs[3]);
+                            addTerminalOutput({ text: `(SIMULACIÓN) IP ${effectiveArgs[3]} baneada por Fail2Ban.`, type: 'output' });
+                            addLogEntry({ source: 'Blue Team', message: `IP ${effectiveArgs[3]} ha sido bloqueada vía Fail2Ban en ${currentHost}.`, teamVisible: 'all' });
+                         }
+                        return;
+                    case 'sha256sum':
+                        const originalHash = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'; // empty file hash
+                        const compromisedHash = 'a1b2c3d4...';
+                        const currentHash = serverState.current.payloadDeployed ? compromisedHash : originalHash;
+                        addTerminalOutput({ text: `${currentHash}  /var/www/html/index.php`, type: 'output' });
+                        if(serverState.current.payloadDeployed) {
+                            addLogEntry({ source: 'System', message: `[CRÍTICO] ¡ALERTA DE FIM! El hash de /var/www/html/index.php no coincide. El sistema está comprometido.`, teamVisible: 'all' });
+                        }
+                        return;
                 }
             }
+        }
+        
+        // --- Commands available inside a compromised host ---
+        if (currentHost !== 'SOC-VALTORIX') {
+             if (cmd === 'wget') {
+                 serverState.current.payloadDeployed = true;
+                 addTerminalOutput({ text: `(SIMULACIÓN) --10:05:10--  http://malware-repo.bad/payload.sh\nConectando a malware-repo.bad... conectado.\n... Guardado.`, type: 'output' });
+                 addLogEntry({ source: 'Red Team', message: `[ALERTA] Tráfico de red saliente sospechoso detectado desde ${currentHost} a un repositorio de malware conocido.`, teamVisible: 'blue' });
+                 return;
+             }
         }
 
 
@@ -285,6 +381,6 @@ const Prompt: React.FC<PromptState> = ({ user, host, dir }) => (
         <span className="prompt-host">{host}</span>
         <span className="text-slate-400">:</span>
         <span className="prompt-dir">{dir}</span>
-        <span className="text-slate-400">{user === 'root' ? '# ' : '$ '}</span>
+        <span className="text-slate-400">{user === 'root' || user === 'admin' ? '# ' : '$ '}</span>
     </span>
 );
