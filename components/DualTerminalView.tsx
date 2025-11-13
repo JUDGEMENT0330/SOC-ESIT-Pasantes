@@ -1,4 +1,3 @@
-
 import React, { useRef } from 'react';
 import { TerminalInstance } from './TerminalInstance';
 import { LogViewer } from './LogViewer';
@@ -23,9 +22,11 @@ const TerminalHeader: React.FC<{ team: 'Red' | 'Blue' }> = ({ team }) => {
 export const DualTerminalView: React.FC<DualTerminalViewProps> = ({ logEntries, addLogEntry }) => {
     // This state is shared between both terminal instances to simulate a single server environment
     const serverState = useRef({
-        rootLoginEnabled: true,
+        rootLoginEnabled: true, // Legacy, use sshHardened instead for logic
         firewallEnabled: false,
         hydraRunCount: 0,
+        dbConfigPermissions: '644', // Default insecure permissions: user, group, other can read
+        sshHardened: false, // PermitRootLogin is 'yes' by default
     });
 
     return (
