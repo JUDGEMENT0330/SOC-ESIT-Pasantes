@@ -2,7 +2,7 @@ import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from './supabaseClient';
 import type { SimulationState, LogEntry, SessionData } from './types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { DEFAULT_SIMULATION_STATE } from '../constants';
+import { DEFAULT_SIMULATION_STATE } from './constants';
 
 // Define the shape of the context
 interface SimulationContextType {
@@ -10,7 +10,6 @@ interface SimulationContextType {
     logs: LogEntry[];
     addLog: (log: Omit<LogEntry, 'id' | 'timestamp' | 'session_id'>) => Promise<void>;
     updateServerState: (newState: Partial<SimulationState>) => Promise<void>;
-    // FIX: Add 'spectator' to the userTeam type to match all possible roles from SessionData.
     userTeam: 'red' | 'blue' | 'spectator' | null;
 }
 
@@ -40,42 +39,40 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         let stateChannel: RealtimeChannel;
         let logsChannel: RealtimeChannel;
 
-        // Fetch initial data
         const fetchInitialData = async () => {
-             // Fetch initial server state, use maybeSingle to prevent crash on missing state
-            let { data: stateData, error: stateError } = await supabase
+            // Step 1: Attempt to fetch the simulation state.
+            const { data: stateData, error: stateError } = await supabase
                 .from('simulation_state')
                 .select('*')
                 .eq('session_id', sessionId)
                 .maybeSingle();
 
-            // If state doesn't exist, create it to make the app resilient to race conditions or failed initializations.
-            if (!stateData && !stateError) {
-                console.warn(`No simulation state found for session ${sessionId}. Creating a default one to recover.`);
+            // Step 2: If state is not found (either null data or a PGRST116 error), create a default one.
+            if (!stateData && (!stateError || stateError.code === 'PGRST116')) {
+                console.warn(`No state found for session ${sessionId}. Creating default state to recover.`);
                 const { data: newStateData, error: insertError } = await supabase
                     .from('simulation_state')
                     .insert({ session_id: sessionId, ...DEFAULT_SIMULATION_STATE })
                     .select()
                     .single();
-                
+
                 if (insertError) {
                     console.error('CRITICAL: Failed to create missing simulation state:', insertError);
-                    // At this point, the app cannot proceed for this session.
-                    stateError = insertError;
+                    setServerState(null); // Recovery failed
                 } else {
-                    console.log('Successfully created missing simulation state.');
-                    stateData = newStateData;
+                    console.log('Successfully created and set initial state.');
+                    setServerState(newStateData);
                 }
-            }
-
-            if (stateError) {
+            } else if (stateError) {
+                // Step 3: Handle other, unexpected errors during fetch.
                 console.error('Error fetching initial state:', stateError);
                 setServerState(null);
             } else {
+                // Step 4: If fetch was successful, set the state.
                 setServerState(stateData);
             }
 
-            // Fetch initial logs
+            // Fetch initial logs regardless of state fetch outcome
             const { data: logsData, error: logsError } = await supabase
                 .from('simulation_logs')
                 .select('*')
@@ -85,6 +82,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             if (logsError) console.error('Error fetching initial logs:', logsError);
             else setLogs(logsData as LogEntry[]);
         };
+
 
         fetchInitialData();
 
