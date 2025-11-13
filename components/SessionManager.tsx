@@ -36,48 +36,49 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
 
     const fetchSessions = async () => {
         setLoading(true);
-        const { data, error } = await supabase
-            .from('simulation_sessions')
-            .select('*')
-            .eq('is_active', true)
-            .order('created_at', { ascending: false });
+        setError('');
+        try {
+            const { data, error: fetchError } = await supabase
+                .from('simulation_sessions')
+                .select('*')
+                .eq('is_active', true)
+                .order('created_at', { ascending: false });
 
-        if (error) {
-            setError('Error al cargar las sesiones.');
-            console.error(error);
-        } else {
+            if (fetchError) throw fetchError;
+
             setSessions(data || []);
+        } catch (err: any) {
+            setError(`Error al cargar las sesiones: ${err.message}`);
+            console.error(err);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const createNewSession = async (name: string): Promise<SimulationSession | null> => {
-        // 1. Create the session
-        const { data: sessionData, error: sessionError } = await supabase
-            .from('simulation_sessions')
-            .insert({ session_name: name.trim() })
-            .select()
-            .single();
+        try {
+            // 1. Create the session
+            const { data: sessionData, error: sessionError } = await supabase
+                .from('simulation_sessions')
+                .insert({ session_name: name.trim() })
+                .select()
+                .single();
 
-        if (sessionError || !sessionData) {
-            setError('No se pudo crear la sesión.');
-            console.error(sessionError);
+            if (sessionError) throw sessionError;
+
+            // 2. Create the initial state for the session
+            const { error: stateError } = await supabase
+                .from('simulation_state')
+                .insert({ session_id: sessionData.id, ...defaultSimulationState });
+            
+            if (stateError) throw stateError;
+            
+            return sessionData;
+        } catch (err: any) {
+            setError(`Error creando la sesión: ${err.message}`);
+            console.error(err);
             return null;
         }
-
-        // 2. Create the initial state for the session
-        const { error: stateError } = await supabase
-            .from('simulation_state')
-            .insert({ session_id: sessionData.id, ...defaultSimulationState });
-        
-        if (stateError) {
-             setError('No se pudo inicializar el estado de la sesión.');
-             console.error(stateError);
-             // TODO: Add cleanup logic to delete the session if state creation fails
-             return null;
-        }
-        
-        return sessionData;
     }
 
     const handleCreateSession = async (e: React.FormEvent) => {
@@ -98,7 +99,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
 
         if (newSession) {
             setNewSessionName('');
-            await fetchSessions();
+            setSessions(prev => [newSession, ...prev]);
         }
         
         setIsCreating(false);
@@ -108,34 +109,32 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
         setLoading(true);
         setError('');
 
-        // Check if role is already taken
-        const { data: participants, error: checkError } = await supabase
-            .from('session_participants')
-            .select('team_role')
-            .eq('session_id', sessionId)
-            .eq('team_role', team);
-        
-        if (checkError) {
-             setError('Error al verificar el equipo.');
-             setLoading(false);
-             return;
-        }
-        if (participants && participants.length > 0) {
-            setError(`El rol de equipo ${team === 'red' ? 'Rojo' : 'Azul'} ya está ocupado en esta sesión.`);
-            setLoading(false);
-            return;
-        }
+        try {
+            // Check if role is already taken
+            const { data: participants, error: checkError } = await supabase
+                .from('session_participants')
+                .select('team_role')
+                .eq('session_id', sessionId)
+                .eq('team_role', team);
+            
+            if (checkError) throw checkError;
 
-        const { error } = await supabase
-            .from('session_participants')
-            .insert({ session_id: sessionId, user_id: user.id, team_role: team });
+            if (participants && participants.length > 0) {
+                throw new Error(`El rol de equipo ${team === 'red' ? 'Rojo' : 'Azul'} ya está ocupado.`);
+            }
 
-        if (error) {
-            setError('No se pudo unir a la sesión.');
-            console.error(error);
-            setLoading(false);
-        } else {
+            const { error: insertError } = await supabase
+                .from('session_participants')
+                .insert({ session_id: sessionId, user_id: user.id, team_role: team });
+
+            if (insertError) throw insertError;
+
             setSessionData({ sessionId, sessionName, team });
+
+        } catch (err: any) {
+            setError(`No se pudo unir a la sesión: ${err.message}`);
+            console.error(err);
+            setLoading(false);
         }
     };
     
@@ -144,37 +143,38 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
         setLoading(true);
         setError('');
 
-        // Check if a session with this default name already exists
-        let { data: existingSession, error: findError } = await supabase
-            .from('simulation_sessions')
-            .select('*')
-            .eq('session_name', sessionName)
-            .single();
-            
-        if (findError && findError.code !== 'PGRST116') { // PGRST116 = not found, which is fine
-            setError("Error buscando sesión por defecto.");
-            setLoading(false);
-            return;
-        }
+        try {
+            // Check if a session with this default name already exists
+            let { data: existingSessions, error: findError } = await supabase
+                .from('simulation_sessions')
+                .select('*')
+                .eq('session_name', sessionName)
+                .limit(1);
 
-        let sessionToJoin = existingSession;
+            if (findError) throw findError;
 
-        if (!existingSession) {
-            // Create it on-demand
-            const newSession = await createNewSession(sessionName);
-            if (!newSession) {
-                setLoading(false);
-                return;
+            let sessionToJoin = existingSessions?.[0] || null;
+
+            if (!sessionToJoin) {
+                // Create it on-demand
+                const newSession = await createNewSession(sessionName);
+                if (!newSession) {
+                    // createNewSession sets the error, so just stop.
+                    setLoading(false);
+                    return; 
+                }
+                sessionToJoin = newSession;
+                // Add new session to the list for UI to update
+                setSessions(prev => [newSession, ...prev]);
             }
-            sessionToJoin = newSession;
-            await fetchSessions();
-        }
-        
-        if (sessionToJoin) {
+            
             await handleJoinSession(sessionToJoin.id, sessionToJoin.session_name, team);
+
+        } catch (err: any) {
+            console.error('Error joining default session:', err);
+            setError(`Error al unirse a la sesión por defecto. Es posible que la política RLS de Supabase sea incorrecta. Error: ${err.message}`);
+            setLoading(false);
         }
-        
-        setLoading(false);
     };
 
     return (
@@ -186,7 +186,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
                         <p className="text-gray-300 mt-2">Elige un entrenamiento por defecto o crea/únete a una sesión personalizada.</p>
                     </div>
 
-                    {error && <p className="mb-4 text-center text-red-400 bg-red-900/50 p-3 rounded-lg">{error}</p>}
+                    {error && <p className="mb-4 text-center text-red-400 bg-red-900/50 p-3 rounded-lg animate-fade-in-fast">{error}</p>}
                     
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                         <button onClick={() => handleJoinDefaultSession('red')} className="p-6 text-left bg-red-900/30 border border-red-500/50 rounded-lg hover:bg-red-900/60 transition-all duration-300 disabled:opacity-50 flex items-center space-x-4" disabled={loading}>
@@ -214,9 +214,9 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
                                 value={newSessionName}
                                 onChange={(e) => setNewSessionName(e.target.value)}
                                 className="flex-grow px-4 py-2 bg-black/30 border border-[rgba(184,134,11,0.3)] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--cv-gold)]"
-                                disabled={isCreating}
+                                disabled={isCreating || loading}
                             />
-                            <button type="submit" className="px-4 py-2 font-bold text-white bg-green-600/80 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 flex items-center justify-center" disabled={isCreating}>
+                            <button type="submit" className="px-4 py-2 font-bold text-white bg-green-600/80 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 flex items-center justify-center" disabled={isCreating || loading}>
                                 <Icon name="plus-circle" className="h-5 w-5 mr-2"/>
                                 {isCreating ? 'Creando...' : 'Crear'}
                             </button>
