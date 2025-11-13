@@ -138,10 +138,10 @@ export const DEFAULT_SIMULATION_STATE = {
     db_config_permissions: '644',
     hydra_run_count: 0,
     server_load: 5.0,
-    red_terminal_output: getWelcomeMessage('Red'),
-    blue_terminal_output: getWelcomeMessage('Blue'),
-    red_prompt: getInitialPrompt('Red'),
-    blue_prompt: getInitialPrompt('Blue'),
+    terminal_output_red: getWelcomeMessage('Red'),
+    terminal_output_blue: getWelcomeMessage('Blue'),
+    prompt_red: getInitialPrompt('Red'),
+    prompt_blue: getInitialPrompt('Blue'),
 };
 
 
@@ -400,7 +400,6 @@ export const RESOURCE_MODULES: ResourceModule[] = [
                 <CisoTable 
                     headers={['Registro', 'Nombre Completo', 'Función', 'Ejemplo de Valor']}
                     rows={[
-                        // FIX: Changed malformed `code>` tag to a proper `<code>` tag.
                         [<strong>A</strong>, 'Address', 'Asocia un dominio a una dirección IPv4.', <code>172.217.14.228</code>],
                         [<strong>AAAA</strong>, 'Quad A', 'Asocia un dominio a una dirección IPv6.', <code>2607:f8b0:400a:80e::200e</code>],
                         [<strong>CNAME</strong>, 'Canonical Name', 'Crea un alias. Apunta un dominio a otro dominio.', 'mail.google.com'],
