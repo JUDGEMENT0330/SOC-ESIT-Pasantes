@@ -1,10 +1,13 @@
+
 import React, { useState, useEffect } from 'react';
 import { DualTerminalView } from './components/DualTerminalView';
 import { Auth } from './components/Auth';
 import { supabase } from './supabaseClient';
 import { GLOSSARY_TERMS, TRAINING_SCENARIOS, RESOURCE_MODULES, Icon } from './constants';
-import type { TrainingScenario, ResourceModule, GlossaryTerm, LogEntry } from './types';
+import type { TrainingScenario, ResourceModule, LogEntry, SessionData } from './types';
 import type { Session } from '@supabase/supabase-js';
+import { SessionManager } from './components/SessionManager';
+import { SimulationProvider } from './SimulationContext';
 
 
 // ============================================================================
@@ -13,24 +16,24 @@ import type { Session } from '@supabase/supabase-js';
 
 export default function App() {
     const [session, setSession] = useState<Session | null>(null);
+    const [sessionData, setSessionData] = useState<SessionData | null>(null);
     const [completedScenarios, setCompletedScenarios] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Check the initial session state
         supabase.auth.getSession().then(({ data: { session } }) => {
-            console.log("Initial session check:", session);
             setSession(session);
             setLoading(false);
         });
 
-        // Listen for authentication state changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            console.log("Auth state changed:", _event, session);
             setSession(session);
+            // If user logs out, clear the simulation session data
+            if (_event === 'SIGNED_OUT') {
+                setSessionData(null);
+            }
         });
 
-        // Cleanup subscription on unmount
         return () => subscription.unsubscribe();
     }, []);
 
@@ -49,7 +52,7 @@ export default function App() {
                 .eq('id', session.user.id)
                 .single();
 
-            if (error && error.code !== 'PGRST116') { // PGRST116: row not found
+            if (error && error.code !== 'PGRST116') {
                 console.error('Error fetching progress:', error);
             }
             if (data) {
@@ -76,7 +79,6 @@ export default function App() {
 
             if (error) {
                 console.error('Error updating progress:', error);
-                // Revert optimistic update on error
                 setCompletedScenarios(completedScenarios);
             }
         } catch (error) {
@@ -89,17 +91,24 @@ export default function App() {
         return <div className="flex items-center justify-center min-h-screen text-white">Cargando sesión...</div>;
     }
 
-    // More robust check: show login page if there is no session OR no user in the session.
     if (!session || !session.user) {
         return <Auth />;
     }
 
+    if (!sessionData) {
+        return <SessionManager user={session.user} setSessionData={setSessionData} />;
+    }
+
     return (
-        <MainApp 
-            session={session} 
-            completedScenarios={completedScenarios} 
-            updateProgress={updateProgress}
-        />
+        <SimulationProvider sessionData={sessionData}>
+            <MainApp 
+                session={session}
+                sessionData={sessionData} 
+                completedScenarios={completedScenarios} 
+                updateProgress={updateProgress}
+                exitSession={() => setSessionData(null)}
+            />
+        </SimulationProvider>
     );
 }
 
@@ -109,32 +118,22 @@ export default function App() {
 
 interface MainAppProps {
     session: Session;
+    sessionData: SessionData;
     completedScenarios: string[];
     updateProgress: (scenarioId: string) => void;
+    exitSession: () => void;
 }
 
-const MainApp: React.FC<MainAppProps> = ({ session, completedScenarios, updateProgress }) => {
-    const [activeTab, setActiveTab] = useState('inicio');
-    const [logEntries, setLogEntries] = useState<LogEntry[]>([
-        { id: 0, timestamp: new Date().toLocaleTimeString(), source: 'System', message: 'Simulación iniciada. Ambos equipos están activos.', teamVisible: 'all' }
-    ]);
-
-    const addLogEntry = (log: Omit<LogEntry, 'id' | 'timestamp'>) => {
-        setLogEntries(prev => [
-            ...prev,
-            { ...log, id: prev.length, timestamp: new Date().toLocaleTimeString() }
-        ]);
-    };
+const MainApp: React.FC<MainAppProps> = ({ session, sessionData, completedScenarios, updateProgress, exitSession }) => {
+    const [activeTab, setActiveTab] = useState('terminal');
 
     return (
         <div className="flex flex-col min-h-screen">
-            <Header activeTab={activeTab} userEmail={session.user.email} />
+            <Header activeTab={activeTab} userEmail={session.user.email} sessionData={sessionData} exitSession={exitSession} />
             <main className="container mx-auto p-4 md:p-8 mt-4 md:mt-8 flex-grow">
                 <Tabs activeTab={activeTab} setActiveTab={setActiveTab} />
                 <TabContent 
                     activeTab={activeTab} 
-                    logEntries={logEntries} 
-                    addLogEntry={addLogEntry} 
                     completedScenarios={completedScenarios} 
                     updateProgress={updateProgress}
                 />
@@ -149,21 +148,22 @@ const MainApp: React.FC<MainAppProps> = ({ session, completedScenarios, updatePr
 // Layout Components
 // ============================================================================
 
-const Header: React.FC<{ activeTab: string; userEmail?: string }> = ({ activeTab, userEmail }) => {
+interface HeaderProps {
+    activeTab: string;
+    userEmail?: string;
+    sessionData: SessionData;
+    exitSession: () => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ activeTab, userEmail, sessionData, exitSession }) => {
     const tabs = ['inicio', 'capacitacion', 'recursos', 'terminal'];
     const tabIndex = tabs.indexOf(activeTab);
     const progressWidth = ((tabIndex + 1) / tabs.length) * 100;
 
     const handleLogout = async () => {
-        console.log("Attempting to sign out...");
         const { error } = await supabase.auth.signOut();
         if (error) {
-            console.error('Error logging out:', error);
-            // Provide feedback to the user in case of an error.
             alert(`Error al cerrar sesión: ${error.message}`);
-        } else {
-            console.log("Sign out successful. The onAuthStateChange listener should now redirect to the login page.");
-            // No need to manually set session to null, the listener in App.tsx will handle it.
         }
     };
 
@@ -171,29 +171,32 @@ const Header: React.FC<{ activeTab: string; userEmail?: string }> = ({ activeTab
         <header className="glass-morphism shadow-2xl relative bg-[rgba(45,80,22,0.85)] backdrop-blur-xl border border-[rgba(184,134,11,0.3)]">
             <div className="container mx-auto px-4 py-4 md:px-6 md:py-6">
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3 md:space-x-4">
+                     <div className="flex items-center space-x-3 md:space-x-4">
                         <div className="p-2 bg-gray-900/50 rounded-lg shadow-lg flex-shrink-0">
-                            <img 
+                             <img 
                                 src="https://cybervaltorix.com/wp-content/uploads/2025/09/Logo-Valtorix-1.png" 
                                 alt="Logo Cyber Valtorix" 
                                 className="h-10 w-10 md:h-12 md:w-12 object-contain"
                                 onError={(e) => (e.currentTarget.src = 'https://placehold.co/48x48/2d5016/b8860b?text=CV')}
                             />
                         </div>
-                        <div>
+                         <div>
                             <h1 className="text-xl sm:text-2xl font-bold text-white">CYBER VALTORIX</h1>
                             <p className="text-yellow-200 text-xs sm:text-sm font-medium">Taller de Inducción SOC</p>
                         </div>
                     </div>
-                    <div className="text-right flex-shrink-0 ml-3 flex items-center space-x-4">
-                        {userEmail && (
-                             <div className="text-right">
-                                <p className="text-white text-sm truncate max-w-[150px] sm:max-w-xs" title={userEmail}>{userEmail}</p>
-                                <p className="text-yellow-200 text-xs mt-1">Nivel: Pasante</p>
-                            </div>
-                        )}
-                        <button onClick={handleLogout} className="bg-red-600/50 hover:bg-red-600/80 p-2 rounded-full transition-colors" title="Cerrar Sesión">
+                    <div className="flex items-center space-x-2 md:space-x-4">
+                        <div className="text-right">
+                           <p className="text-white text-sm truncate max-w-[100px] sm:max-w-xs" title={sessionData.sessionName}>Sesión: {sessionData.sessionName}</p>
+                           <p className={`text-xs mt-1 font-bold ${sessionData.team === 'red' ? 'text-red-400' : 'text-blue-400'}`}>
+                                Equipo: {sessionData.team === 'red' ? 'Rojo (Ataque)' : 'Azul (Defensa)'}
+                           </p>
+                        </div>
+                        <button onClick={exitSession} className="bg-yellow-600/50 hover:bg-yellow-600/80 p-2 rounded-full transition-colors" title="Salir de la Sesión">
                             <Icon name="log-out" className="h-5 w-5 text-white" />
+                        </button>
+                         <button onClick={handleLogout} className="bg-red-600/50 hover:bg-red-600/80 p-2 rounded-full transition-colors" title="Cerrar Sesión">
+                            <Icon name="power" className="h-5 w-5 text-white" />
                         </button>
                     </div>
                 </div>
@@ -222,10 +225,10 @@ const Footer: React.FC = () => (
 // ============================================================================
 
 const TABS_CONFIG = [
-    { id: 'inicio', icon: 'book-open', label: 'Inicio (Glosario)' },
+    { id: 'terminal', icon: 'terminal', label: 'Terminal (Simulada)' },
     { id: 'capacitacion', icon: 'graduation-cap', label: 'Capacitación SOC' },
     { id: 'recursos', icon: 'library', label: 'Recursos' },
-    { id: 'terminal', icon: 'terminal', label: 'Terminal (Simulada)' },
+    { id: 'inicio', icon: 'book-open', label: 'Inicio (Glosario)' },
 ];
 
 const Tabs: React.FC<{ activeTab: string; setActiveTab: (tab: string) => void }> = ({ activeTab, setActiveTab }) => {
@@ -267,13 +270,11 @@ const Tabs: React.FC<{ activeTab: string; setActiveTab: (tab: string) => void }>
 
 interface TabContentProps {
     activeTab: string;
-    logEntries: LogEntry[];
-    addLogEntry: (log: Omit<LogEntry, 'id' | 'timestamp'>) => void;
     completedScenarios: string[];
     updateProgress: (scenarioId: string) => void;
 }
 
-const TabContent: React.FC<TabContentProps> = ({ activeTab, logEntries, addLogEntry, completedScenarios, updateProgress }) => {
+const TabContent: React.FC<TabContentProps> = ({ activeTab, completedScenarios, updateProgress }) => {
     const [currentTab, setCurrentTab] = useState(activeTab);
     const [isFading, setIsFading] = useState(false);
 
@@ -293,7 +294,7 @@ const TabContent: React.FC<TabContentProps> = ({ activeTab, logEntries, addLogEn
             case 'inicio': return <GlossarySection />;
             case 'capacitacion': return <TrainingSection completedScenarios={completedScenarios} updateProgress={updateProgress} />;
             case 'recursos': return <ResourcesSection />;
-            case 'terminal': return <DualTerminalView logEntries={logEntries} addLogEntry={addLogEntry} />;
+            case 'terminal': return <DualTerminalView />;
             default: return null;
         }
     };
