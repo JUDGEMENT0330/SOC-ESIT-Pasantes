@@ -23,7 +23,6 @@ export default function App() {
     const [isAdmin, setIsAdmin] = useState(false);
 
     const cleanUpParticipant = async () => {
-        // This check is important to avoid running cleanup when there's nothing to clean.
         if (sessionData && session?.user && sessionData.team !== 'spectator') {
             const { error } = await supabase
                 .from('session_participants')
@@ -36,31 +35,34 @@ export default function App() {
         }
     };
 
+    // Effect for handling authentication state changes. Runs only once on mount.
     useEffect(() => {
+        setLoading(true);
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
             setIsAdmin(session?.user?.email === ADMIN_EMAIL);
             setLoading(false);
         });
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             setSession(session);
             setIsAdmin(session?.user?.email === ADMIN_EMAIL);
-            
             if (_event === 'SIGNED_OUT') {
-                await cleanUpParticipant();
                 setSessionData(null);
             }
         });
 
         return () => subscription.unsubscribe();
-    }, [sessionData, session]); // Rerun effect if sessionData changes to capture it in cleanup
+    }, []);
 
+    // Effect for fetching user progress. Runs only when the user logs in or out.
     useEffect(() => {
-        if (session) {
+        if (session?.user?.id) {
             fetchProgress();
+        } else {
+            setCompletedScenarios([]);
         }
-    }, [session]);
+    }, [session?.user?.id]);
 
     const fetchProgress = async () => {
         if (!session?.user) return;
@@ -110,6 +112,14 @@ export default function App() {
         await cleanUpParticipant();
         setSessionData(null);
     };
+
+    const handleLogout = async () => {
+        await cleanUpParticipant();
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            console.error('Error al cerrar sesión:', error);
+        }
+    };
     
     if (loading) {
         return <div className="flex items-center justify-center min-h-screen text-white">Cargando sesión...</div>;
@@ -131,6 +141,7 @@ export default function App() {
                 completedScenarios={completedScenarios} 
                 updateProgress={updateProgress}
                 exitSession={handleExitSession}
+                logout={handleLogout}
             />
         </SimulationProvider>
     );
@@ -146,14 +157,15 @@ interface MainAppProps {
     completedScenarios: string[];
     updateProgress: (scenarioId: string) => void;
     exitSession: () => void;
+    logout: () => void;
 }
 
-const MainApp: React.FC<MainAppProps> = ({ session, sessionData, completedScenarios, updateProgress, exitSession }) => {
+const MainApp: React.FC<MainAppProps> = ({ session, sessionData, completedScenarios, updateProgress, exitSession, logout }) => {
     const [activeTab, setActiveTab] = useState('terminal');
 
     return (
         <div className="flex flex-col min-h-screen">
-            <Header activeTab={activeTab} userEmail={session.user.email} sessionData={sessionData} exitSession={exitSession} />
+            <Header activeTab={activeTab} sessionData={sessionData} exitSession={exitSession} logout={logout} />
             <main className="container mx-auto p-4 md:p-8 mt-4 md:mt-8 flex-grow">
                 <Tabs activeTab={activeTab} setActiveTab={setActiveTab} />
                 <TabContent 
@@ -174,23 +186,15 @@ const MainApp: React.FC<MainAppProps> = ({ session, sessionData, completedScenar
 
 interface HeaderProps {
     activeTab: string;
-    userEmail?: string;
     sessionData: SessionData;
     exitSession: () => void;
+    logout: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ activeTab, userEmail, sessionData, exitSession }) => {
+const Header: React.FC<HeaderProps> = ({ activeTab, sessionData, exitSession, logout }) => {
     const tabs = ['inicio', 'capacitacion', 'recursos', 'terminal'];
     const tabIndex = tabs.indexOf(activeTab);
     const progressWidth = ((tabIndex + 1) / tabs.length) * 100;
-
-    const handleLogout = async () => {
-        // The exitSession logic is handled by the onAuthStateChange listener
-        const { error } = await supabase.auth.signOut();
-        if (error) {
-            alert(`Error al cerrar sesión: ${error.message}`);
-        }
-    };
 
     const getTeamDisplay = () => {
         switch (sessionData.team) {
@@ -231,7 +235,7 @@ const Header: React.FC<HeaderProps> = ({ activeTab, userEmail, sessionData, exit
                         <button onClick={exitSession} className="bg-yellow-600/50 hover:bg-yellow-600/80 p-2 rounded-full transition-colors" title="Salir de la Sesión">
                             <Icon name="log-out" className="h-5 w-5 text-white" />
                         </button>
-                         <button onClick={handleLogout} className="bg-red-600/50 hover:bg-red-600/80 p-2 rounded-full transition-colors" title="Cerrar Sesión">
+                         <button onClick={logout} className="bg-red-600/50 hover:bg-red-600/80 p-2 rounded-full transition-colors" title="Cerrar Sesión">
                             <Icon name="power" className="h-5 w-5 text-white" />
                         </button>
                     </div>
