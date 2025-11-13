@@ -1,8 +1,8 @@
-
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from './supabaseClient';
 import type { SimulationState, LogEntry, SessionData } from './types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { DEFAULT_SIMULATION_STATE } from '../constants';
 
 // Define the shape of the context
 interface SimulationContextType {
@@ -42,15 +42,38 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
 
         // Fetch initial data
         const fetchInitialData = async () => {
-            // Fetch initial server state
-            const { data: stateData, error: stateError } = await supabase
+             // Fetch initial server state, use maybeSingle to prevent crash on missing state
+            let { data: stateData, error: stateError } = await supabase
                 .from('simulation_state')
                 .select('*')
                 .eq('session_id', sessionId)
-                .single();
+                .maybeSingle();
 
-            if (stateError) console.error('Error fetching initial state:', stateError);
-            else setServerState(stateData);
+            // If state doesn't exist, create it to make the app resilient to race conditions or failed initializations.
+            if (!stateData && !stateError) {
+                console.warn(`No simulation state found for session ${sessionId}. Creating a default one to recover.`);
+                const { data: newStateData, error: insertError } = await supabase
+                    .from('simulation_state')
+                    .insert({ session_id: sessionId, ...DEFAULT_SIMULATION_STATE })
+                    .select()
+                    .single();
+                
+                if (insertError) {
+                    console.error('CRITICAL: Failed to create missing simulation state:', insertError);
+                    // At this point, the app cannot proceed for this session.
+                    stateError = insertError;
+                } else {
+                    console.log('Successfully created missing simulation state.');
+                    stateData = newStateData;
+                }
+            }
+
+            if (stateError) {
+                console.error('Error fetching initial state:', stateError);
+                setServerState(null);
+            } else {
+                setServerState(stateData);
+            }
 
             // Fetch initial logs
             const { data: logsData, error: logsError } = await supabase
