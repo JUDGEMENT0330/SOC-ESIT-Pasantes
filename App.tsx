@@ -450,7 +450,14 @@ const TrainingModule: React.FC<TrainingModuleProps> = ({ scenario, isCompleted, 
                             <Icon name={scenario.icon} className={`h-6 w-6 ${scenario.color.replace('bg-', 'text-').replace('-500','-400')}`} />
                         </div>
                         <div className="min-w-0">
-                            <h4 className="font-bold text-white truncate">{scenario.title}</h4>
+                             <div className="flex items-center">
+                                <h4 className="font-bold text-white truncate">{scenario.title}</h4>
+                                {isCompleted && (
+                                    <span className="ml-3 px-2 py-0.5 text-xs font-semibold text-green-800 bg-green-300 rounded-full animate-fade-in-fast flex-shrink-0">
+                                        ✓ Completado
+                                    </span>
+                                )}
+                            </div>
                             <p className="text-sm text-gray-400">{scenario.subtitle}</p>
                         </div>
                     </div>
