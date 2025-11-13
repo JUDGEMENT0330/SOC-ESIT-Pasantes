@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from './supabaseClient';
 import type { SimulationState, LogEntry, SessionData, TerminalLine, PromptState } from './types';
@@ -257,8 +258,8 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
                     break;
                 case 'ls':
                     if (effectiveArgs[1] === '-l' && effectiveArgs[2]?.includes('db_config.php')) {
-                        const perms = serverState.db_config_permissions === '640' ? 'r--' : 'r--';
-                        outputLines.push({ text: `-rw-r--${perms} 1 www-data www-data 58 Jul 15 10:00 /var/www/html/db_config.php`, type: 'output' });
+                        const perms = serverState.db_config_permissions === '640' ? '-rw-r-----' : '-rw-r--r--';
+                        outputLines.push({ text: `${perms} 1 www-data www-data 58 Jul 15 10:00 /var/www/html/db_config.php`, type: 'output' });
                     } else {
                          outputLines.push({ text: `(SIMULACIÓN)\ntotal 8\ndrwxr-xr-x 2 root root 4096 Jul 15 09:00 bin\ndrwxr-xr-x 2 root root 4096 Jul 15 09:01 etc`, type: 'output' });
                     }
