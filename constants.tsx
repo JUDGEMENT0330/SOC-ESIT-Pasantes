@@ -400,7 +400,8 @@ export const RESOURCE_MODULES: ResourceModule[] = [
                 <CisoTable 
                     headers={['Registro', 'Nombre Completo', 'Función', 'Ejemplo de Valor']}
                     rows={[
-                        [<strong>A</strong>, 'Address', 'Asocia un dominio a una dirección IPv4.', code>172.217.14.228</code>],
+                        // FIX: Changed malformed `code>` tag to a proper `<code>` tag.
+                        [<strong>A</strong>, 'Address', 'Asocia un dominio a una dirección IPv4.', <code>172.217.14.228</code>],
                         [<strong>AAAA</strong>, 'Quad A', 'Asocia un dominio a una dirección IPv6.', <code>2607:f8b0:400a:80e::200e</code>],
                         [<strong>CNAME</strong>, 'Canonical Name', 'Crea un alias. Apunta un dominio a otro dominio.', 'mail.google.com'],
                         [<strong>MX</strong>, 'Mail Exchange', 'Especifica el servidor de correo para un dominio.', '10 smtp.google.com'],
