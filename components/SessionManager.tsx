@@ -123,14 +123,33 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
         if (!isAdmin) return;
         if (window.confirm('¿Está seguro de que desea eliminar esta sesión para todos los usuarios? Esta acción es irreversible.')) {
             setLoading(true);
-            // Delete related records first to avoid foreign key constraints
-            await supabase.from('session_participants').delete().eq('session_id', sessionId);
-            await supabase.from('simulation_state').delete().eq('session_id', sessionId);
-            await supabase.from('simulation_logs').delete().eq('session_id', sessionId);
-            const { error } = await supabase.from('simulation_sessions').delete().eq('id', sessionId);
-            if (error) setError(`Error al eliminar: ${error.message}`);
-            // Realtime will update the list
-            setLoading(false);
+            setError('');
+    
+            // Run dependency deletions in parallel for efficiency
+            const deletePromises = [
+                supabase.from('session_participants').delete().eq('session_id', sessionId),
+                supabase.from('simulation_state').delete().eq('session_id', sessionId),
+                supabase.from('simulation_logs').delete().eq('session_id', sessionId)
+            ];
+    
+            const results = await Promise.all(deletePromises);
+            
+            const errors = results.map(r => r.error).filter(Boolean);
+    
+            if (errors.length > 0) {
+                const errorMessages = errors.map(e => e.message).join('; ');
+                setError(`Error limpiando dependencias de la sesión. Es posible que una política de seguridad (RLS) lo esté bloqueando. Detalles: ${errorMessages}`);
+                setLoading(false);
+                return; // Stop if dependencies can't be deleted
+            }
+    
+            // If dependencies are gone, delete the main session
+            const { error: sessionError } = await supabase.from('simulation_sessions').delete().eq('id', sessionId);
+            if (sessionError) {
+                setError(`Error al eliminar la sesión principal: ${sessionError.message}`);
+            }
+            
+            setLoading(false); // Realtime will update the list
         }
     };
 
