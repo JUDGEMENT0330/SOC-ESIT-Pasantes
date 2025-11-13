@@ -112,6 +112,19 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team, isCont
                 return;
         }
 
+        // --- Contextual Command Check ---
+        if (currentHost === 'SOC-VALTORIX') {
+            const hostSpecificCommands = [
+                'ufw', 'nano', 'systemctl', 'grep', 'ss', 'ls', 'chmod', 'openssl', 'top', 
+                'htop', 'journalctl', 'fail2ban-client', 'sha256sum', 'wget'
+            ];
+            const commandToCheck = cmd === 'sudo' ? args[1] : cmd;
+            if (hostSpecificCommands.includes(commandToCheck)) {
+                addTerminalOutput({ text: `Error: El comando '${commandToCheck}' solo está disponible después de conectarse a un host de simulación (ej. ssh blue-team@PORTAL-WEB).`, type: 'error' });
+                return;
+            }
+        }
+
         // --- RED TEAM COMMANDS (from soc-valtorix) ---
         if (isRedTeam && currentHost === 'SOC-VALTORIX') {
             const targetHost = args[args.length - 1].toUpperCase();
