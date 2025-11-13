@@ -22,7 +22,7 @@ export const Icon: React.FC<IconProps> = ({ name, className, ...props }) => {
         'layers': <><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 7 12 12 22 7"/><polyline points="2 17 12 22 22 17"/></>,
         'shield-alert': <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="M12 16h.01"/></>,
         'network': <><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></>,
-        'brain-circuit': <><path d="M12 5a3 3 0 1 0-5.993.142"/><path d="M18 5a3 3 0 1 0-5.993.142"/><path d="M21 12a3 3 0 1 0-5.993.142"/><path d="M15 12a3 3 0 1 0-5.993.142"/><path d="M9 12a3 3 0 1 0-5.993.142"/><path d="M12 19a3 3 0 1 0-5.993.142"/><path d="M18 19a3 3 0 1 0-5.993.142"/><path d="M12 5a3 3 0 1 0-5.993.142"/><path d="m14.65 6.01 1.35-.51"/><path d="m13.013 10.511 1.984-1.388"/><path d="m15.013 10.611 1.985 1.288"/><path d="M14.65 17.99 l1.35.51"/><path d="m8.65 6.01 7.35- .5"/><path d="m9.013 10.511-1.984-1.388"/><path d="m7.013 10.611-1.985 1.288"/><path d="m8.65 17.99-1.35.51"/></>,
+        'brain-circuit': <><path d="M12 5a3 3 0 1 0-5.993.142"/><path d="M18 5a3 3 0 1 0-5.993.142"/><path d="M21 12a3 3 0 1 0-5.993.142"/><path d="M15 12a3 3 0 1 0-5.993.142"/><path d="M9 12a3 3 0 1 0-5.993.142"/><path d="M12 19a3 3 0 1 0-5.993.142"/><path d="M18 19a3 3 0 1 0-5.993.142"/><path d="M12 5a3 3 0 1 0-5.993.142"/><path d="m14.65 6.01 1.35-.51"/><path d="m13.013 10.511 1.984-1.388"/><path d="m15.013 10.611 1.985 1.288"/><path d="m14.65 17.99 l1.35.51"/><path d="m8.65 6.01 7.35 -.5"/><path d="m9.013 10.511-1.984-1.388"/><path d="m7.013 10.611-1.985 1.288"/><path d="m8.65 17.99-1.35.51"/></>,
         'shield-off': <><path d="M19.69 14a6.9 6.9 0 0 0 .31-2V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m2 2 20 20"/></>,
         'swords': <><path d="M14.5 17.5 3 6"/><path d="m21 3-9.5 9.5"/><path d="m6.5 12.5 11 11"/></>,
         'shield-check': <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></>,
@@ -448,6 +448,29 @@ export const RESOURCE_MODULES: ResourceModule[] = [
                 <dl>
                     <dt>Fuerza Bruta (Hydra):</dt>
                     <dd>Hydra es una herramienta "ruidosa". Es un "martillo", no un "bisturí". En un pentest real, esto alertaría a cualquier SOC decente.</dd>
+                </dl>
+            </CisoCard>
+        </>
+    },
+    {
+        id: 'recurso-taller8', icon: 'activity', title: 'Análisis Profundo: Furia en la Red (Taller 8)',
+        content: <>
+            <CisoCard icon="shield" title="Contexto Equipo Azul (Respuesta)">
+                 <dl>
+                    <dt>Detección de DoS (top/htop):</dt>
+                    <dd>Un ataque de inundación SYN (SYN Flood) agota los recursos del servidor al dejar conexiones a medio abrir. En <code>top</code>, esto se manifiesta como un uso de CPU cercano al 100%, a menudo por procesos del sistema que manejan interrupciones de red (ksoftirqd).</dd>
+                    <dt>Análisis de Logs (journalctl/grep):</dt>
+                    <dd>Los ataques de fuerza bruta son "ruidosos" por diseño. Dejan un rastro claro en los logs de autenticación (<code>/var/log/auth.log</code> o vía <code>journalctl</code>). Buscar "Failed password" es la forma más rápida de confirmar el ataque y encontrar la IP de origen.</dd>
+                    <dt>Contención (Firewall):</dt>
+                    <dd>Una vez identificada la IP del atacante, bloquearla en el firewall (<code>ufw deny from [IP]</code>) es la contención más efectiva. Detiene tanto el DoS como el ataque de fuerza bruta con una sola regla.</dd>
+                </dl>
+            </CisoCard>
+            <CisoCard icon="sword" title="Contexto Equipo Rojo (Ataque)">
+                <dl>
+                    <dt>Ataque Combinado:</dt>
+                    <dd>La estrategia aquí es usar un ataque "ruidoso" y de baja complejidad (DoS) como una cortina de humo para ocultar el ataque más sigiloso y peligroso (fuerza bruta para obtener credenciales). Mientras el equipo de defensa está ocupado con el DoS, el atacante intenta ganar acceso.</dd>
+                    <dt>Inundación SYN (hping3):</dt>
+                    <dd><code>hping3 --flood -S [host]</code> envía una ráfaga de paquetes TCP SYN sin completar el handshake. Es una forma clásica y efectiva de probar la resistencia de un servidor a ataques DoS a nivel de red.</dd>
                 </dl>
             </CisoCard>
         </>
