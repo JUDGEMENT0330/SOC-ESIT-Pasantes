@@ -1,3 +1,4 @@
+
 import React, { useRef } from 'react';
 import { TerminalInstance } from './TerminalInstance';
 import { LogViewer } from './LogViewer';
@@ -22,11 +23,19 @@ const TerminalHeader: React.FC<{ team: 'Red' | 'Blue' }> = ({ team }) => {
 export const DualTerminalView: React.FC<DualTerminalViewProps> = ({ logEntries, addLogEntry }) => {
     // This state is shared between both terminal instances to simulate a single server environment
     const serverState = useRef({
-        rootLoginEnabled: true, // Legacy, use sshHardened instead for logic
+        // Scenario 7 state ('BOVEDA-WEB')
         firewallEnabled: false,
         hydraRunCount: 0,
-        dbConfigPermissions: '644', // Default insecure permissions: user, group, other can read
-        sshHardened: false, // PermitRootLogin is 'yes' by default
+        dbConfigPermissions: '644',
+        sshHardened: false,
+        // Scenario 8 state ('PORTAL-WEB')
+        attackerIp: '188.45.67.123',
+        isDosActive: false,
+        serverLoad: 5.0, // Percentage
+        bannedIps: [] as string[],
+        portalAdminPassword: 'portal@admin123',
+        payloadDeployed: false,
+        adminPasswordFound: false,
     });
 
     return (
@@ -34,7 +43,7 @@ export const DualTerminalView: React.FC<DualTerminalViewProps> = ({ logEntries, 
             <div className="text-center mb-6">
                 <h2 className="text-2xl md:text-3xl font-bold text-white">Simulación: Equipo Rojo vs. Equipo Azul</h2>
                 <p className="text-gray-300 max-w-3xl mx-auto mt-2">
-                    El Equipo Rojo (atacante) debe auditar el servidor <strong>BOVEDA-WEB</strong>. El Equipo Azul (defensor) debe asegurarlo y detectar la intrusión. Las acciones en una terminal generarán logs en la otra.
+                    El Equipo Rojo (atacante) debe auditar los servidores. El Equipo Azul (defensor) debe asegurarlos y detectar la intrusión. Las acciones en una terminal generarán logs en la otra.
                 </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
