@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import type { User } from '@supabase/supabase-js';
@@ -132,7 +131,11 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
             setSessionData({ sessionId, sessionName, team });
 
         } catch (err: any) {
-            setError(`No se pudo unir a la sesión: ${err.message}`);
+            let userMessage = `No se pudo unir a la sesión: ${err.message}`;
+            if (err.message?.includes('recursion')) {
+                userMessage = "Error de configuración en la base de datos (recursión infinita en política RLS). Por favor, aplique el script SQL de corrección en su editor de Supabase.";
+            }
+            setError(userMessage);
             console.error(err);
             setLoading(false);
         }
@@ -172,7 +175,11 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
 
         } catch (err: any) {
             console.error('Error joining default session:', err);
-            setError(`Error al unirse a la sesión por defecto. Es posible que la política RLS de Supabase sea incorrecta. Error: ${err.message}`);
+            let userMessage = `Error al unirse a la sesión por defecto: ${err.message}`;
+             if (err.message?.includes('recursion')) {
+                userMessage = "Error de configuración en la base de datos (recursión infinita en política RLS). Por favor, aplique el script SQL de corrección en su editor de Supabase.";
+            }
+            setError(userMessage);
             setLoading(false);
         }
     };
