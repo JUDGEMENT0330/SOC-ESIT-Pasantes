@@ -56,10 +56,10 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
 
     const createNewSession = async (name: string): Promise<SimulationSession | null> => {
         try {
-            // 1. Create the session
+            // 1. Create the session, including the user's ID as the creator
             const { data: sessionData, error: sessionError } = await supabase
                 .from('simulation_sessions')
-                .insert({ session_name: name.trim() })
+                .insert({ session_name: name.trim(), created_by: user.id })
                 .select()
                 .single();
 
@@ -74,7 +74,11 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
             
             return sessionData;
         } catch (err: any) {
-            setError(`Error creando la sesión: ${err.message}`);
+            let userMessage = `Error creando la sesión: ${err.message}`;
+            if (err.message?.includes('violates row-level security policy')) {
+                userMessage = "Error creando la sesión: La política de seguridad (RLS) de la base de datos lo impidió. Asegúrese de que la política de inserción en 'simulation_sessions' sea correcta y que la columna 'created_by' esté siendo asignada.";
+            }
+            setError(userMessage);
             console.error(err);
             return null;
         }
@@ -132,8 +136,8 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
 
         } catch (err: any) {
             let userMessage = `No se pudo unir a la sesión: ${err.message}`;
-            if (err.message?.includes('recursion')) {
-                userMessage = "Error de configuración en la base de datos (recursión infinita en política RLS). Por favor, aplique el script SQL de corrección en su editor de Supabase.";
+            if (err.message?.includes('security policy') || err.message?.includes('recursion')) {
+                userMessage = "Error de la base de datos debido a una política de seguridad (RLS). Por favor, revise y aplique los scripts SQL de corrección recomendados en su editor de Supabase.";
             }
             setError(userMessage);
             console.error(err);
@@ -176,8 +180,8 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
         } catch (err: any) {
             console.error('Error joining default session:', err);
             let userMessage = `Error al unirse a la sesión por defecto: ${err.message}`;
-             if (err.message?.includes('recursion')) {
-                userMessage = "Error de configuración en la base de datos (recursión infinita en política RLS). Por favor, aplique el script SQL de corrección en su editor de Supabase.";
+            if (err.message?.includes('security policy') || err.message?.includes('recursion')) {
+                userMessage = "Error de la base de datos debido a una política de seguridad (RLS). Por favor, revise y aplique los scripts SQL de corrección recomendados en su editor de Supabase.";
             }
             setError(userMessage);
             setLoading(false);
