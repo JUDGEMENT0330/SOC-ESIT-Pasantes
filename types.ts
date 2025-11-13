@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 export interface TerminalLine {
@@ -69,8 +68,13 @@ export interface SimulationState {
 
 export interface SessionData {
     sessionId: string;
-    team: 'red' | 'blue';
+    team: 'red' | 'blue' | 'spectator';
     sessionName: string;
+}
+
+export interface SessionParticipant {
+    user_id: string;
+    team_role: 'red' | 'blue';
 }
 
 export interface SimulationSession {
@@ -78,4 +82,5 @@ export interface SimulationSession {
     session_name: string;
     created_at: string;
     is_active: boolean;
+    session_participants: SessionParticipant[];
 }
