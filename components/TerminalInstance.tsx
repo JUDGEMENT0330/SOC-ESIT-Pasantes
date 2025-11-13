@@ -7,6 +7,7 @@ type Team = 'Red' | 'Blue';
 
 interface TerminalInstanceProps {
     team: Team;
+    isControlling?: boolean; // Prop for admin control
 }
 
 const getInitialPrompt = (team: Team): PromptState => {
@@ -21,7 +22,7 @@ const getWelcomeMessage = (team: Team): TerminalLine[] => [
     { html: "Escriba <strong class='text-amber-300'>help</strong> para ver sus objetivos y comandos.", type: 'html' },
 ];
 
-export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team }) => {
+export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team, isControlling = false }) => {
     const { serverState, addLog, updateServerState, userTeam } = useContext(SimulationContext);
     const isSpectator = userTeam === 'spectator';
 
@@ -53,11 +54,19 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team }) => {
     };
     
     const processCommand = (command: string) => {
-        if (isSpectator) return; // Spectators cannot issue commands
-
-        if (team.toLowerCase() !== userTeam) {
-            addTerminalOutput({ text: "Acción no permitida: Esta no es la terminal de tu equipo.", type: 'error' });
-            return;
+        // --- Authorization Check ---
+        if (isSpectator) {
+            if (!isControlling) {
+                // Admin is spectating, do nothing.
+                return;
+            }
+            // Admin is controlling, proceed. The 'team' prop determines which team's commands are simulated.
+        } else {
+            // This is a regular user. Check if they are on their assigned team's terminal.
+            if (team.toLowerCase() !== userTeam) {
+                addTerminalOutput({ text: "Acción no permitida: Esta no es la terminal de tu equipo.", type: 'error' });
+                return;
+            }
         }
 
         const args = command.trim().split(' ');
@@ -80,7 +89,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team }) => {
                 const scenarioId = args[1];
                 if (scenarioId && SCENARIO_HELP_TEXTS[scenarioId]) {
                     const scenarioHelp = SCENARIO_HELP_TEXTS[scenarioId];
-                    const teamSpecificHelp = userTeam === 'red' ? scenarioHelp.red : scenarioHelp.blue;
+                    const teamSpecificHelp = team === 'Red' ? scenarioHelp.red : scenarioHelp.blue;
                     const fullHelp = scenarioHelp.general + teamSpecificHelp;
                     addTerminalOutput({ html: fullHelp, type: 'html' });
                 } else if (isRedTeam) {
@@ -347,7 +356,20 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team }) => {
         }
     };
 
-    const canInteract = !isSpectator && (team.toLowerCase() === userTeam) && !!serverState;
+    const canInteract = (isSpectator && isControlling && !!serverState) || 
+                        (!isSpectator && team.toLowerCase() === userTeam && !!serverState);
+
+
+    const getPlaceholderText = () => {
+        if (!serverState) return "Sincronizando estado...";
+        if (isSpectator) {
+            return isControlling ? "Modo Control activado. Escriba un comando..." : "Modo Espectador (solo lectura)";
+        }
+        if (team.toLowerCase() !== userTeam) {
+            return "Terminal de otro equipo...";
+        }
+        return "Escriba un comando...";
+    };
 
     return (
         <div 
@@ -380,12 +402,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team }) => {
                     autoCapitalize="off"
                     spellCheck="false"
                     disabled={!canInteract}
-                    placeholder={
-                        isSpectator ? "Modo Espectador (solo lectura)" :
-                        !serverState ? "Sincronizando estado..." :
-                        (team.toLowerCase() !== userTeam) ? "Terminal de otro equipo..." :
-                        "Escriba un comando..."
-                    }
+                    placeholder={getPlaceholderText()}
                 />
             </div>
         </div>
