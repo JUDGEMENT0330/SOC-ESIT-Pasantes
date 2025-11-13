@@ -508,12 +508,13 @@ Use <strong class="text-amber-300">help [id]</strong> para una guía detallada (
   <strong class="text-amber-300">sha256sum [file]</strong>           - Verifica la integridad de un archivo.
 </pre>`;
 
-export const SCENARIO_HELP_TEXTS: { [key: string]: string } = {
-  'escenario7': `<pre class="whitespace-pre-wrap font-mono text-xs">
+export const SCENARIO_HELP_TEXTS: { [key: string]: { general: string, red: string, blue: string } } = {
+  'escenario7': {
+    general: `<pre class="whitespace-pre-wrap font-mono text-xs">
 <strong class="text-yellow-300">GUÍA DETALLADA - ESCENARIO 7: Fortaleza Digital</strong>
-
 Este es un ejercicio práctico de ataque y defensa en tiempo real contra <strong class="text-cyan-300">BOVEDA-WEB</strong>.
-
+</pre>`,
+    blue: `<pre class="whitespace-pre-wrap font-mono text-xs">
 <strong class="text-blue-400">EQUIPO AZUL (DEFENSOR) - EN TERMINAL 'BOVEDA-WEB'</strong>
 Tu misión es asegurar el servidor ANTES de que el Equipo Rojo encuentre una vulnerabilidad.
 El orden es crítico.
@@ -537,7 +538,8 @@ El orden es crítico.
                            usa 'hydra' para ver los ataques en tiempo real)
     <strong class="text-amber-300">sudo ss -tulnp</strong>       (Verifica qué puertos están abiertos. Deberían ser
                            menos después de activar el firewall)
-
+</pre>`,
+    red: `<pre class="whitespace-pre-wrap font-mono text-xs">
 <strong class="text-red-400">EQUIPO ROJO (ATACANTE) - EN TERMINAL 'soc-valtorix'</strong>
 Tu misión es encontrar una ventana de oportunidad antes de que el Equipo Azul la cierre.
 
@@ -554,12 +556,14 @@ Tu misión es encontrar una ventana de oportunidad antes de que el Equipo Azul l
     <strong class="text-amber-300">dirb http://BOVEDA-WEB</strong>     (Busca directorios. ¿Hay un /backup?)
     <strong class="text-amber-300">curl http://BOVEDA-WEB/db_config.php</strong> (Si los permisos no han sido
                                      corregidos, podrías leer el archivo)
-</pre>`,
- 'escenario8': `<pre class="whitespace-pre-wrap font-mono text-xs">
+</pre>`
+  },
+ 'escenario8': {
+    general: `<pre class="whitespace-pre-wrap font-mono text-xs">
 <strong class="text-yellow-300">GUÍA DETALLADA - ESCENARIO 8: Furia en la Red</strong>
-
 Ataque combinado contra <strong class="text-cyan-300">PORTAL-WEB</strong>. El trabajo en equipo y la velocidad son claves.
-
+</pre>`,
+    blue: `<pre class="whitespace-pre-wrap font-mono text-xs">
 <strong class="text-blue-400">EQUIPO AZUL (DEFENSOR) - EN TERMINAL 'PORTAL-WEB'</strong>
 Estás bajo un doble ataque. Debes diagnosticar y mitigar ambas amenazas.
 
@@ -580,7 +584,8 @@ Estás bajo un doble ataque. Debes diagnosticar y mitigar ambas amenazas.
     <strong class="text-amber-300">sha256sum /var/www/html/index.php</strong> (Verifica la integridad del archivo.
                                         Si el Equipo Rojo tuvo éxito, verás una alerta
                                         de que el hash no coincide).
-
+</pre>`,
+    red: `<pre class="whitespace-pre-wrap font-mono text-xs">
 <strong class="text-red-400">EQUIPO ROJO (ATACANTE) - EN TERMINAL 'soc-valtorix'</strong>
 Tu misión es multifacética: distraer, infiltrar y desplegar.
 
@@ -603,4 +608,5 @@ Tu misión es multifacética: distraer, infiltrar y desplegar.
 
 El ejercicio termina cuando el Equipo Azul bloquea tu IP o cuando despliegas el payload.
 </pre>`
+ }
 };
