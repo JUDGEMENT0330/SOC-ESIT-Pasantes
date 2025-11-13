@@ -1,10 +1,10 @@
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useContext } from 'react';
 import type { LogEntry } from '../types';
 import { Icon } from '../constants';
+import { SimulationContext } from '../SimulationContext';
 
 interface LogViewerProps {
-    logs: LogEntry[];
     team: 'Red' | 'Blue';
 }
 
@@ -18,8 +18,9 @@ const LogSourceIndicator: React.FC<{ source: LogEntry['source'] }> = ({ source }
     return <span className={`font-bold mr-2 ${color}`}>{text}</span>;
 };
 
-export const LogViewer: React.FC<LogViewerProps> = ({ logs, team }) => {
+export const LogViewer: React.FC<LogViewerProps> = ({ team }) => {
     const endOfLogsRef = useRef<HTMLDivElement>(null);
+    const { logs } = useContext(SimulationContext);
 
     const filteredLogs = logs.filter(log => log.teamVisible === 'all' || log.teamVisible === team.toLowerCase());
 
@@ -37,7 +38,7 @@ export const LogViewer: React.FC<LogViewerProps> = ({ logs, team }) => {
                 <div className="flex-grow overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
                     {filteredLogs.map(log => (
                         <div key={log.id} className="flex items-start">
-                            <span className="text-gray-500 mr-2 flex-shrink-0">{log.timestamp}</span>
+                            <span className="text-gray-500 mr-2 flex-shrink-0">{new Date(log.timestamp).toLocaleTimeString()}</span>
                             <div className="break-words">
                                 <LogSourceIndicator source={log.source} />
                                 <span className="text-slate-300">{log.message}</span>
