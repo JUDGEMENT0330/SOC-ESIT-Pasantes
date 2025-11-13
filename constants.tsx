@@ -1,5 +1,5 @@
 import React from 'react';
-import type { TrainingScenario, ResourceModule, GlossaryTerm } from './types';
+import type { TrainingScenario, ResourceModule, GlossaryTerm, TerminalLine, PromptState } from './types';
 
 // ============================================================================
 // Icon Component (Lucide SVG paths)
@@ -116,6 +116,18 @@ const CisoTable: React.FC<{ headers: string[]; rows: (string | React.ReactNode)[
 // Simulation Defaults
 // ============================================================================
 
+const getInitialPrompt = (team: 'Red' | 'Blue'): PromptState => {
+    if (team === 'Blue') {
+        return { user: 'pasante-blue', host: 'soc-valtorix', dir: '~' };
+    }
+    return { user: 'pasante-red', host: 'soc-valtorix', dir: '~' };
+};
+
+const getWelcomeMessage = (team: 'Red' | 'Blue'): TerminalLine[] => [
+    { text: `Bienvenido a la terminal del Equipo ${team}.`, type: 'output' },
+    { html: "Escriba <strong class='text-amber-300'>help</strong> para ver sus objetivos y comandos.", type: 'html' },
+];
+
 export const DEFAULT_SIMULATION_STATE = {
     firewall_enabled: false,
     ssh_hardened: false,
@@ -126,6 +138,10 @@ export const DEFAULT_SIMULATION_STATE = {
     db_config_permissions: '644',
     hydra_run_count: 0,
     server_load: 5.0,
+    red_terminal_output: getWelcomeMessage('Red'),
+    blue_terminal_output: getWelcomeMessage('Blue'),
+    red_prompt: getInitialPrompt('Red'),
+    blue_prompt: getInitialPrompt('Blue'),
 };
 
 
@@ -384,7 +400,7 @@ export const RESOURCE_MODULES: ResourceModule[] = [
                 <CisoTable 
                     headers={['Registro', 'Nombre Completo', 'Función', 'Ejemplo de Valor']}
                     rows={[
-                        [<strong>A</strong>, 'Address', 'Asocia un dominio a una dirección IPv4.', <code>172.217.14.228</code>],
+                        [<strong>A</strong>, 'Address', 'Asocia un dominio a una dirección IPv4.', code>172.217.14.228</code>],
                         [<strong>AAAA</strong>, 'Quad A', 'Asocia un dominio a una dirección IPv6.', <code>2607:f8b0:400a:80e::200e</code>],
                         [<strong>CNAME</strong>, 'Canonical Name', 'Crea un alias. Apunta un dominio a otro dominio.', 'mail.google.com'],
                         [<strong>MX</strong>, 'Mail Exchange', 'Especifica el servidor de correo para un dominio.', '10 smtp.google.com'],
