@@ -112,6 +112,22 @@ const CisoTable: React.FC<{ headers: string[]; rows: (string | React.ReactNode)[
     </div>
 );
 
+// ============================================================================
+// Simulation Defaults
+// ============================================================================
+
+export const DEFAULT_SIMULATION_STATE = {
+    firewall_enabled: false,
+    ssh_hardened: false,
+    banned_ips: [],
+    payload_deployed: false,
+    is_dos_active: false,
+    admin_password_found: false,
+    db_config_permissions: '644',
+    hydra_run_count: 0,
+    server_load: 5.0,
+};
+
 
 // ============================================================================
 // Static Content Data
