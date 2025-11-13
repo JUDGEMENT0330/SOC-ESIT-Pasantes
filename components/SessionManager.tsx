@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import type { User } from '@supabase/supabase-js';
@@ -67,9 +68,11 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
 
             if (sessionError) throw sessionError;
 
+            const { prompt_red, prompt_blue, ...stateForDb } = DEFAULT_SIMULATION_STATE;
+
             const { error: stateError } = await supabase
                 .from('simulation_state')
-                .insert({ session_id: sessionData.id, ...DEFAULT_SIMULATION_STATE });
+                .insert({ session_id: sessionData.id, ...stateForDb });
             
             if (stateError) {
                 // Attempt to clean up the session if state creation fails
@@ -82,6 +85,8 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
             let userMessage = `Error creando la sesión: ${err.message}`;
             if (err.message?.includes('violates row-level security policy')) {
                 userMessage = "Error creando la sesión: La política de seguridad (RLS) de la base de datos lo impidió. Asegúrese de que la política de inserción en 'simulation_sessions' sea correcta.";
+            } else if (err.message?.includes('Could not find the')) {
+                 userMessage = `Error creando la sesión: ${err.message}. Verifique que el esquema de la base de datos coincide con DEFAULT_SIMULATION_STATE.`;
             }
             setError(userMessage);
             console.error(err);
@@ -140,36 +145,36 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
         }
     };
 
-    const handleJoinSession = async (sessionId: string, sessionName: string, team: 'red' | 'blue') => {
-        if (isAdmin) {
-            setSessionData({ sessionId, sessionName, team: 'spectator' });
-            return;
-        }
-
+    const handleJoinSession = async (sessionId: string, sessionName: string, team: 'red' | 'blue' | 'spectator') => {
+        // Admin joins as spectator, regular user joins a team
+        const roleToJoin = isAdmin ? 'spectator' : team;
+        
         setLoading(true);
         setError('');
 
         try {
-            // Re-check just before joining to be safe
-            const { data: participants, error: checkError } = await supabase
-                .from('session_participants')
-                .select('team_role')
-                .eq('session_id', sessionId)
-                .eq('team_role', team);
-            
-            if (checkError) throw checkError;
+            if (roleToJoin !== 'spectator') {
+                 // Re-check just before joining to be safe for non-admins
+                const { data: participants, error: checkError } = await supabase
+                    .from('session_participants')
+                    .select('team_role')
+                    .eq('session_id', sessionId)
+                    .eq('team_role', roleToJoin);
+                
+                if (checkError) throw checkError;
 
-            if (participants && participants.length > 0) {
-                throw new Error(`El rol de equipo ${team === 'red' ? 'Rojo' : 'Azul'} ya está ocupado.`);
+                if (participants && participants.length > 0) {
+                    throw new Error(`El rol de equipo ${roleToJoin === 'red' ? 'Rojo' : 'Azul'} ya está ocupado.`);
+                }
+
+                const { error: insertError } = await supabase
+                    .from('session_participants')
+                    .insert({ session_id: sessionId, user_id: user.id, team_role: roleToJoin });
+
+                if (insertError) throw insertError;
             }
 
-            const { error: insertError } = await supabase
-                .from('session_participants')
-                .insert({ session_id: sessionId, user_id: user.id, team_role: team });
-
-            if (insertError) throw insertError;
-
-            setSessionData({ sessionId, sessionName, team });
+            setSessionData({ sessionId, sessionName, team: roleToJoin as 'red' | 'blue' | 'spectator' });
 
         } catch (err: any) {
             setError(`No se pudo unir a la sesión: ${err.message}`);
@@ -179,6 +184,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
     };
     
     const handleJoinDefaultSession = async (team: 'red' | 'blue') => {
+        if (isAdmin) return; // Admins should not use this function
         const sessionName = team === 'red' ? 'Entrenamiento Equipo Rojo' : 'Entrenamiento Equipo Azul';
         setLoading(true);
         setError('');
@@ -207,6 +213,8 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
         }
     };
 
+    const sessionsForUser = isAdmin ? sessions : sessions.filter(s => !s.session_name.includes('Entrenamiento'));
+
     return (
         <div className="min-h-screen flex items-center justify-center p-4">
             <div className="w-full max-w-3xl">
@@ -219,45 +227,49 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
                     {error && <p className="mb-4 text-center text-red-400 bg-red-900/50 p-3 rounded-lg animate-fade-in-fast">{error}</p>}
                     
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                        <button onClick={() => handleJoinDefaultSession('red')} className="p-6 text-left bg-red-900/30 border border-red-500/50 rounded-lg hover:bg-red-900/60 transition-all duration-300 disabled:opacity-50 flex items-center space-x-4" disabled={loading}>
+                        <button onClick={() => handleJoinDefaultSession('red')} className="p-6 text-left bg-red-900/30 border border-red-500/50 rounded-lg hover:bg-red-900/60 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-4" disabled={loading || isAdmin}>
                             <Icon name="sword" className="h-10 w-10 text-red-400 flex-shrink-0"/>
                             <div>
-                                <h3 className="font-bold text-red-300 text-lg">{isAdmin ? 'Ver' : 'Entrenamiento'} Equipo Rojo</h3>
-                                <p className="text-red-400/80 text-sm">{isAdmin ? 'Observar la sesión de ataque.' : 'Únete como atacante para auditar sistemas.'}</p>
+                                <h3 className="font-bold text-red-300 text-lg">Entrenamiento Equipo Rojo</h3>
+                                <p className="text-red-400/80 text-sm">Únete como atacante para auditar sistemas.</p>
                             </div>
                         </button>
-                         <button onClick={() => handleJoinDefaultSession('blue')} className="p-6 text-left bg-blue-900/30 border border-blue-500/50 rounded-lg hover:bg-blue-900/60 transition-all duration-300 disabled:opacity-50 flex items-center space-x-4" disabled={loading}>
+                         <button onClick={() => handleJoinDefaultSession('blue')} className="p-6 text-left bg-blue-900/30 border border-blue-500/50 rounded-lg hover:bg-blue-900/60 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-4" disabled={loading || isAdmin}>
                             <Icon name="shield" className="h-10 w-10 text-blue-400 flex-shrink-0"/>
                             <div>
-                                <h3 className="font-bold text-blue-300 text-lg">{isAdmin ? 'Ver' : 'Entrenamiento'} Equipo Azul</h3>
-                                <p className="text-blue-400/80 text-sm">{isAdmin ? 'Observar la sesión de defensa.' : 'Únete como defensor para asegurar y monitorear.'}</p>
+                                <h3 className="font-bold text-blue-300 text-lg">Entrenamiento Equipo Azul</h3>
+                                <p className="text-blue-400/80 text-sm">Únete como defensor para asegurar y monitorear.</p>
                             </div>
                         </button>
                     </div>
+                    {isAdmin && <p className="text-center text-yellow-300 mb-6 -mt-4 animate-fade-in-fast">Como administrador, puede observar cualquier sesión activa desde la lista de abajo.</p>}
 
-                    <div className="bg-black/20 p-4 rounded-lg mb-6">
-                        <h3 className="font-semibold text-lg text-yellow-300 mb-3">Crear Sesión Personalizada</h3>
-                        <form onSubmit={handleCreateSession} className="flex flex-col sm:flex-row gap-3">
-                            <input
-                                type="text"
-                                placeholder="Nombre de la nueva sesión"
-                                value={newSessionName}
-                                onChange={(e) => setNewSessionName(e.target.value)}
-                                className="flex-grow px-4 py-2 bg-black/30 border border-[rgba(184,134,11,0.3)] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--cv-gold)]"
-                                disabled={isCreating || loading}
-                            />
-                            <button type="submit" className="px-4 py-2 font-bold text-white bg-green-600/80 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 flex items-center justify-center" disabled={isCreating || loading}>
-                                <Icon name="plus-circle" className="h-5 w-5 mr-2"/>
-                                {isCreating ? 'Creando...' : 'Crear'}
-                            </button>
-                        </form>
-                    </div>
+
+                    {!isAdmin && (
+                        <div className="bg-black/20 p-4 rounded-lg mb-6">
+                            <h3 className="font-semibold text-lg text-yellow-300 mb-3">Crear Sesión Personalizada</h3>
+                            <form onSubmit={handleCreateSession} className="flex flex-col sm:flex-row gap-3">
+                                <input
+                                    type="text"
+                                    placeholder="Nombre de la nueva sesión"
+                                    value={newSessionName}
+                                    onChange={(e) => setNewSessionName(e.target.value)}
+                                    className="flex-grow px-4 py-2 bg-black/30 border border-[rgba(184,134,11,0.3)] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--cv-gold)]"
+                                    disabled={isCreating || loading}
+                                />
+                                <button type="submit" className="px-4 py-2 font-bold text-white bg-green-600/80 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 flex items-center justify-center" disabled={isCreating || loading}>
+                                    <Icon name="plus-circle" className="h-5 w-5 mr-2"/>
+                                    {isCreating ? 'Creando...' : 'Crear'}
+                                </button>
+                            </form>
+                        </div>
+                    )}
 
                     <div className="space-y-3 max-h-[30vh] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-                        <h3 className="font-semibold text-lg text-yellow-300 mb-3 sticky top-0 bg-[rgba(45,80,22,0.95)] backdrop-blur-sm py-2">Sesiones Personalizadas Activas</h3>
+                        <h3 className="font-semibold text-lg text-yellow-300 mb-3 sticky top-0 bg-[rgba(45,80,22,0.95)] backdrop-blur-sm py-2">{isAdmin ? "Sesiones Activas para Observar" : "Sesiones Personalizadas Activas"}</h3>
                         {loading && !isCreating && <p className="text-center text-gray-300">Cargando sesiones...</p>}
-                        {!loading && sessions.filter(s => !s.session_name.includes('Entrenamiento')).length === 0 && <p className="text-center text-gray-400">No hay sesiones personalizadas. ¡Crea una!</p>}
-                        {sessions.filter(s => !s.session_name.includes('Entrenamiento')).map(session => {
+                        {!loading && sessionsForUser.length === 0 && <p className="text-center text-gray-400">{isAdmin ? "No hay sesiones activas." : "No hay sesiones personalizadas. ¡Crea una!"}</p>}
+                        {sessionsForUser.map(session => {
                             const redParticipant = session.session_participants.find(p => p.team_role === 'red');
                             const blueParticipant = session.session_participants.find(p => p.team_role === 'blue');
                             return (
@@ -267,13 +279,25 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
                                         <p className="text-xs text-gray-400">Creada: {new Date(session.created_at).toLocaleString()}</p>
                                     </div>
                                     <div className="flex gap-3 flex-shrink-0">
-                                        {isAdmin && (
-                                            <button onClick={() => handleDeleteSession(session.id)} className="px-3 py-2 font-bold text-white bg-gray-600/80 rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 flex items-center" disabled={loading}>
-                                                <Icon name="trash" className="h-4 w-4"/>
-                                            </button>
+                                        {isAdmin ? (
+                                            <>
+                                                <button onClick={() => handleJoinSession(session.id, session.session_name, 'spectator')} className="px-4 py-2 font-bold text-white bg-yellow-600/80 rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2" disabled={loading}>
+                                                    <Icon name="binoculars" className="h-4 w-4"/> Ver Sesión
+                                                </button>
+                                                <button onClick={() => handleDeleteSession(session.id)} className="px-3 py-2 font-bold text-white bg-gray-600/80 rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 flex items-center" disabled={loading}>
+                                                    <Icon name="trash" className="h-4 w-4"/>
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <button onClick={() => handleJoinSession(session.id, session.session_name, 'red')} className="px-4 py-2 font-bold text-white bg-red-600/80 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50" disabled={loading || !!redParticipant}>
+                                                    {redParticipant ? 'Ocupado' : 'Unirse (Rojo)'}
+                                                </button>
+                                                <button onClick={() => handleJoinSession(session.id, session.session_name, 'blue')} className="px-4 py-2 font-bold text-white bg-blue-600/80 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50" disabled={loading || !!blueParticipant}>
+                                                    {blueParticipant ? 'Ocupado' : 'Unirse (Azul)'}
+                                                </button>
+                                            </>
                                         )}
-                                        <button onClick={() => handleJoinSession(session.id, session.session_name, 'red')} className="px-4 py-2 font-bold text-white bg-red-600/80 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50" disabled={loading || (!!redParticipant && !isAdmin)}>{isAdmin ? 'Ver Rojo' : (redParticipant ? 'Ocupado' : 'Unirse (Rojo)')}</button>
-                                        <button onClick={() => handleJoinSession(session.id, session.session_name, 'blue')} className="px-4 py-2 font-bold text-white bg-blue-600/80 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50" disabled={loading || (!!blueParticipant && !isAdmin)}>{isAdmin ? 'Ver Azul' : (blueParticipant ? 'Ocupado' : 'Unirse (Azul)')}</button>
                                     </div>
                                 </div>
                             );
