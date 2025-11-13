@@ -75,8 +75,12 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team }) => {
         // Universal Commands
         switch (cmd) {
             case 'help':
-                if (args[1] && SCENARIO_HELP_TEXTS[args[1]]) {
-                    addTerminalOutput({ html: SCENARIO_HELP_TEXTS[args[1]], type: 'html' });
+                const scenarioId = args[1];
+                if (scenarioId && SCENARIO_HELP_TEXTS[scenarioId]) {
+                    const scenarioHelp = SCENARIO_HELP_TEXTS[scenarioId];
+                    const teamSpecificHelp = userTeam === 'red' ? scenarioHelp.red : scenarioHelp.blue;
+                    const fullHelp = scenarioHelp.general + teamSpecificHelp;
+                    addTerminalOutput({ html: fullHelp, type: 'html' });
                 } else if (isRedTeam) {
                     addTerminalOutput({ html: RED_TEAM_HELP_TEXT, type: 'html' });
                 } else if (isBlueTeam) {
