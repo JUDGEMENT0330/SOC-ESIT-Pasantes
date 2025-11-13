@@ -40,35 +40,22 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         let logsChannel: RealtimeChannel;
 
         const fetchInitialData = async () => {
-            // Step 1: Attempt to fetch the simulation state.
             const { data: stateData, error: stateError } = await supabase
                 .from('simulation_state')
                 .select('*')
                 .eq('session_id', sessionId)
                 .maybeSingle();
 
-            // Step 2: If state is not found (either null data or a PGRST116 error), create a default one.
-            if (!stateData && (!stateError || stateError.code === 'PGRST116')) {
-                console.warn(`No state found for session ${sessionId}. Creating default state to recover.`);
-                const { data: newStateData, error: insertError } = await supabase
-                    .from('simulation_state')
-                    .insert({ session_id: sessionId, ...DEFAULT_SIMULATION_STATE })
-                    .select()
-                    .single();
-
-                if (insertError) {
-                    console.error('CRITICAL: Failed to create missing simulation state:', insertError);
-                    setServerState(null); // Recovery failed
-                } else {
-                    console.log('Successfully created and set initial state.');
-                    setServerState(newStateData);
-                }
-            } else if (stateError) {
-                // Step 3: Handle other, unexpected errors during fetch.
-                console.error('Error fetching initial state:', stateError);
-                setServerState(null);
+            // Robust state initialization: If there's any error fetching state (e.g., RLS permission denied)
+            // or if no state exists for the session yet, fall back to a default local state.
+            // This prevents the UI from breaking or getting stuck.
+            if (stateError && stateError.code !== 'PGRST116') {
+                console.error("Error fetching simulation state, falling back to local state:", stateError);
+                setServerState({ session_id: sessionId, ...DEFAULT_SIMULATION_STATE });
+            } else if (!stateData) {
+                console.warn(`No simulation state found for session ${sessionId}. Initializing with default local state.`);
+                setServerState({ session_id: sessionId, ...DEFAULT_SIMULATION_STATE });
             } else {
-                // Step 4: If fetch was successful, set the state.
                 setServerState(stateData);
             }
 
@@ -91,10 +78,13 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             .channel(`simulation-state-${sessionId}`)
             .on<SimulationState>(
                 'postgres_changes',
-                { event: 'UPDATE', schema: 'public', table: 'simulation_state', filter: `session_id=eq.${sessionId}` },
+                { event: '*', schema: 'public', table: 'simulation_state', filter: `session_id=eq.${sessionId}` },
                 (payload) => {
                     console.log('Realtime state update received:', payload.new);
-                    setServerState(payload.new as SimulationState);
+                    // Handle UPDATE and INSERT events
+                    if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+                        setServerState(payload.new as SimulationState);
+                    }
                 }
             )
             .subscribe();
@@ -132,15 +122,25 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
     const updateServerState = async (newState: Partial<SimulationState>) => {
         if (!serverState) return;
         
-        // Remove session_id from update payload as it's the primary key
-        const { session_id, ...updateData } = newState;
-
+        const updatedState = {
+          ...serverState,
+          ...newState,
+          last_updated: new Date().toISOString(),
+          session_id: sessionId,
+        };
+    
+        // Use upsert to create the state if it doesn't exist, or update it if it does.
+        // This will attempt to self-heal a session with a missing state on the first action.
         const { error } = await supabase
             .from('simulation_state')
-            .update({ ...updateData, last_updated: new Date().toISOString() })
-            .eq('session_id', sessionId);
+            .upsert(updatedState);
 
-        if (error) console.error('Error updating server state:', error);
+        if (error) {
+            console.error('Error upserting server state:', error);
+            // If the upsert fails (e.g., RLS), update the local state anyway for a responsive UI.
+            // The state will be out of sync, but the app won't break for the current user.
+            setServerState(updatedState);
+        }
     };
 
     const value = {
