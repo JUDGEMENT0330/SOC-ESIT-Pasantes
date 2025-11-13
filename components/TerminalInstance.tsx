@@ -375,8 +375,8 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team }) => {
                     autoComplete="off"
                     autoCapitalize="off"
                     spellCheck="false"
-                    disabled={team.toLowerCase() !== userTeam}
-                    placeholder={team.toLowerCase() !== userTeam ? "Terminal de otro equipo..." : "Escriba un comando..."}
+                    disabled={team.toLowerCase() !== userTeam || !serverState}
+                    placeholder={!serverState ? "Sincronizando estado..." : team.toLowerCase() !== userTeam ? "Terminal de otro equipo..." : "Escriba un comando..."}
                 />
             </div>
         </div>
