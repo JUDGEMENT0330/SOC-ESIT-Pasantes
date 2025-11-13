@@ -39,7 +39,7 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
     const attackerIp = '188.45.67.123';
     const portalAdminPassword = 'portal@admin123';
     const isAttackerBanned = serverState.banned_ips.includes(attackerIp);
-    const promptState = team === 'Red' ? serverState.red_prompt : serverState.blue_prompt;
+    const promptState = team === 'Red' ? serverState.prompt_red : serverState.prompt_blue;
 
     const args = command.trim().split(' ');
     const cmd = args[0].toLowerCase();
@@ -73,8 +73,8 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
             if (currentHost !== 'SOC-VALTORIX') {
                 outputLines.push({ text: `(SIMULACIÓN) Conexión a ${promptState.host} cerrada.`, type: 'output' });
                 const initialPrompt = team === 'Red' 
-                    ? DEFAULT_SIMULATION_STATE.red_prompt 
-                    : DEFAULT_SIMULATION_STATE.blue_prompt;
+                    ? DEFAULT_SIMULATION_STATE.prompt_red 
+                    : DEFAULT_SIMULATION_STATE.prompt_blue;
                 newPrompt = initialPrompt;
             } else {
                 outputLines.push({ text: 'Error: No hay sesión SSH activa para cerrar.', type: 'error' });
@@ -420,7 +420,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             setTimeout(async () => {
                 const { data: currentState, error } = await supabase
                     .from('simulation_state')
-                    .select('red_terminal_output, blue_terminal_output')
+                    .select('terminal_output_red, terminal_output_blue')
                     .eq('session_id', sessionId)
                     .single();
 
@@ -429,7 +429,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                     return;
                 }
                 
-                const outputKey = team === 'Red' ? 'red_terminal_output' : 'blue_terminal_output';
+                const outputKey = team === 'Red' ? 'terminal_output_red' : 'terminal_output_blue';
                 const currentOutput = currentState[outputKey] || [];
                 await updateServerState({ [outputKey]: [...currentOutput, ...lines] });
             }, 0);
@@ -439,8 +439,8 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             command, team, serverState, addLog, updateServerState, addDelayedOutput
         });
 
-        const outputKey = team === 'Red' ? 'red_terminal_output' : 'blue_terminal_output';
-        const promptKey = team === 'Red' ? 'red_prompt' : 'blue_prompt';
+        const outputKey = team === 'Red' ? 'terminal_output_red' : 'terminal_output_blue';
+        const promptKey = team === 'Red' ? 'prompt_red' : 'prompt_blue';
         const currentOutput = serverState[outputKey] || [];
         
         const promptLine: TerminalLine = { type: 'prompt' };
@@ -450,7 +450,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         const newStateUpdate: Partial<SimulationState> = {};
         
         if (clear) {
-            const welcomeMessage = team === 'Red' ? DEFAULT_SIMULATION_STATE.red_terminal_output : DEFAULT_SIMULATION_STATE.blue_terminal_output;
+            const welcomeMessage = team === 'Red' ? DEFAULT_SIMULATION_STATE.terminal_output_red : DEFAULT_SIMULATION_STATE.terminal_output_blue;
             newStateUpdate[outputKey] = welcomeMessage;
         } else {
             newStateUpdate[outputKey] = [...currentOutput, ...allNewLines];
