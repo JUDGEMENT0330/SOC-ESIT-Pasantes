@@ -151,40 +151,50 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
     };
 
     const handleJoinSession = async (sessionId: string, sessionName: string, team: 'red' | 'blue' | 'spectator') => {
-        // Admin joins as spectator, regular user joins a team
-        const roleToJoin = isAdmin ? 'spectator' : team;
-        
+        if (isAdmin) {
+            setSessionData({ sessionId, sessionName, team: 'spectator' });
+            return;
+        }
+    
         setLoading(true);
         setError('');
-
+    
         try {
-            if (roleToJoin !== 'spectator') {
-                 // Re-check just before joining to be safe for non-admins
-                const { data: participants, error: checkError } = await supabase
-                    .from('session_participants')
-                    .select('team_role')
-                    .eq('session_id', sessionId)
-                    .eq('team_role', roleToJoin);
-                
-                if (checkError) throw checkError;
-
-                if (participants && participants.length > 0) {
-                    throw new Error(`El rol de equipo ${roleToJoin === 'red' ? 'Rojo' : 'Azul'} ya está ocupado.`);
-                }
-
-                const { error: insertError } = await supabase
-                    .from('session_participants')
-                    .insert({ session_id: sessionId, user_id: user.id, team_role: roleToJoin });
-
-                if (insertError) throw insertError;
+            // 1. Get all current participants for this session
+            const { data: participants, error: fetchError } = await supabase
+                .from('session_participants')
+                .select('user_id, team_role')
+                .eq('session_id', sessionId);
+    
+            if (fetchError) throw fetchError;
+    
+            // 2. Check if the desired role is occupied by SOMEONE ELSE
+            const roleOccupant = participants.find(p => p.team_role === team);
+            if (roleOccupant && roleOccupant.user_id !== user.id) {
+                throw new Error(`El rol de equipo ${team === 'red' ? 'Rojo' : 'Azul'} ya está ocupado.`);
             }
+    
+            // 3. Upsert the participant record. This handles all cases:
+            // - New user joining a session.
+            // - Existing user re-joining (no change needed, but upsert is safe).
+            // - Existing user switching teams.
+            const { error: upsertError } = await supabase
+                .from('session_participants')
+                .upsert({ 
+                    session_id: sessionId, 
+                    user_id: user.id, 
+                    team_role: team 
+                });
 
-            setSessionData({ sessionId, sessionName, team: roleToJoin as 'red' | 'blue' | 'spectator' });
-
+            if (upsertError) throw upsertError;
+    
+            // 4. Success: set session data and enter the simulation
+            setSessionData({ sessionId, sessionName, team });
+    
         } catch (err: any) {
             setError(`No se pudo unir a la sesión: ${err.message}`);
             console.error(err);
-            setLoading(false);
+            setLoading(false); // Only set loading false on error, success transitions away
         }
     };
     
@@ -277,6 +287,12 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
                         {sessionsForUser.map(session => {
                             const redParticipant = session.session_participants.find(p => p.team_role === 'red');
                             const blueParticipant = session.session_participants.find(p => p.team_role === 'blue');
+
+                            const isUserInRed = redParticipant?.user_id === user.id;
+                            const isUserInBlue = blueParticipant?.user_id === user.id;
+                            const isRedOccupiedByOther = redParticipant && !isUserInRed;
+                            const isBlueOccupiedByOther = blueParticipant && !isUserInBlue;
+
                             return (
                                 <div key={session.id} className="bg-black/20 p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3 animate-fade-in-fast">
                                     <div className="flex-grow text-center sm:text-left">
@@ -295,11 +311,11 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
                                             </>
                                         ) : (
                                             <>
-                                                <button onClick={() => handleJoinSession(session.id, session.session_name, 'red')} className="px-4 py-2 font-bold text-white bg-red-600/80 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50" disabled={loading || !!redParticipant}>
-                                                    {redParticipant ? 'Ocupado' : 'Unirse (Rojo)'}
+                                                <button onClick={() => handleJoinSession(session.id, session.session_name, 'red')} className={`px-4 py-2 font-bold text-white rounded-lg transition-colors disabled:opacity-50 ${isUserInRed ? 'bg-yellow-600/80 hover:bg-yellow-600' : 'bg-red-600/80 hover:bg-red-600'}`} disabled={loading || isRedOccupiedByOther}>
+                                                    {isRedOccupiedByOther ? 'Ocupado' : (isUserInRed ? 'Reunirse' : 'Unirse (Rojo)')}
                                                 </button>
-                                                <button onClick={() => handleJoinSession(session.id, session.session_name, 'blue')} className="px-4 py-2 font-bold text-white bg-blue-600/80 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50" disabled={loading || !!blueParticipant}>
-                                                    {blueParticipant ? 'Ocupado' : 'Unirse (Azul)'}
+                                                <button onClick={() => handleJoinSession(session.id, session.session_name, 'blue')} className={`px-4 py-2 font-bold text-white rounded-lg transition-colors disabled:opacity-50 ${isUserInBlue ? 'bg-yellow-600/80 hover:bg-yellow-600' : 'bg-blue-600/80 hover:bg-blue-600'}`} disabled={loading || isBlueOccupiedByOther}>
+                                                    {isBlueOccupiedByOther ? 'Ocupado' : (isUserInBlue ? 'Reunirse' : 'Unirse (Azul)')}
                                                 </button>
                                             </>
                                         )}
