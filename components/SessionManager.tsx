@@ -68,7 +68,12 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
 
             if (sessionError) throw sessionError;
 
-            const { prompt_red, prompt_blue, ...stateForDb } = DEFAULT_SIMULATION_STATE;
+            // Prompts are local-only state and should not be persisted in the database.
+            const { 
+                prompt_red, 
+                prompt_blue, 
+                ...stateForDb 
+            } = DEFAULT_SIMULATION_STATE;
 
             const { error: stateError } = await supabase
                 .from('simulation_state')
