@@ -361,7 +361,9 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
 
             if (!stateData) {
                 console.warn(`No simulation state found for session ${sessionId}. Initializing state in database.`);
+                // Prompts are local-only and should not be in the initial DB insert.
                 const { prompt_red, prompt_blue, ...initialStateForDb } = DEFAULT_SIMULATION_STATE;
+                
                 const { error: insertError } = await supabase
                     .from('simulation_state')
                     .insert({ session_id: sessionId, ...initialStateForDb });
@@ -372,7 +374,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                 // Always set local state to the full default state after attempting to initialize.
                 setServerState({ session_id: sessionId, ...DEFAULT_SIMULATION_STATE });
             } else {
-                // If data exists, merge with defaults to ensure prompts are in the local state.
+                // Merge DB state with local defaults to ensure all fields, like prompts, are present.
                 setServerState({ ...DEFAULT_SIMULATION_STATE, ...stateData });
             }
 
@@ -380,8 +382,6 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             if (logsError) {
                 console.error('Error fetching initial logs:', logsError);
             } else if (logsData) {
-                // FIX: Correctly map database 'source_team' enum ('Red', 'Blue') to application 'source' string ('Red Team', 'Blue Team').
-                // The previous type assertion was incorrect and hid this type mismatch.
                 const transformedLogs = logsData.map(log => {
                     let source: LogEntry['source'] = 'System';
                     if (log.source_team === 'Red') {
@@ -389,7 +389,6 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                     } else if (log.source_team === 'Blue') {
                         source = 'Blue Team';
                     }
-                    // The 'source' from the DB is 'System' which matches, so no specific case needed.
                     return { ...log, source };
                 });
                 setLogs(transformedLogs);
@@ -400,14 +399,13 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
 
         stateChannel = supabase.channel(`simulation-state-${sessionId}`).on<SimulationState>('postgres_changes', { event: '*', schema: 'public', table: 'simulation_state', filter: `session_id=eq.${sessionId}` }, (payload) => {
             if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+                // When receiving updates, merge them into the existing state to preserve local-only fields like prompts.
                 setServerState(prevState => ({ ...(prevState || DEFAULT_SIMULATION_STATE), ...payload.new as SimulationState }));
             }
         }).subscribe();
         
         logsChannel = supabase.channel(`simulation-logs-${sessionId}`).on<LogEntry>('postgres_changes', { event: 'INSERT', schema: 'public', table: 'simulation_logs', filter: `session_id=eq.${sessionId}` }, (payload) => {
             const newLog = payload.new as LogEntry;
-            // FIX: Map database source_team ('Red', 'Blue') to application source ('Red Team', 'Blue Team').
-            // The previous direct assignment caused a type error.
             if (newLog.source_team) {
                 if (newLog.source_team === 'Red') {
                     newLog.source = 'Red Team';
@@ -427,8 +425,6 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
     }, [sessionId]);
 
     const addLog = async (log: Omit<LogEntry, 'id' | 'timestamp' | 'session_id'>) => {
-        // Map the descriptive source name from the app ('Red Team') 
-        // to the expected database enum value ('Red').
         const sourceTeamMap = {
             'Red Team': 'Red',
             'Blue Team': 'Blue',
@@ -452,8 +448,12 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             console.error("updateServerState called before serverState is initialized.");
             return;
         }
-        
-        const { data: currentState, error: fetchError } = await supabase
+
+        const currentState = serverState;
+        const updatedStateForLocalUI = { ...currentState, ...newState };
+        setServerState(updatedStateForLocalUI);
+    
+        const { error: fetchError } = await supabase
             .from('simulation_state')
             .select('*')
             .eq('session_id', sessionId)
@@ -464,19 +464,22 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             return;
         }
     
-        const baseState = currentState || serverState;
+        const baseState = serverState;
         const updatedState = { ...baseState, ...newState, last_updated: new Date().toISOString() };
         
-        // Non-persistent fields are local to the client state and should not be written to the database.
-        const { prompt_red, prompt_blue, ...stateForDb } = updatedState;
+        // The prompts are local-only state and should not be persisted.
+        const { 
+            prompt_red, 
+            prompt_blue, 
+            ...stateForDb 
+        } = updatedState;
         
         const { error } = await supabase.from('simulation_state').upsert(stateForDb);
     
         if (error) {
-            // Log the error but do not update the local state.
-            // This prevents the UI from becoming out of sync with the database.
-            // State is only updated via the realtime subscription on a successful DB write.
             console.error('Error upserting server state:', error);
+            // If the update fails, the optimistic local update will remain.
+            // This is acceptable as the realtime channel will eventually correct any desync.
         }
     };
     
@@ -487,32 +490,33 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         if (currentUserTeam === 'spectator' && !isFromAdminControl) return;
         if (currentUserTeam !== 'spectator' && team.toLowerCase() !== currentUserTeam) return;
 
-        const addDelayedOutput = (lines: TerminalLine[]) => {
-            setTimeout(async () => {
-                const { data: currentState, error } = await supabase
-                    .from('simulation_state')
-                    .select('terminal_output_red, terminal_output_blue')
-                    .eq('session_id', sessionId)
-                    .maybeSingle();
+        // Create a stable copy of the state for this command execution
+        const stateAtCommandStart = { ...serverState };
 
-                if (error || !currentState) {
-                    console.error('Failed to get current state for delayed output:', error);
-                    return;
-                }
-                
-                const outputKey = team === 'Red' ? 'terminal_output_red' : 'terminal_output_blue';
-                const currentOutput = currentState[outputKey] || [];
-                await updateServerState({ [outputKey]: [...currentOutput, ...lines] });
-            }, 0);
+        const addDelayedOutput = (lines: TerminalLine[]) => {
+            setTimeout(() => {
+                setServerState(prevState => {
+                    if (!prevState) return null;
+                    const outputKey = team === 'Red' ? 'terminal_output_red' : 'terminal_output_blue';
+                    const currentOutput = prevState[outputKey] || [];
+                    const updatedState = {
+                        ...prevState,
+                        [outputKey]: [...currentOutput, ...lines]
+                    };
+                    // Persist the delayed output
+                    updateServerState({ [outputKey]: updatedState[outputKey] });
+                    return updatedState;
+                });
+            }, 500); // Delay to simulate processing
         };
 
         const { outputLines, newPrompt, clear } = await processCommandLogic({
-            command, team, serverState, addLog, updateServerState, addDelayedOutput
+            command, team, serverState: stateAtCommandStart, addLog, updateServerState, addDelayedOutput
         });
 
         const outputKey = team === 'Red' ? 'terminal_output_red' : 'terminal_output_blue';
         const promptKey = team === 'Red' ? 'prompt_red' : 'prompt_blue';
-        const currentOutput = serverState[outputKey] || [];
+        const currentOutput = stateAtCommandStart[outputKey] || [];
         
         const promptLine: TerminalLine = { type: 'prompt' };
         const commandLine: TerminalLine = { text: command, type: 'command' };
@@ -531,6 +535,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             newStateUpdate[promptKey] = newPrompt;
         }
 
+        // This will update both local UI optimistically and the database.
         await updateServerState(newStateUpdate);
     };
 
