@@ -387,12 +387,18 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             } else if (logsData) {
                 const transformedLogs = logsData.map(log => {
                     let source: LogEntry['source'] = 'System';
-                    if (log.source_team === 'Red') {
-                        source = 'Red Team';
-                    } else if (log.source_team === 'Blue') {
-                        source = 'Blue Team';
-                    }
-                    return { ...log, source, teamVisible: log.team_visible };
+                    if (log.source_team === 'Red') source = 'Red Team';
+                    else if (log.source_team === 'Blue') source = 'Blue Team';
+                    
+                    return { 
+                        id: log.id,
+                        timestamp: log.timestamp,
+                        source: source,
+                        message: log.message,
+                        teamVisible: log.team_visible,
+                        session_id: log.session_id,
+                        source_team: log.source_team
+                    };
                 });
                 setLogs(transformedLogs);
             }
@@ -408,12 +414,22 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         }).subscribe();
         
         logsChannel = supabase.channel(`simulation-logs-${sessionId}`).on<any>('postgres_changes', { event: 'INSERT', schema: 'public', table: 'simulation_logs', filter: `session_id=eq.${sessionId}` }, (payload) => {
-            const newLog = payload.new;
+            const newLogData = payload.new;
             let source: LogEntry['source'] = 'System';
-            if (newLog.source_team === 'Red') source = 'Red Team';
-            else if (newLog.source_team === 'Blue') source = 'Blue Team';
+            if (newLogData.source_team === 'Red') source = 'Red Team';
+            else if (newLogData.source_team === 'Blue') source = 'Blue Team';
+
+            const logEntry: LogEntry = {
+                id: newLogData.id,
+                timestamp: newLogData.timestamp,
+                source: source,
+                message: newLogData.message,
+                teamVisible: newLogData.team_visible,
+                session_id: newLogData.session_id,
+                source_team: newLogData.source_team,
+            };
             
-            setLogs(prevLogs => [...prevLogs, { ...newLog, source, teamVisible: newLog.team_visible }]);
+            setLogs(prevLogs => [...prevLogs, logEntry]);
         }).subscribe();
 
 
