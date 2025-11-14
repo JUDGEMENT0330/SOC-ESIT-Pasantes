@@ -129,7 +129,7 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
         switch(cmd) {
             case 'nmap':
                 outputLines.push({ text: `(SIMULACIÓN) Ejecutando Nmap en ${targetHost}...`, type: 'output' });
-                await addLog({ source: 'Red Team', message: `Escaneo Nmap detectado contra ${targetHost} desde ${attackerIp}.`, teamVisible: 'blue' });
+                await addLog({ source: 'Red Team', message: `Escaneo Nmap detectado contra ${targetHost} desde ${attackerIp}.`, teamVisible: 'all' });
                 setTimeout(() => {
                     const openPorts = serverState.firewall_enabled ? 'Puertos abiertos: 22/tcp (ssh), 80/tcp (http)' : 'Puertos abiertos: 22/tcp (ssh), 80/tcp (http), 443/tcp (https), 3306/tcp (mysql)';
                     addDelayedOutput([{ text: `Resultado:\n${openPorts}`, type: 'output' }]);
@@ -139,12 +139,12 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
                 const user = targetHost === 'PORTAL-WEB' ? 'admin' : 'root';
                 outputLines.push({ text: `(SIMULACIÓN) Ejecutando Hydra contra SSH en ${targetHost} para el usuario '${user}'...`, type: 'output' });
                 await updateServerState({ hydra_run_count: serverState.hydra_run_count + 100 });
-                await addLog({ source: 'Red Team', message: `[!!] Múltiples intentos de login SSH fallidos para '${user}' desde ${attackerIp}. (Posible ataque de fuerza bruta)`, teamVisible: 'blue' });
+                await addLog({ source: 'Red Team', message: `[!!] Múltiples intentos de login SSH fallidos para '${user}' desde ${attackerIp}. (Posible ataque de fuerza bruta)`, teamVisible: 'all' });
                 setTimeout(async () => {
                      let hydraResult: TerminalLine;
                      if (targetHost === 'BOVEDA-WEB' && !serverState.ssh_hardened) {
                         hydraResult = { text: `[ÉXITO] Contraseña encontrada para 'root': '123456'`, type: 'output' };
-                        await addLog({ source: 'Red Team', message: `[CRÍTICO] Login de 'root' exitoso en BOVEDA-WEB desde ${attackerIp}.`, teamVisible: 'blue' });
+                        await addLog({ source: 'Red Team', message: `[CRÍTICO] Login de 'root' exitoso en BOVEDA-WEB desde ${attackerIp}.`, teamVisible: 'all' });
                      } else if (targetHost === 'PORTAL-WEB') {
                         await updateServerState({ admin_password_found: true });
                         hydraResult = { text: `[ÉXITO] Contraseña encontrada para 'admin': '${portalAdminPassword}'`, type: 'output' };
@@ -170,7 +170,7 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
                     }
                     if(accessGranted) {
                          outputLines.push({ text: `Contraseña: [ÉXITO] Bienvenido.`, type: 'output' });
-                         await addLog({ source: 'Red Team', message: `[CRÍTICO] Acceso SSH exitoso como '${sshUser}' en ${targetSshHost} desde ${attackerIp}.`, teamVisible: 'blue' });
+                         await addLog({ source: 'Red Team', message: `[CRÍTICO] Acceso SSH exitoso como '${sshUser}' en ${targetSshHost} desde ${attackerIp}.`, teamVisible: 'all' });
                     } else {
                          outputLines.push({ text: 'Acceso denegado.', type: 'error' });
                     }
@@ -181,18 +181,18 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
             case 'john':
                 outputLines.push({ text: `(SIMULACIÓN) Ejecutando John the Ripper... Contraseña crackeada: '${portalAdminPassword}'`, type: 'output' });
                 await updateServerState({ admin_password_found: true });
-                await addLog({ source: 'Red Team', message: `Contraseña de 'admin' obtenida offline.`, teamVisible: 'red' });
+                await addLog({ source: 'Red Team', message: `Contraseña de 'admin' obtenida offline.`, teamVisible: 'all' });
                 break;
             case 'hping3':
                 await updateServerState({ is_dos_active: true, server_load: 99.9 });
                 outputLines.push({ text: `(SIMULACIÓN) Inundación SYN iniciada contra ${targetHost}. Presione Ctrl+C para detener.`, type: 'output' });
-                await addLog({ source: 'Red Team', message: `[ALERTA] Patrón de tráfico anómalo consistente con un ataque DoS detectado desde ${attackerIp} contra ${targetHost}.`, teamVisible: 'blue' });
+                await addLog({ source: 'Red Team', message: `[ALERTA] Patrón de tráfico anómalo consistente con un ataque DoS detectado desde ${attackerIp} contra ${targetHost}.`, teamVisible: 'all' });
                 break;
             case 'curl':
             case 'dirb':
             case 'nikto':
                  outputLines.push({ text: `(SIMULACIÓN) Ejecutando ${cmd} contra ${targetHost}...`, type: 'output' });
-                 await addLog({ source: 'Red Team', message: `Herramienta de reconocimiento web (${cmd}) detectada contra ${targetHost}.`, teamVisible: 'blue' });
+                 await addLog({ source: 'Red Team', message: `Herramienta de reconocimiento web (${cmd}) detectada contra ${targetHost}.`, teamVisible: 'all' });
                  if (cmd === 'curl' && args[1]?.includes('db_config.php')) {
                       setTimeout(async () => {
                           if (serverState.db_config_permissions === '644') {
@@ -253,7 +253,7 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
                     break;
                 case 'grep':
                      outputLines.push({ text: `(SIMULACIÓN) Buscando en auth.log...\n${serverState.hydra_run_count > 0 ? `${serverState.hydra_run_count} resultados encontrados para "Failed password"` : 'No se encontraron resultados.'}`, type: 'output' });
-                     await addLog({ source: 'Blue Team', message: `Revisando logs de autenticación en ${currentHost}.`, teamVisible: 'blue' });
+                     await addLog({ source: 'Blue Team', message: `Revisando logs de autenticación en ${currentHost}.`, teamVisible: 'all' });
                     break;
                 case 'ss':
                     outputLines.push({ text: `(SIMULACIÓN) Puertos escuchando:\n22/tcp, 80/tcp${!serverState.firewall_enabled ? ', 443/tcp, 3306/tcp' : ''}` , type: 'output' });
@@ -278,7 +278,7 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
                 case 'openssl':
                     if (effectiveArgs[1] === 's_client') {
                         outputLines.push({text: '(SIMULACIÓN) Verificando certificado SSL/TLS...\n--- \nCertificado: \n    CN=BOVEDA-WEB\n    Válido\n    Protocolo: TLSv1.3\n    Cifrado: AES-256-GCM\n--- \nVerificación: OK', type: 'output'});
-                        await addLog({ source: 'Blue Team', message: `Validación de certificado SSL/TLS realizada en BOVEDA-WEB.`, teamVisible: 'blue' });
+                        await addLog({ source: 'Blue Team', message: `Validación de certificado SSL/TLS realizada en BOVEDA-WEB.`, teamVisible: 'all' });
                     } else {
                         outputLines.push({ text: 'Comando openssl no reconocido.', type: 'error' });
                     }
@@ -318,10 +318,16 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
     }
 
     async function handleCompromisedHostCommands() {
+        const attackTools = ['nmap', 'hydra', 'hping3', 'dirb', 'nikto', 'john'];
+        if (attackTools.includes(cmd)) {
+            outputLines.push({ text: `Error: La herramienta '${cmd}' es un software de ataque y solo se puede ejecutar desde su terminal 'soc-valtorix', no desde un host comprometido.`, type: 'error' });
+            return;
+        }
+
         if (cmd === 'wget') {
              await updateServerState({ payload_deployed: true });
              outputLines.push({ text: `(SIMULACIÓN) --10:05:10--  http://malware-repo.bad/payload.sh\nConectando a malware-repo.bad... conectado.\n... Guardado.`, type: 'output' });
-             await addLog({ source: 'Red Team', message: `[ALERTA] Tráfico de red saliente sospechoso detectado desde ${currentHost} a un repositorio de malware conocido.`, teamVisible: 'blue' });
+             await addLog({ source: 'Red Team', message: `[ALERTA] Tráfico de red saliente sospechoso detectado desde ${currentHost} a un repositorio de malware conocido.`, teamVisible: 'all' });
              return;
          }
         outputLines.push({ text: `Error: comando '${cmd}' no reconocido o no disponible en este contexto.`, type: 'error' });
