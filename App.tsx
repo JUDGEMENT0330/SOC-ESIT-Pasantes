@@ -23,19 +23,6 @@ export default function App() {
     const [loading, setLoading] = useState(true);
     const [isAdmin, setIsAdmin] = useState(false);
 
-    const cleanUpParticipant = async () => {
-        if (sessionData && session?.user && sessionData.team !== 'spectator') {
-            const { error } = await supabase
-                .from('session_participants')
-                .delete()
-                .match({ session_id: sessionData.sessionId, user_id: session.user.id });
-
-            if (error) {
-                console.error('Error cleaning up participant:', error);
-            }
-        }
-    };
-
     // Effect for handling authentication state changes. Runs only once on mount.
     useEffect(() => {
         setLoading(true);
@@ -109,13 +96,11 @@ export default function App() {
         }
     };
 
-    const handleExitSession = async () => {
-        await cleanUpParticipant();
+    const handleExitSession = () => {
         setSessionData(null);
     };
 
     const handleLogout = async () => {
-        await cleanUpParticipant();
         const { error } = await supabase.auth.signOut();
         if (error) {
             console.error('Error al cerrar sesión:', error);
