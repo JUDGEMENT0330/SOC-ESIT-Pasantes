@@ -48,9 +48,9 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
     const cmd = args[0].toLowerCase();
     
     const isRedTeam = team === 'Red';
-    const isBlueTeam = team === 'Blue';
     const currentHost = promptState.host.toUpperCase();
 
+    // 1. Handle global commands first
     switch (cmd) {
         case 'help':
             const scenarioId = args[1];
@@ -60,10 +60,8 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
                 outputLines.push({ html: scenarioHelp.general + teamSpecificHelp, type: 'html' });
             } else if (isRedTeam) {
                 outputLines.push({ html: RED_TEAM_HELP_TEXT, type: 'html' });
-            } else if (isBlueTeam) {
+            } else { // Blue Team
                 outputLines.push({ html: BLUE_TEAM_HELP_TEXT, type: 'html' });
-            } else {
-                outputLines.push({ html: GENERAL_HELP_TEXT, type: 'html' });
             }
             break;
         case 'clear':
@@ -75,38 +73,45 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
         case 'exit': 
             if (currentHost !== 'SOC-VALTORIX') {
                 outputLines.push({ text: `(SIMULACIÓN) Conexión a ${promptState.host} cerrada.`, type: 'output' });
-                const initialPrompt = team === 'Red' 
+                newPrompt = team === 'Red' 
                     ? DEFAULT_SIMULATION_STATE.prompt_red 
                     : DEFAULT_SIMULATION_STATE.prompt_blue;
-                newPrompt = initialPrompt;
             } else {
                 outputLines.push({ text: 'Error: No hay sesión SSH activa para cerrar.', type: 'error' });
             }
             break;
-        // Host-specific command guard
-        default:
-            if (currentHost === 'SOC-VALTORIX') {
-                const hostSpecificCommands = ['ufw', 'nano', 'systemctl', 'grep', 'ss', 'ls', 'chmod', 'openssl', 'top', 'htop', 'journalctl', 'fail2ban-client', 'sha256sum', 'wget'];
-                const commandToCheck = cmd === 'sudo' ? args[1] : cmd;
-                if (hostSpecificCommands.includes(commandToCheck)) {
-                    outputLines.push({ text: `Error: El comando '${commandToCheck}' solo está disponible después de conectarse a un host de simulación (ej. ssh blue-team@PORTAL-WEB).`, type: 'error' });
-                    return { outputLines, newPrompt, clear };
-                }
-            }
-
-            if (isRedTeam && currentHost === 'SOC-VALTORIX') {
-                await handleRedTeamCommands();
-            } else if (isBlueTeam) {
-                await handleBlueTeamCommands();
-            } else if (currentHost !== 'SOC-VALTORIX') {
-                 await handleCompromisedHostCommands();
-            } else {
-                outputLines.push({ text: `Error: comando '${cmd}' no reconocido o no disponible en este contexto.`, type: 'error' });
-            }
     }
     
-    async function handleRedTeamCommands() {
-        // Fix: Improve target host parsing to handle URLs and various command formats.
+    // If a global command was handled, we can return early.
+    if (outputLines.length > 0 || clear) {
+        return { outputLines, newPrompt, clear };
+    }
+
+    // 2. Handle context-specific commands with clear routing
+    if (isRedTeam) {
+        if (currentHost === 'SOC-VALTORIX') {
+            await handleRedTeamLocalCommands();
+        } else {
+            await handleRedTeamRemoteCommands();
+        }
+    } else { // isBlueTeam
+        if (currentHost === 'SOC-VALTORIX') {
+            await handleBlueTeamLocalCommands();
+        } else {
+            await handleBlueTeamRemoteCommands();
+        }
+    }
+
+    // 3. If no command matched in the specific handlers, show a generic error.
+    if(outputLines.length === 0 && !clear) {
+        outputLines.push({ text: `Error: comando '${cmd}' no reconocido o no disponible en este contexto.`, type: 'error' });
+    }
+    
+    // ============================================================================
+    // Command Handler Functions
+    // ============================================================================
+
+    async function handleRedTeamLocalCommands() {
         const targetArg = args.find(arg => arg.toUpperCase().includes('BOVEDA-WEB') || arg.toUpperCase().includes('PORTAL-WEB'));
         let targetHost = '';
         if (targetArg) {
@@ -114,13 +119,12 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
             else if (targetArg.toUpperCase().includes('PORTAL-WEB')) targetHost = 'PORTAL-WEB';
         }
 
-        if (cmd !== 'ssh' && !['BOVEDA-WEB', 'PORTAL-WEB'].includes(targetHost)) {
-             const targetCommands = ['nmap', 'hydra', 'hping3', 'dirb', 'nikto', 'curl'];
-             if (targetCommands.includes(cmd)) {
-                 outputLines.push({ text: `Error: Host objetivo no válido o no especificado. (Ej: ${cmd} BOVEDA-WEB)`, type: 'error' });
-                 return;
-             }
+        const targetCommands = ['nmap', 'hydra', 'hping3', 'dirb', 'nikto', 'curl', 'ssh'];
+        if (targetCommands.includes(cmd) && !targetHost) {
+             outputLines.push({ text: `Error: Host objetivo no válido o no especificado. (Ej: ${cmd} BOVEDA-WEB)`, type: 'error' });
+             return;
         }
+
         if (isAttackerBanned && ['nmap', 'hydra', 'hping3', 'ssh'].includes(cmd)) {
             outputLines.push({ text: `(SIMULACIÓN) Error: No route to host. El firewall parece estar bloqueando tu IP.`, type: 'error' });
             return;
@@ -158,24 +162,19 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
             case 'ssh':
                 const [sshUser, sshHost] = (args[1] || '').split('@');
                 const targetSshHost = sshHost?.toUpperCase();
-                if (['BOVEDA-WEB', 'PORTAL-WEB'].includes(targetSshHost)) {
-                    outputLines.push({ text: `(SIMULACIÓN) Conectando a ${sshHost}...`, type: 'output' });
-                    let accessGranted = false;
-                    if (targetSshHost === 'BOVEDA-WEB' && sshUser === 'root' && !serverState.ssh_hardened) {
-                        accessGranted = true;
-                        newPrompt = { user: 'root', host: 'BOVEDA-WEB', dir: '#' };
-                    } else if (targetSshHost === 'PORTAL-WEB' && sshUser === 'admin' && serverState.admin_password_found) {
-                         accessGranted = true;
-                         newPrompt = { user: 'admin', host: 'PORTAL-WEB', dir: '~' };
-                    }
-                    if(accessGranted) {
-                         outputLines.push({ text: `Contraseña: [ÉXITO] Bienvenido.`, type: 'output' });
-                         await addLog({ source: 'Red Team', message: `[CRÍTICO] Acceso SSH exitoso como '${sshUser}' en ${targetSshHost} desde ${attackerIp}.`, teamVisible: 'all' });
-                    } else {
-                         outputLines.push({ text: 'Acceso denegado.', type: 'error' });
-                    }
+                let accessGranted = false;
+                if (targetSshHost === 'BOVEDA-WEB' && sshUser === 'root' && !serverState.ssh_hardened) {
+                    accessGranted = true;
+                    newPrompt = { user: 'root', host: 'BOVEDA-WEB', dir: '#' };
+                } else if (targetSshHost === 'PORTAL-WEB' && sshUser === 'admin' && serverState.admin_password_found) {
+                     accessGranted = true;
+                     newPrompt = { user: 'admin', host: 'PORTAL-WEB', dir: '~' };
+                }
+                if(accessGranted) {
+                     outputLines.push({ text: `Contraseña: [ÉXITO] Bienvenido a ${targetSshHost}.`, type: 'output' });
+                     await addLog({ source: 'Red Team', message: `[CRÍTICO] Acceso SSH exitoso como '${sshUser}' en ${targetSshHost} desde ${attackerIp}.`, teamVisible: 'all' });
                 } else {
-                    outputLines.push({ text: 'Host desconocido.', type: 'error' });
+                     outputLines.push({ text: `ssh: Conexión a ${sshHost} puerto 22: Acceso denegado.`, type: 'error' });
                 }
                 break;
             case 'john':
@@ -204,120 +203,10 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
                       }, 500);
                  }
                  break;
-            default:
-                outputLines.push({ text: `Error: comando '${cmd}' no reconocido o no disponible en este contexto.`, type: 'error' });
         }
     }
-
-    async function handleBlueTeamCommands() {
-         if (cmd === 'ssh' && args[1]?.startsWith('blue-team@')) {
-            const host = args[1].split('@')[1].toUpperCase();
-             if (['BOVEDA-WEB', 'PORTAL-WEB'].includes(host)) {
-                outputLines.push({ text: `(SIMULACIÓN) Conectando... Bienvenido a ${host}.`, type: 'output' });
-                newPrompt = { user: 'blue-team', host: host, dir: '~' };
-                return;
-            }
-        }
-        if (currentHost !== 'SOC-VALTORIX') {
-            const effectiveCmd = cmd === 'sudo' ? args[1] : cmd;
-            const effectiveArgs = cmd === 'sudo' ? args.slice(1) : args;
-            switch(effectiveCmd) {
-                case 'ufw':
-                     if (effectiveArgs[1] === 'enable') {
-                         await updateServerState({ firewall_enabled: true });
-                         outputLines.push({ text: `(SIMULACIÓN) Firewall activado en ${currentHost}.`, type: 'output' });
-                         await addLog({ source: 'Blue Team', message: `Firewall (UFW) HABILITADO en ${currentHost}.`, teamVisible: 'all' });
-                     } else if (effectiveArgs[1] === 'status') {
-                         outputLines.push({ text: `Estado: ${serverState.firewall_enabled ? 'activo' : 'inactivo'}`, type: 'output' });
-                     } else if (effectiveArgs[1] === 'allow') {
-                        outputLines.push({ text: `(SIMULACIÓN) Regla UFW añadida para ${effectiveArgs[2]}.`, type: 'output' });
-                     } else if (effectiveArgs[1] === 'deny' && effectiveArgs[3]) {
-                        const newBannedIps = [...serverState.banned_ips, effectiveArgs[3]];
-                        await updateServerState({ banned_ips: newBannedIps });
-                         outputLines.push({ text: `(SIMULACIÓN) IP ${effectiveArgs[3]} bloqueada.`, type: 'output' });
-                         await addLog({ source: 'Blue Team', message: `IP ${effectiveArgs[3]} ha sido bloqueada manualmente en el firewall de ${currentHost}.`, teamVisible: 'all' });
-                     }
-                     break;
-                case 'nano':
-                    if (effectiveArgs[1] === 'sshd_config') {
-                         await updateServerState({ ssh_hardened: true });
-                         outputLines.push({ text: `(SIMULACIÓN) 'PermitRootLogin' cambiado a 'no'. Recuerde reiniciar el servicio sshd.`, type: 'output' });
-                         await addLog({ source: 'Blue Team', message: `Configuración de SSH modificada en ${currentHost} (hardening).`, teamVisible: 'all' });
-                    }
-                    break;
-                case 'systemctl':
-                     if (effectiveArgs[1] === 'restart' && effectiveArgs[2] === 'sshd') {
-                         outputLines.push({ text: `(SIMULACIÓN) Reiniciando servicio sshd... Configuración aplicada.`, type: 'output' });
-                         await addLog({ source: 'Blue Team', message: `Servicio SSH reiniciado en ${currentHost}. Hardening aplicado.`, teamVisible: 'all' });
-                     }
-                    break;
-                case 'grep':
-                     outputLines.push({ text: `(SIMULACIÓN) Buscando en auth.log...\n${serverState.hydra_run_count > 0 ? `${serverState.hydra_run_count} resultados encontrados para "Failed password"` : 'No se encontraron resultados.'}`, type: 'output' });
-                     await addLog({ source: 'Blue Team', message: `Revisando logs de autenticación en ${currentHost}.`, teamVisible: 'all' });
-                    break;
-                case 'ss':
-                    outputLines.push({ text: `(SIMULACIÓN) Puertos escuchando:\n22/tcp, 80/tcp${!serverState.firewall_enabled ? ', 443/tcp, 3306/tcp' : ''}` , type: 'output' });
-                    break;
-                case 'ls':
-                    if (effectiveArgs[1] === '-l' && effectiveArgs[2]?.includes('db_config.php')) {
-                        const perms = serverState.db_config_permissions === '640' ? '-rw-r-----' : '-rw-r--r--';
-                        outputLines.push({ text: `${perms} 1 www-data www-data 58 Jul 15 10:00 /var/www/html/db_config.php`, type: 'output' });
-                    } else {
-                         outputLines.push({ text: `(SIMULACIÓN)\ntotal 8\ndrwxr-xr-x 2 root root 4096 Jul 15 09:00 bin\ndrwxr-xr-x 2 root root 4096 Jul 15 09:01 etc`, type: 'output' });
-                    }
-                    break;
-                case 'chmod':
-                    if (effectiveArgs[1] === '640' && effectiveArgs[2]?.includes('db_config.php')) {
-                        await updateServerState({ db_config_permissions: '640' });
-                        outputLines.push({ text: `(SIMULACIÓN) Permisos de '/var/www/html/db_config.php' cambiados a 640.`, type: 'output' });
-                        await addLog({ source: 'Blue Team', message: `Permisos restringidos en db_config.php. Buen trabajo.`, teamVisible: 'all' });
-                    } else {
-                        outputLines.push({ text: `(SIMULACIÓN) Permisos cambiados.`, type: 'output' });
-                    }
-                    break;
-                case 'openssl':
-                    if (effectiveArgs[1] === 's_client') {
-                        outputLines.push({text: '(SIMULACIÓN) Verificando certificado SSL/TLS...\n--- \nCertificado: \n    CN=BOVEDA-WEB\n    Válido\n    Protocolo: TLSv1.3\n    Cifrado: AES-256-GCM\n--- \nVerificación: OK', type: 'output'});
-                        await addLog({ source: 'Blue Team', message: `Validación de certificado SSL/TLS realizada en BOVEDA-WEB.`, teamVisible: 'all' });
-                    } else {
-                        outputLines.push({ text: 'Comando openssl no reconocido.', type: 'error' });
-                    }
-                    break;
-                case 'top': case 'htop':
-                     const load = serverState.is_dos_active ? 99.9 : 5.0;
-                     outputLines.push({ text: `(SIMULACIÓN) Carga del sistema: ${load.toFixed(1)}%`, type: 'output' });
-                     break;
-                case 'journalctl':
-                     outputLines.push({ text: `(SIMULACIÓN) Revisando logs de sshd...\n-- Logs --\n` +
-                        `Jul 15 10:01:03 ${currentHost} sshd[1121]: Failed password for admin from ${attackerIp} port 12345\n`.repeat(5) +
-                        `Jul 15 10:01:04 ${currentHost} sshd[1122]: Failed password for admin from ${attackerIp} port 12346\n`.repeat(5), type: 'output' });
-                     break;
-                case 'fail2ban-client':
-                     if (effectiveArgs[2] === 'banip' && effectiveArgs[3]) {
-                        const newBannedIps = [...serverState.banned_ips, effectiveArgs[3]];
-                        await updateServerState({ banned_ips: newBannedIps });
-                        outputLines.push({ text: `(SIMULACIÓN) IP ${effectiveArgs[3]} baneada por Fail2Ban.`, type: 'output' });
-                        await addLog({ source: 'Blue Team', message: `IP ${effectiveArgs[3]} ha sido bloqueada vía Fail2Ban en ${currentHost}.`, teamVisible: 'all' });
-                     }
-                    break;
-                case 'sha256sum':
-                    const originalHash = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'; // empty file hash
-                    const compromisedHash = 'a1b2c3d4e5f6...compromised';
-                    const currentHash = serverState.payload_deployed ? compromisedHash : originalHash;
-                    outputLines.push({ text: `${currentHash}  /var/www/html/index.php`, type: 'output' });
-                    if(serverState.payload_deployed) {
-                        await addLog({ source: 'System', message: `[CRÍTICO] ¡ALERTA DE FIM! El hash de /var/www/html/index.php no coincide. El sistema está comprometido.`, teamVisible: 'all' });
-                    }
-                    break;
-                default:
-                    outputLines.push({ text: `Error: comando '${cmd}' no reconocido o no disponible en este contexto.`, type: 'error' });
-            }
-        } else {
-             outputLines.push({ text: `Error: comando '${cmd}' no reconocido o no disponible en este contexto.`, type: 'error' });
-        }
-    }
-
-    async function handleCompromisedHostCommands() {
+    
+    async function handleRedTeamRemoteCommands() {
         const attackTools = ['nmap', 'hydra', 'hping3', 'dirb', 'nikto', 'john'];
         if (attackTools.includes(cmd)) {
             outputLines.push({ text: `Error: La herramienta '${cmd}' es un software de ataque y solo se puede ejecutar desde su terminal 'soc-valtorix', no desde un host comprometido.`, type: 'error' });
@@ -328,9 +217,117 @@ const processCommandLogic = async ({ command, team, serverState, addLog, updateS
              await updateServerState({ payload_deployed: true });
              outputLines.push({ text: `(SIMULACIÓN) --10:05:10--  http://malware-repo.bad/payload.sh\nConectando a malware-repo.bad... conectado.\n... Guardado.`, type: 'output' });
              await addLog({ source: 'Red Team', message: `[ALERTA] Tráfico de red saliente sospechoso detectado desde ${currentHost} a un repositorio de malware conocido.`, teamVisible: 'all' });
-             return;
          }
-        outputLines.push({ text: `Error: comando '${cmd}' no reconocido o no disponible en este contexto.`, type: 'error' });
+    }
+
+    async function handleBlueTeamLocalCommands() {
+         if (cmd === 'ssh' && args[1]?.startsWith('blue-team@')) {
+            const host = args[1].split('@')[1].toUpperCase();
+             if (['BOVEDA-WEB', 'PORTAL-WEB'].includes(host)) {
+                outputLines.push({ text: `(SIMULACIÓN) Conectando... Bienvenido a ${host}.`, type: 'output' });
+                newPrompt = { user: 'blue-team', host: host, dir: '~' };
+            }
+        }
+    }
+
+    async function handleBlueTeamRemoteCommands() {
+        const effectiveCmd = cmd === 'sudo' ? args[1] : cmd;
+        const effectiveArgs = cmd === 'sudo' ? args.slice(1) : args;
+        switch(effectiveCmd) {
+            case 'ufw':
+                 if (effectiveArgs[1] === 'enable') {
+                     await updateServerState({ firewall_enabled: true });
+                     outputLines.push({ text: `(SIMULACIÓN) Firewall activado en ${currentHost}.`, type: 'output' });
+                     await addLog({ source: 'Blue Team', message: `Firewall (UFW) HABILITADO en ${currentHost}.`, teamVisible: 'all' });
+                 } else if (effectiveArgs[1] === 'status') {
+                     const rules = serverState.ssh_hardened ? '22/tcp (ssh) ALLOW\n80/tcp (http) ALLOW' : 'Firewall no configurado. ¡Peligro!';
+                     outputLines.push({ text: `Estado: ${serverState.firewall_enabled ? 'activo\n\nReglas:\n' + rules : 'inactivo'}`, type: 'output' });
+                 } else if (effectiveArgs[1] === 'allow') {
+                    outputLines.push({ text: `(SIMULACIÓN) Regla UFW añadida para ${effectiveArgs[2]}.`, type: 'output' });
+                 } else if (effectiveArgs[1] === 'deny' && effectiveArgs[3]) {
+                    const newBannedIps = [...serverState.banned_ips, effectiveArgs[3]];
+                    await updateServerState({ banned_ips: newBannedIps });
+                     outputLines.push({ text: `(SIMULACIÓN) IP ${effectiveArgs[3]} bloqueada.`, type: 'output' });
+                     await addLog({ source: 'Blue Team', message: `IP ${effectiveArgs[3]} ha sido bloqueada manualmente en el firewall de ${currentHost}.`, teamVisible: 'all' });
+                 }
+                 break;
+            case 'nano':
+                if (effectiveArgs[1] === 'sshd_config') {
+                     await updateServerState({ ssh_hardened: true });
+                     outputLines.push({ text: `(SIMULACIÓN) 'PermitRootLogin' cambiado a 'no'. Recuerde reiniciar el servicio sshd.`, type: 'output' });
+                     await addLog({ source: 'Blue Team', message: `Configuración de SSH modificada en ${currentHost} (hardening).`, teamVisible: 'all' });
+                }
+                break;
+            case 'systemctl':
+                 if (effectiveArgs[1] === 'restart' && effectiveArgs[2] === 'sshd') {
+                     outputLines.push({ text: `(SIMULACIÓN) Reiniciando servicio sshd... Configuración aplicada.`, type: 'output' });
+                     await addLog({ source: 'Blue Team', message: `Servicio SSH reiniciado en ${currentHost}. Hardening aplicado.`, teamVisible: 'all' });
+                 }
+                break;
+            case 'grep':
+                 const hydraCount = serverState.hydra_run_count;
+                 if (hydraCount > 0) {
+                     outputLines.push({ text: `(SIMULACIÓN) Buscando en auth.log...\n` +
+                        `sshd[1121]: Failed password for root from ${attackerIp}\n`.repeat(Math.min(5, hydraCount)) +
+                        `${hydraCount} resultados encontrados.`, type: 'output' });
+                 } else {
+                     outputLines.push({ text: `(SIMULACIÓN) Buscando en auth.log...\nNo se encontraron resultados.`, type: 'output' });
+                 }
+                 await addLog({ source: 'Blue Team', message: `Revisando logs de autenticación en ${currentHost}.`, teamVisible: 'all' });
+                break;
+            case 'ss':
+                outputLines.push({ text: `(SIMULACIÓN) Puertos escuchando:\n22/tcp, 80/tcp${!serverState.firewall_enabled ? ', 443/tcp, 3306/tcp' : ''}` , type: 'output' });
+                break;
+            case 'ls':
+                if (effectiveArgs[1] === '-l' && effectiveArgs[2]?.includes('db_config.php')) {
+                    const perms = serverState.db_config_permissions === '640' ? '-rw-r-----' : '-rw-r--r--';
+                    outputLines.push({ text: `${perms} 1 www-data www-data 58 Jul 15 10:00 /var/www/html/db_config.php`, type: 'output' });
+                } else {
+                     outputLines.push({ text: `(SIMULACIÓN)\ntotal 8\ndrwxr-xr-x 2 root root 4096 Jul 15 09:00 bin\ndrwxr-xr-x 2 root root 4096 Jul 15 09:01 etc`, type: 'output' });
+                }
+                break;
+            case 'chmod':
+                if (effectiveArgs[1] === '640' && effectiveArgs[2]?.includes('db_config.php')) {
+                    await updateServerState({ db_config_permissions: '640' });
+                    outputLines.push({ text: `(SIMULACIÓN) Permisos de '/var/www/html/db_config.php' cambiados a 640.`, type: 'output' });
+                    await addLog({ source: 'Blue Team', message: `Permisos restringidos en db_config.php. Buen trabajo.`, teamVisible: 'all' });
+                } else {
+                    outputLines.push({ text: `(SIMULACIÓN) Permisos cambiados.`, type: 'output' });
+                }
+                break;
+            case 'openssl':
+                if (effectiveArgs[1] === 's_client') {
+                    outputLines.push({text: '(SIMULACIÓN) Verificando certificado SSL/TLS...\n--- \nCertificado: \n    CN=BOVEDA-WEB\n    Válido\n    Protocolo: TLSv1.3\n    Cifrado: AES-256-GCM\n--- \nVerificación: OK', type: 'output'});
+                    await addLog({ source: 'Blue Team', message: `Validación de certificado SSL/TLS realizada en BOVEDA-WEB.`, teamVisible: 'all' });
+                }
+                break;
+            case 'top': case 'htop':
+                 const load = serverState.is_dos_active ? 99.9 : 5.0;
+                 outputLines.push({ text: `(SIMULACIÓN) Carga del sistema: ${load.toFixed(1)}%`, type: 'output' });
+                 break;
+            case 'journalctl':
+                 outputLines.push({ text: `(SIMULACIÓN) Revisando logs de sshd...\n-- Logs --\n` +
+                    `Jul 15 10:01:03 ${currentHost} sshd[1121]: Failed password for admin from ${attackerIp} port 12345\n`.repeat(5) +
+                    `Jul 15 10:01:04 ${currentHost} sshd[1122]: Failed password for admin from ${attackerIp} port 12346\n`.repeat(5), type: 'output' });
+                 break;
+            case 'fail2ban-client':
+                 if (effectiveArgs[2] === 'banip' && effectiveArgs[3]) {
+                    const newBannedIps = [...serverState.banned_ips, effectiveArgs[3]];
+                    await updateServerState({ banned_ips: newBannedIps });
+                    outputLines.push({ text: `(SIMULACIÓN) IP ${effectiveArgs[3]} baneada por Fail2Ban.`, type: 'output' });
+                    await addLog({ source: 'Blue Team', message: `IP ${effectiveArgs[3]} ha sido bloqueada vía Fail2Ban en ${currentHost}.`, teamVisible: 'all' });
+                 }
+                break;
+            case 'sha256sum':
+                const originalHash = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'; // empty file hash
+                const compromisedHash = 'a1b2c3d4e5f6...compromised';
+                const currentHash = serverState.payload_deployed ? compromisedHash : originalHash;
+                outputLines.push({ text: `${currentHash}  /var/www/html/index.php`, type: 'output' });
+                if(serverState.payload_deployed) {
+                    await addLog({ source: 'System', message: `[CRÍTICO] ¡ALERTA DE FIM! El hash de /var/www/html/index.php no coincide. El sistema está comprometido.`, teamVisible: 'all' });
+                }
+                break;
+        }
     }
 
     return { outputLines, newPrompt, clear };
@@ -395,7 +392,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                     } else if (log.source_team === 'Blue') {
                         source = 'Blue Team';
                     }
-                    return { ...log, source };
+                    return { ...log, source, teamVisible: log.team_visible };
                 });
                 setLogs(transformedLogs);
             }
@@ -410,19 +407,15 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             }
         }).subscribe();
         
-        logsChannel = supabase.channel(`simulation-logs-${sessionId}`).on<LogEntry>('postgres_changes', { event: 'INSERT', schema: 'public', table: 'simulation_logs', filter: `session_id=eq.${sessionId}` }, (payload) => {
-            const newLog = payload.new as LogEntry;
-            if (newLog.source_team) {
-                if (newLog.source_team === 'Red') {
-                    newLog.source = 'Red Team';
-                } else if (newLog.source_team === 'Blue') {
-                    newLog.source = 'Blue Team';
-                } else {
-                    newLog.source = 'System';
-                }
-            }
-            setLogs(prevLogs => [...prevLogs, newLog]);
+        logsChannel = supabase.channel(`simulation-logs-${sessionId}`).on<any>('postgres_changes', { event: 'INSERT', schema: 'public', table: 'simulation_logs', filter: `session_id=eq.${sessionId}` }, (payload) => {
+            const newLog = payload.new;
+            let source: LogEntry['source'] = 'System';
+            if (newLog.source_team === 'Red') source = 'Red Team';
+            else if (newLog.source_team === 'Blue') source = 'Blue Team';
+            
+            setLogs(prevLogs => [...prevLogs, { ...newLog, source, teamVisible: newLog.team_visible }]);
         }).subscribe();
+
 
         return () => {
             supabase.removeChannel(stateChannel);
