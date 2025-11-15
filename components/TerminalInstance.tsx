@@ -1,94 +1,49 @@
-
-import React, { useState, useEffect, useRef, useContext } from 'react';
-import type { TerminalLine, PromptState } from '../types';
-import { SimulationContext } from '../SimulationContext';
-import { DEFAULT_SIMULATION_STATE } from '../constants';
-
-type Team = 'Red' | 'Blue';
+import React, { useEffect, useRef } from 'react';
+import type { TerminalState, PromptState } from '../types';
 
 interface TerminalInstanceProps {
-    team: Team;
-    isControlling?: boolean; // Prop for admin control
+    terminalState: TerminalState;
+    onCommand: (command: string) => void;
+    onInputChange: (input: string) => void;
 }
 
-export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team, isControlling = false }) => {
-    const { 
-        serverState, 
-        userTeam, 
-        processCommand 
-    } = useContext(SimulationContext);
+export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalState, onCommand, onInputChange }) => {
+    const { output, prompt, input, isBusy } = terminalState;
     
-    const isSpectator = userTeam === 'spectator';
-    
-    const output = team === 'Red' ? serverState?.terminal_output_red || [] : serverState?.terminal_output_blue || [];
-    const promptState = team === 'Red' 
-        ? (serverState?.prompt_red || DEFAULT_SIMULATION_STATE.prompt_red) 
-        : (serverState?.prompt_blue || DEFAULT_SIMULATION_STATE.prompt_blue);
-
-
-    const [history, setHistory] = useState<string[]>([]);
-    const [historyIndex, setHistoryIndex] = useState(0);
-    const [input, setInput] = useState('');
-
     const endOfOutputRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        endOfOutputRef.current?.scrollIntoView({ behavior: 'smooth' });
+        endOfOutputRef.current?.scrollIntoView({ behavior: "instant" });
     }, [output]);
-    
-    useEffect(() => {
-        setHistory([]);
-        setHistoryIndex(0);
-        setInput('');
-    }, [team]);
-
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter' && input.trim()) {
+        if (e.key === 'Enter' && input.trim() && !isBusy) {
             e.preventDefault();
-            const commandToProcess = input.trim();
-            setHistory(prev => [...prev, commandToProcess]);
-            setHistoryIndex(history.length + 1);
-            processCommand(team, commandToProcess, isControlling);
-            setInput('');
-        } else if (e.key === 'ArrowUp') {
+            onCommand(input);
+        } else if (e.key === 'ArrowUp' && !isBusy) {
             e.preventDefault();
-            const newIndex = Math.max(0, historyIndex - 1);
-            setHistoryIndex(newIndex);
-            setInput(history[newIndex] || '');
-        } else if (e.key === 'ArrowDown') {
+            // Future: Implement history navigation via callback
+        } else if (e.key === 'ArrowDown' && !isBusy) {
             e.preventDefault();
-            const newIndex = Math.min(history.length, historyIndex + 1);
-            setHistoryIndex(newIndex);
-            setInput(history[newIndex] || '');
+            // Future: Implement history navigation via callback
+        } else if (e.key === 'Tab') {
+             e.preventDefault();
+             // Future: Implement tab completion
         }
     };
 
-    const canInteract = (isSpectator && isControlling && !!serverState) || 
-                        (!isSpectator && team.toLowerCase() === userTeam && !!serverState);
-
-
-    const getPlaceholderText = () => {
-        if (!serverState) return "Sincronizando estado...";
-        if (isSpectator) {
-            return isControlling ? "Modo Control activado. Escriba un comando..." : "Modo Espectador (solo lectura)";
-        }
-        if (team.toLowerCase() !== userTeam) {
-            return "Terminal de otro equipo...";
-        }
-        return "Escriba un comando...";
-    };
+    const placeholder = isBusy ? "Procesando comando..." : "Escriba un comando y presione Enter...";
 
     return (
         <div 
-            className="bg-[#0a0f1c] border border-gray-700 rounded-b-lg h-[400px] p-3 flex flex-col font-mono"
+            className="bg-[#0a0f1c] border border-gray-700 rounded-lg h-[400px] p-3 flex flex-col font-mono"
             onClick={() => inputRef.current?.focus()}
         >
             <div className="flex-grow overflow-y-auto text-sm pr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
                 {output.map((line, index) => (
                     <div key={index} className="mb-1">
-                        {line.type === 'prompt' && <Prompt {...(team === 'Red' ? (serverState?.prompt_red || DEFAULT_SIMULATION_STATE.prompt_red) : (serverState?.prompt_blue || DEFAULT_SIMULATION_STATE.prompt_blue))!} />}
+                        {line.type === 'prompt' && <Prompt {...prompt} />}
                         {line.type === 'command' && <span className="text-white break-all">{line.text}</span>}
                         {line.type === 'output' && <pre className="whitespace-pre-wrap text-slate-300">{line.text}</pre>}
                         {line.type === 'html' && <div className="text-slate-300" dangerouslySetInnerHTML={{ __html: line.html || '' }} />}
@@ -98,33 +53,36 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ team, isCont
                 <div ref={endOfOutputRef} />
             </div>
             <div className="flex items-center mt-2 flex-shrink-0">
-                <Prompt {...promptState} />
+                <Prompt {...prompt} />
                 <input
                     ref={inputRef}
                     type="text"
                     className="bg-transparent border-none outline-none text-white font-mono text-sm w-full"
                     value={input}
-                    onChange={e => setInput(e.target.value)}
+                    onChange={e => onInputChange(e.target.value)}
                     onKeyDown={handleKeyDown}
                     autoFocus
                     autoComplete="off"
                     autoCapitalize="off"
                     spellCheck="false"
-                    disabled={!canInteract}
-                    placeholder={getPlaceholderText()}
+                    disabled={isBusy}
+                    placeholder={placeholder}
                 />
             </div>
         </div>
     );
 };
 
-const Prompt: React.FC<PromptState> = ({ user, host, dir }) => (
-    <span className="flex-shrink-0 mr-2">
-        <span className={user.includes('blue') ? 'text-blue-400' : 'text-red-400'}>{user}</span>
-        <span className="text-slate-400">@</span>
-        <span className="prompt-host">{host}</span>
-        <span className="text-slate-400">:</span>
-        <span className="prompt-dir">{dir}</span>
-        <span className="text-slate-400">{user === 'root' || user === 'admin' ? '# ' : '$ '}</span>
-    </span>
-);
+const Prompt: React.FC<PromptState> = ({ user, host, dir }) => {
+    const userColor = user.includes('blue') ? 'text-blue-400' : (user === 'root' ? 'text-red-500' : 'text-red-400');
+    return (
+        <span className="flex-shrink-0 mr-2">
+            <span className={userColor}>{user}</span>
+            <span className="text-slate-400">@</span>
+            <span className="prompt-host">{host}</span>
+            <span className="text-slate-400">:</span>
+            <span className="prompt-dir">{dir}</span>
+            <span className="text-slate-400">{user === 'root' || user === 'admin' ? '# ' : '$ '}</span>
+        </span>
+    );
+};
