@@ -1,5 +1,9 @@
 import React from 'react';
 
+// ============================================================================
+// Core Simulation & Terminal Types
+// ============================================================================
+
 export interface TerminalLine {
     text?: string;
     html?: string;
@@ -11,6 +15,58 @@ export interface PromptState {
     host: string;
     dir: string;
 }
+
+export interface TerminalState {
+    id: string;
+    name: string;
+    output: TerminalLine[];
+    prompt: PromptState;
+    history: string[];
+    historyIndex: number;
+    input: string;
+    mode: 'normal' | 'msf'; // For special modes like msfconsole
+    isBusy: boolean;
+}
+
+export interface ActiveProcess {
+    id: string;
+    terminalId: string;
+    command: string;
+    type: 'listener' | 'capture' | 'bruteforce';
+    port?: number;
+    startTime: number;
+    output?: string;
+}
+
+export interface VirtualHost {
+    ip: string;
+    hostname: string;
+    owner: 'red' | 'blue' | 'neutral';
+    ports: { [port: number]: { service: string; state: 'open' | 'closed' | 'filtered' } };
+}
+
+// This replaces the old SimulationState. It's the shared state for the whole session.
+export interface NetworkState {
+    session_id: string;
+    hosts: VirtualHost[];
+    last_updated?: string;
+    // The following properties are preserved for compatibility with the original structure
+    // but should be considered deprecated in favor of the new granular state.
+    firewall_enabled: boolean;
+    ssh_hardened: boolean;
+    banned_ips: string[];
+    payload_deployed: boolean;
+    is_dos_active: boolean;
+    admin_password_found: boolean;
+    db_config_permissions: string;
+    hydra_run_count: number;
+    server_load: number;
+}
+
+
+// ============================================================================
+// Legacy & App Structure Types
+// ============================================================================
 
 export interface TrainingScenario {
     id: string;
@@ -36,38 +92,12 @@ export interface GlossaryTerm {
 export interface LogEntry {
     id: number;
     timestamp: string;
-    source: 'Red Team' | 'Blue Team' | 'System';
+    source: 'Red Team' | 'Blue Team' | 'System' | 'Network';
     message: string;
     teamVisible: 'all' | 'red' | 'blue';
     // For Supabase compatibility
     session_id?: string;
-    source_team?: 'Red' | 'Blue' | 'System';
-}
-
-
-export interface TrainingModuleProps {
-    scenario: TrainingScenario;
-    isCompleted: boolean;
-    onToggleComplete: (scenarioId: string) => void;
-}
-
-// New types for multiplayer simulation
-export interface SimulationState {
-    session_id: string;
-    firewall_enabled: boolean;
-    ssh_hardened: boolean;
-    banned_ips: string[];
-    payload_deployed: boolean;
-    is_dos_active: boolean;
-    admin_password_found: boolean;
-    db_config_permissions: string;
-    hydra_run_count: number;
-    server_load: number;
-    terminal_output_red: TerminalLine[];
-    terminal_output_blue: TerminalLine[];
-    prompt_red: PromptState;
-    prompt_blue: PromptState;
-    last_updated?: string;
+    source_team?: 'Red' | 'Blue' | 'System' | 'Network';
 }
 
 export interface SessionData {
