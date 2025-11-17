@@ -1,10 +1,8 @@
-
 import React, { createContext, useState, useEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
 import { supabase } from './supabaseClient';
-// FIX: Import FirewallState type to resolve 'Cannot find name' error.
 import type { VirtualEnvironment, LogEntry, SessionData, TerminalLine, PromptState, TerminalState, ActiveProcess, CommandHandler, CommandContext, CommandResult, VirtualHost, FirewallState } from './types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, GENERAL_HELP_TEXT, fortressScenario } from './constants';
+import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, GENERAL_HELP_TEXT, fortressScenario, rageScenario } from './constants';
 import * as R from 'ramda';
 
 // ============================================================================
@@ -17,6 +15,20 @@ const findHost = (env: VirtualEnvironment, hostnameOrIp: string): VirtualHost | 
         if (host) return host;
     }
     return undefined;
+};
+
+const updateHostState = (env: VirtualEnvironment, hostIp: string, updates: Partial<VirtualHost['systemState']>) => {
+    const newEnv = R.clone(env);
+    for (const networkId in newEnv.networks) {
+        const hostIndex = newEnv.networks[networkId].hosts.findIndex(h => h.ip === hostIp);
+        if (hostIndex !== -1) {
+            const hostPath = ['networks', networkId, 'hosts', hostIndex, 'systemState'];
+            const currentSystemState = R.path(hostPath, newEnv) || {};
+            const newSystemState = { ...currentSystemState, ...updates };
+            return R.set(R.lensPath(hostPath), newSystemState, newEnv);
+        }
+    }
+    return newEnv;
 };
 
 // ============================================================================
@@ -53,10 +65,17 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         if (!targetHost) return { output: [{ text: `Host desconocido: ${host}`, type: 'error' }] };
         
         const userAccount = targetHost.users.find(u => u.username === user);
-        // Simplified: Assume password is known if user is in `credentials` or is blue-team
         const hasCredentials = environment.attackProgress.credentials[`${user}@${targetHost.ip}`] === userAccount?.password || user === 'blue-team';
 
-        if (!userAccount || !hasCredentials) return { output: [{ text: `Permiso denegado, por favor intente de nuevo.`, type: 'error' }], duration: 1500 };
+        if (!userAccount || !hasCredentials) {
+            const newEnv = updateHostState(environment, targetHost.ip, { failedLogins: (targetHost.systemState?.failedLogins || 0) + 1 });
+            return { output: [{ text: `Permiso denegado, por favor intente de nuevo.`, type: 'error' }], duration: 1500, newEnvironment: newEnv };
+        }
+
+        const newEnv = R.clone(environment);
+        if (!newEnv.attackProgress.compromised.includes(targetHost.ip)) {
+             newEnv.attackProgress.compromised.push(targetHost.ip);
+        }
         
         return {
             output: [{ text: `Bienvenido a ${targetHost.hostname}.`, type: 'output' }],
@@ -65,7 +84,8 @@ const commandLibrary: { [key: string]: CommandHandler } = {
                 prompt: { user, host: targetHost.hostname, dir: '~' },
                 originalPrompt: terminalState.prompt,
                 currentHostIp: targetHost.ip
-            }
+            },
+            newEnvironment: newEnv
         };
     },
     nmap: async (args, { environment }) => {
@@ -79,7 +99,7 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         const visiblePorts = Object.entries(targetHost.services).filter(([port]) => {
             if (!fw.enabled) return true;
             const portNum = parseInt(port);
-            return fw.rules.some(r => r.destPort === portNum && r.action === 'allow');
+            return fw.rules.some(r => r.destPort === portNum && r.action === 'allow' && !r.sourceIP);
         });
         
         let outputText = `\nStarting Nmap...\nNmap scan report for ${targetHost.hostname} (${targetHost.ip})\nHost is up.\n`;
@@ -97,7 +117,7 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         return { output: [{ text: outputText, type: 'output' }], duration: 2500, newEnvironment: newEnv };
     },
      hydra: async (args, { environment }) => {
-        const userArg = args.indexOf('-l') > -1 ? args[args.indexOf('-l') + 1] : null;
+        const userArg = args.includes('-l') ? args[args.indexOf('-l') + 1] : null;
         const targetArg = args.find(a => a.startsWith('ssh://'));
         if (!userArg || !targetArg) return { output: [{ text: "Uso: hydra -l <user> -P <wordlist> ssh://<host>", type: 'error'}] };
         
@@ -106,23 +126,25 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         if (!targetHost) return { output: [{ text: `Host desconocido: ${host}`, type: 'error' }] };
 
         const userAccount = targetHost.users.find(u => u.username === userArg);
-        if (userAccount && userAccount.password === 'toor') {
-            const newEnv = R.clone(environment);
-            newEnv.attackProgress.credentials[`${userArg}@${targetHost.ip}`] = 'toor';
+        const passwordFound = userAccount && (userAccount.password === 'toor' || userAccount.password === 'P@ssw0rd');
+
+        let newEnv = updateHostState(environment, targetHost.ip, { failedLogins: (targetHost.systemState?.failedLogins || 0) + 20 });
+        
+        if (passwordFound) {
+            newEnv.attackProgress.credentials[`${userArg}@${targetHost.ip}`] = userAccount.password;
             return {
-                output: [{ text: `[22][ssh] host: ${host} login: ${userArg} password: toor`, type: 'output' }],
+                output: [{ text: `[22][ssh] host: ${host} login: ${userArg} password: ${userAccount.password}`, type: 'output' }],
                 duration: 5000,
                 newEnvironment: newEnv
             };
         }
-        return { output: [{ text: 'No se encontraron contraseñas válidas.', type: 'output' }], duration: 5000 };
+        return { output: [{ text: 'No se encontraron contraseñas válidas.', type: 'output' }], duration: 5000, newEnvironment: newEnv };
     },
     'sudo': async (args, context) => {
         const cmd = args[0];
         if (!cmd) return { output: [{text: "sudo: se requiere un comando", type: 'error'}] };
         const handler = commandLibrary[cmd];
         if (!handler) return { output: [{text: `sudo: ${cmd}: comando no encontrado`, type: 'error'}]};
-        // Simplified sudo: just run the command
         return handler(args.slice(1), context);
     },
     ufw: async (args, { environment, terminalState }) => {
@@ -137,36 +159,34 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         let outputText = '';
 
         switch (args[0]) {
-            case 'enable':
-                fw.enabled = true;
-                outputText = 'Firewall is active and enabled on system startup';
-                break;
-            case 'disable':
-                fw.enabled = false;
-                outputText = 'Firewall stopped and disabled on system startup';
-                break;
+            case 'enable': fw.enabled = true; outputText = 'Firewall is active and enabled on system startup'; break;
+            case 'disable': fw.enabled = false; outputText = 'Firewall stopped and disabled on system startup'; break;
             case 'status':
                 outputText = `Status: ${fw.enabled ? 'active' : 'inactive'}\n\nTo                         Action      From\n--                         ------      ----\n`;
-                fw.rules.forEach(r => {
-                    outputText += `${r.destPort || 'Any'}/${r.protocol || 'any'}                  ${r.action.toUpperCase()}        ${r.sourceIP || 'Anywhere'}\n`;
-                });
+                fw.rules.forEach(r => { outputText += `${r.destPort || 'Any'}/${r.protocol || 'any'}                  ${r.action.toUpperCase()}        ${r.sourceIP || 'Anywhere'}\n`; });
                 break;
             case 'allow':
                 const allowPort = parseInt(args[1]);
                 if (isNaN(allowPort)) return { output: [{text: "Regla inválida", type: 'error'}]};
-                fw.rules = fw.rules.filter(r => r.destPort !== allowPort);
+                fw.rules = fw.rules.filter(r => !(r.destPort === allowPort && !r.sourceIP));
                 fw.rules.push({ id: `allow-${allowPort}`, action: 'allow', destPort: allowPort, protocol: 'any'});
                 outputText = `Rule added`;
                 break;
             case 'deny':
-                 const denyPort = parseInt(args[1]);
-                if (isNaN(denyPort)) return { output: [{text: "Regla inválida", type: 'error'}]};
-                fw.rules = fw.rules.filter(r => r.destPort !== denyPort);
-                fw.rules.push({ id: `deny-${denyPort}`, action: 'deny', destPort: denyPort, protocol: 'any'});
-                outputText = `Rule added`;
+                if (args[1] === 'from') {
+                    const ip = args[2];
+                    if (!ip) return { output: [{text: "Se requiere una IP.", type: 'error'}]};
+                    fw.rules.push({ id: `deny-ip-${ip}`, action: 'deny', sourceIP: ip, protocol: 'any'});
+                    outputText = `Rule added`;
+                } else {
+                    const denyPort = parseInt(args[1]);
+                    if (isNaN(denyPort)) return { output: [{text: "Regla inválida", type: 'error'}]};
+                    fw.rules = fw.rules.filter(r => r.destPort !== denyPort);
+                    fw.rules.push({ id: `deny-${denyPort}`, action: 'deny', destPort: denyPort, protocol: 'any'});
+                    outputText = `Rule added`;
+                }
                 break;
-            default:
-                return { output: [{text: "Comando no reconocido", type: 'error'}] };
+            default: return { output: [{text: "Comando no reconocido", type: 'error'}] };
         }
         
         return { output: [{ text: outputText, type: 'output' }], newEnvironment: R.set(R.lensPath(fwPath), fw, newEnv) };
@@ -189,17 +209,6 @@ const commandLibrary: { [key: string]: CommandHandler } = {
 
         return { output: [], newEnvironment: R.set(R.lensPath(hostPath), host, newEnv) };
     },
-    ls: async (args, { environment, terminalState }) => {
-        if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
-        const host = findHost(environment, terminalState.currentHostIp);
-        if (!host) return { output: [] };
-
-        if (args.includes('/var/www/html/')) {
-            const file = host.files.find(f => f.path.includes('db_config'));
-             if (file) return { output: [{ text: `-rwx-r----- 1 www-data www-data 1024 Jan 1 12:00 db_config.php`, type: 'output' }] };
-        }
-        return { output: [{ text: 'drwxr-xr-x 2 user user 4096 Jan 1 12:00 Documents\n-rw-r--r-- 1 user user 1024 Jan 1 12:00 notes.txt', type: 'output' }] };
-    },
     nano: async (args, { environment, terminalState }) => {
          if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
         if (args.length < 1) return { output: [{text: "nano: se requiere un nombre de archivo para editar", type: 'error'}] };
@@ -209,34 +218,73 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         const hostPath = ['networks', 'dmz', 'hosts', 0];
         let host = R.path(hostPath, newEnv) as VirtualHost;
         const fileIndex = host.files.findIndex(f => f.path === path);
-        
-        if (fileIndex !== -1 && path === '/etc/ssh/sshd_config') {
+        if (fileIndex === -1) return { output: [{text: `El archivo no existe. (Simulado)`, type: 'error'}] };
+
+        if (path === '/etc/ssh/sshd_config') {
             host.files[fileIndex].content = host.files[fileIndex].content?.replace('PermitRootLogin yes', 'PermitRootLogin no');
-            return { output: [{text: `Archivo guardado. (Simulado)`, type: 'output'}], newEnvironment: R.set(R.lensPath(hostPath), host, newEnv) };
+        } else if (path === '/var/www/html/index.php') {
+            host.files[fileIndex].content = '<?php echo "Sitio Comprometido"; ?>';
+            host.files[fileIndex].hash = 'hacked_hash_456';
         }
-        return { output: [{text: `Archivo guardado. (Simulado)`, type: 'output'}] };
+        return { output: [{text: `Archivo guardado. (Simulado)`, type: 'output'}], newEnvironment: R.set(R.lensPath(hostPath), host, newEnv) };
     },
     systemctl: async (args, { environment }) => {
-        if (args[0] === 'restart' && args[1] === 'sshd') {
-            return { output: [{text: `Servicio sshd reiniciado. (Simulado)`, type: 'output'}], duration: 800 };
-        }
+        if (args[0] === 'restart' && args[1] === 'sshd') return { output: [{text: `Servicio sshd reiniciado. (Simulado)`, type: 'output'}], duration: 800 };
         return { output: [{text: `Comando systemctl no reconocido.`, type: 'error'}] };
     },
-    curl: async (args, { environment, terminalState }) => {
-        if (args.length < 1) return { output: [{text: "curl: la URL no tiene el formato correcto", type: 'error'}]};
-        const url = args[0].replace('http://', '').split('/')[0];
-        const file = args[0].replace('http://', '').split('/')[1];
+    top: async (args, { environment, terminalState }) => {
+        if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
+        const host = findHost(environment, terminalState.currentHostIp);
+        if (!host || !host.systemState) return { output: [] };
+        const { cpuLoad, memoryUsage, networkConnections } = host.systemState;
+        const outputText = `top - ${new Date().toTimeString().split(' ')[0]} up 1 day, 2:30,  1 user,  load average: ${cpuLoad.toFixed(2)}, 0.8, 0.5
+Tasks: 1 total,   1 running,   0 sleeping,   0 stopped,   0 zombie
+%Cpu(s): ${cpuLoad.toFixed(1)} us,  ${(cpuLoad / 3).toFixed(1)} sy,  0.0 ni, ${(100 - cpuLoad - (cpuLoad/3)).toFixed(1)} id
+MiB Mem :  ${(memoryUsage * 1024).toFixed(1)} total,  ${(memoryUsage * 512).toFixed(1)} free,  ${(memoryUsage * 512).toFixed(1)} used
+MiB Swap:    0.0 total,    0.0 free,    0.0 used.`;
+        return { output: [{ text: outputText, type: 'output' }] };
+    },
+    hping3: async (args, { environment, setEnvironment }) => {
+        const target = args.find(arg => !arg.startsWith('-'));
+        if (!target) return { output: [{ text: 'Se requiere un objetivo.', type: 'error' }] };
+        const targetHost = findHost(environment, target);
+        if (!targetHost) return { output: [{ text: `Host desconocido: ${target}`, type: 'error' }] };
 
-        const host = findHost(environment, url);
-        if (!host || !file) return { output: [{text: "No se pudo resolver el host.", type: 'error'}] };
-        
-        const targetFile = host.files.find(f => f.path.includes(file));
-        const canRead = parseInt(targetFile?.permissions || '0', 8) & 0b00000100; // Check "other" read bit
+        const originalCpuLoad = targetHost.systemState?.cpuLoad || 5.0;
+        setEnvironment(env => updateHostState(env, targetHost.ip, { cpuLoad: 99.8 }));
+        setTimeout(() => {
+             setEnvironment(env => updateHostState(env, targetHost.ip, { cpuLoad: originalCpuLoad }));
+        }, 20000); // DoS lasts for 20 seconds
 
-        if (targetFile && canRead) {
-            return { output: [{text: targetFile.content || '', type: 'output'}] };
+        return {
+            output: [{ text: `HPING ${target} (eth0 ${target}): S set, 40 headers + 0 data bytes, flooding`, type: 'output' }],
+            process: { command: `hping3 ${args.join(' ')}`, type: 'dos' },
+            duration: 1000 // Command returns immediately but process runs
+        };
+    },
+    journalctl: async(args, { environment, terminalState }) => {
+        if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
+        const host = findHost(environment, terminalState.currentHostIp);
+        if (!host || !host.systemState) return { output: [] };
+        let output = '-- Logs begin at Mon 2024-01-01 --\n';
+        for (let i = 0; i < host.systemState.failedLogins; i++) {
+            const time = new Date(Date.now() - i * 1000).toTimeString().split(' ')[0];
+            output += `Jan 01 ${time} ${host.hostname} sshd[123${i}]: Failed password for invalid user admin from 192.168.1.100 port 54321 ssh2\n`;
         }
-        return { output: [{text: `curl: (7) Failed to connect to ${url} port 80: Connection refused`, type: 'error'}]};
+        return { output: [{ text: output, type: 'output' }] };
+    },
+    sha256sum: async (args, { environment, terminalState }) => {
+        if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
+        if (args.length < 1) return { output: [{text: "sha256sum: falta un operando", type: 'error'}] };
+        const path = args[0];
+        const host = findHost(environment, terminalState.currentHostIp);
+        const file = host?.files.find(f => f.path === path);
+        if (!file) return { output: [{text: `sha256sum: ${path}: No existe el fichero o el directorio`, type: 'error'}]};
+        return { output: [{ text: `${file.hash}  ${path}`, type: 'output' }] };
+    },
+    'fail2ban-client': async (args, context) => {
+        // This is an alias for ufw deny from
+        return commandLibrary.ufw(['deny', 'from', args[args.indexOf('banip') + 1]], context);
     },
 };
 
@@ -279,7 +327,8 @@ const createNewTerminal = (id: string, name: string, userTeam: 'red' | 'blue'): 
 };
 
 export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children, sessionData }) => {
-    const [environment, setEnvironment] = useState<VirtualEnvironment>(R.clone(fortressScenario.initialEnvironment));
+    // TODO: Select scenario based on session/user choice.
+    const [environment, setEnvironment] = useState<VirtualEnvironment>(R.clone(rageScenario.initialEnvironment));
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [terminals, setTerminals] = useState<TerminalState[]>([]);
     const [processes, setProcesses] = useState<ActiveProcess[]>([]);
@@ -334,20 +383,8 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
     }, [updateTerminalState]);
     
     const navigateHistory = useCallback((terminalId: string, direction: 'up' | 'down') => {
-        const terminal = terminals.find(t => t.id === terminalId);
-        if (!terminal || terminal.history.length === 0) return;
-
-        let newIndex = terminal.historyIndex;
-        if (direction === 'up') {
-            newIndex = newIndex === -1 ? terminal.history.length - 1 : Math.max(0, newIndex - 1);
-        } else {
-            newIndex = newIndex === -1 ? -1 : Math.min(terminal.history.length, newIndex + 1);
-        }
-        
-        const newInput = newIndex >= 0 && newIndex < terminal.history.length ? terminal.history[newIndex] : '';
-        updateTerminalState(terminalId, { historyIndex: newIndex, input: newInput });
-
-    }, [terminals, updateTerminalState]);
+        // This is now handled locally in TerminalInstance with CommandHistory class
+    }, []);
 
     const processCommand = useCallback(async (terminalId: string, command: string) => {
         const terminal = terminals.find(t => t.id === terminalId);
@@ -369,12 +406,16 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         commandCount.current++;
 
         updateTerminalState(terminalId, { isBusy: true });
+        
+        const timestamp = new Date().toISOString();
+        const logMessage = `User executed command: ${command}`;
+        // addLog({ source: team === 'red' ? 'Red Team' : 'Blue Team', message: logMessage, teamVisible: 'all' });
+        
+        setEnvironment(env => ({ ...env!, timeline: [...env!.timeline, { id: env!.timeline.length + 1, timestamp, source: team === 'red' ? 'Red Team' : 'Blue Team', source_team: team === 'red' ? 'Red' : 'Blue', message: command, teamVisible: 'all'}] }));
 
-        const newHistory = terminal.history[terminal.history.length - 1] === command ? terminal.history : [...terminal.history, command];
+
         updateTerminalState(terminalId, {
             output: [...terminal.output, { type: 'prompt', ...terminal.prompt }, { text: command, type: 'command' }],
-            history: newHistory,
-            historyIndex: -1,
             input: ''
         });
         
