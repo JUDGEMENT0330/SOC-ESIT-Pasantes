@@ -464,9 +464,10 @@ const TrainingModule: React.FC<TrainingModuleProps> = ({ scenario, isCompleted, 
             }
             // Fallback for when the interactive environment is not yet available.
             return <div className="text-center text-gray-400 p-4">Cargando entorno interactivo...</div>;
+        } else {
+            // This path is for the standard TrainingScenario, which is guaranteed to have 'content'.
+            return scenario.content;
         }
-        // This path is for the standard TrainingScenario, which is guaranteed to have 'content'.
-        return scenario.content;
     };
 
     return (
