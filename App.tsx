@@ -14,7 +14,7 @@ import { SimulationProvider } from './SimulationContext';
 // Main App Component
 // ============================================================================
 
-const ADMIN_EMAIL = 'manciarodrigez53@gmail.com';
+const ADMIN_EMAIL = process.env.VITE_ADMIN_EMAIL || 'admin@cybervaltorix.com';
 
 export default function App() {
     const [session, setSession] = useState<Session | null>(null);
