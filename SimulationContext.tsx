@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import type { VirtualEnvironment, LogEntry, SessionData, TerminalLine, PromptState, TerminalState, ActiveProcess, CommandHandler, CommandContext, CommandResult, VirtualHost, FirewallState, InteractiveScenario } from './types';
@@ -368,17 +369,16 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         const scenario = TRAINING_SCENARIOS.find(s => s.id === payload.active_scenario_id) as InteractiveScenario | undefined;
         setActiveScenario(scenario ?? null);
         setEnvironment(payload.live_environment ?? null);
+    
+        const terminalsToShow = [];
+        if (payload.red_terminal_state) terminalsToShow.push(payload.red_terminal_state);
+        if (payload.blue_terminal_state) terminalsToShow.push(payload.blue_terminal_state);
 
         if (team === 'spectator') {
-            const spectatorTerminals = [];
-            if (payload.red_terminal_state) spectatorTerminals.push(payload.red_terminal_state);
-            if (payload.blue_terminal_state) spectatorTerminals.push(payload.blue_terminal_state);
-            setTerminals(spectatorTerminals);
+            setTerminals(terminalsToShow);
         } else if (team === 'red' || team === 'blue') {
-            const myTerminalState = team === 'red' ? payload.red_terminal_state : payload.blue_terminal_state;
-            
-            if (myTerminalState) {
-                setTerminals([myTerminalState]);
+            if (terminalsToShow.length > 0) {
+                 setTerminals(terminalsToShow);
             } else {
                 // If no terminal state exists for this team in the DB, create a default local one.
                 // This ensures the user always has a terminal, even in an empty/new session.
@@ -464,16 +464,29 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
     
     const processCommand = useCallback(async (terminalId: string, command: string) => {
         const terminal = terminals.find(t => t.id === terminalId);
-        if (!terminal || !environment || team === 'spectator') return;
+        if (!terminal || team === 'spectator') return;
 
-        // Optimistic UI update for responsiveness
-         const newOutput: TerminalLine[] = [...terminal.output, { type: 'prompt', ...terminal.prompt }, { text: command, type: 'command' }];
-         setTerminals(prev => prev.map(t => t.id === terminalId ? { ...t, output: newOutput, isBusy: true, history: [...t.history, command] } : t));
-        
         const cmdStr = command.trim().split(' ')[0].toLowerCase();
+        const isEnvIndependent = ['help', 'start-scenario', 'clear', 'marca', 'whoami', 'exit'].includes(cmdStr);
+
+        if (!environment && !isEnvIndependent) {
+            const outputWithError: TerminalLine[] = [
+                ...terminal.output,
+                { type: 'prompt', ...terminal.prompt },
+                { text: command, type: 'command' },
+                { text: "Error: Ningún escenario interactivo está activo. Use 'start-scenario [id]' para comenzar.", type: 'error' }
+            ];
+            setTerminals(prev => prev.map(t => t.id === terminalId ? { ...t, output: outputWithError } : t));
+            return;
+        }
+
+        const optimisticHistory = [...terminal.history, command];
+        const newOutput: TerminalLine[] = [...terminal.output, { type: 'prompt', ...terminal.prompt }, { text: command, type: 'command' }];
+        setTerminals(prev => prev.map(t => t.id === terminalId ? { ...t, output: newOutput, isBusy: true, history: optimisticHistory } : t));
+        
         const handler = commandLibrary[cmdStr];
         
-        const context: CommandContext = { userTeam: team as 'red' | 'blue', terminalState: terminal, environment: environment, setEnvironment, startScenario };
+        const context: CommandContext = { userTeam: team as 'red' | 'blue', terminalState: terminal, environment: environment!, setEnvironment, startScenario };
 
         let result: CommandResult;
         if (handler) {
@@ -486,9 +499,8 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         const timestamp = new Date().toISOString();
         const source: LogEntry['source'] = team === 'red' ? 'Red Team' : 'Blue Team';
         
-        // FIX: Create the new log entry with an explicit type to prevent type widening issues.
         const newLogEntry: LogEntry = {
-            id: finalEnvironment.timeline.length + 1,
+            id: finalEnvironment!.timeline.length + 1,
             timestamp,
             source,
             message: command,
@@ -496,13 +508,13 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         };
         const finalTimelineEnv = {
             ...finalEnvironment,
-            timeline: [...finalEnvironment.timeline, newLogEntry]
+            timeline: [...finalEnvironment!.timeline, newLogEntry]
         };
 
         const updatedTerminalState: TerminalState = {
             ...terminal,
             ...result.newTerminalState,
-            history: [...terminal.history, command],
+            history: optimisticHistory,
             output: result.clear ? result.output : [...newOutput, ...result.output],
             isBusy: false,
         };
