@@ -1,8 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import type { TerminalState, PromptState } from '../types';
 import DOMPurify from 'https://esm.sh/dompurify';
-
-const COMMANDS = ['help', 'nmap', 'hydra', 'nc', 'msfconsole', 'clear', 'marca', 'exit', 'ssh', 'sudo', 'ufw', 'ls', 'whoami'];
+import { ALL_COMMANDS } from '../constants';
 
 interface TerminalInstanceProps {
     terminalState: TerminalState;
@@ -22,7 +21,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalStat
     }, [output]);
     
     useEffect(() => {
-        if (inputRef.current) {
+        if (inputRef.current && inputRef.current.value !== input) {
             inputRef.current.value = input;
         }
     }, [input]);
@@ -41,9 +40,15 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalStat
             onHistoryNav('down');
         } else if (e.key === 'Tab') {
              e.preventDefault();
-             const matching = COMMANDS.filter(cmd => cmd.startsWith(input));
+             const currentInput = input.split(' ').pop() || '';
+             if (!currentInput) return;
+             
+             const matching = ALL_COMMANDS.filter(cmd => cmd.startsWith(currentInput));
              if (matching.length === 1) {
-                 onInputChange(matching[0] + ' ');
+                 const newCommand = matching[0];
+                 const parts = input.split(' ');
+                 parts[parts.length - 1] = newCommand;
+                 onInputChange(parts.join(' ') + ' ');
              }
         }
     };
@@ -109,7 +114,7 @@ const Prompt: React.FC<PromptState> = ({ user, host, dir }) => {
             <span className="prompt-host">{host}</span>
             <span className="text-slate-400">:</span>
             <span className="prompt-dir">{dir}</span>
-            <span className="text-slate-400">{user === 'root' || user === 'admin' ? '# ' : '$ '}</span>
+            <span className="text-slate-400">{user === 'root' || user === 'admin' || user === 'blue-team' ? '# ' : '$ '}</span>
         </span>
     );
 };
