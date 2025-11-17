@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 
@@ -23,12 +24,42 @@ export const Auth: React.FC = () => {
         e.preventDefault();
         setMessage('');
         setLoading(true);
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) {
-            setMessage(error.message);
-        } else {
+
+        try {
+            // 1. Verificar dominio corporativo
+            if (!email.endsWith('@cybervaltorix.com')) {
+                throw new Error('Solo se permiten correos corporativos (@cybervaltorix.com).');
+            }
+            
+            // 2. Verificar contra whitelist en Supabase (simulado, asume que la tabla 'allowed_emails' existe)
+            const { data: isWhitelisted, error: whitelistError } = await supabase
+                .from('allowed_emails')
+                .select('email')
+                .eq('email', email)
+                .single();
+
+            if (whitelistError && whitelistError.code !== 'PGRST116') throw whitelistError;
+            
+            if (!isWhitelisted) {
+                throw new Error('Email no autorizado. Contacte al administrador.');
+            }
+
+            // 3. Activar MFA y registrar
+            const { error: signUpError } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    emailRedirectTo: `${window.location.origin}/`,
+                }
+            });
+
+            if (signUpError) throw signUpError;
+            
             setMessage('¡Registro exitoso! Por favor, revise su correo para el enlace de confirmación.');
+        } catch (error: any) {
+            setMessage(error.message);
         }
+
         setLoading(false);
     };
 
