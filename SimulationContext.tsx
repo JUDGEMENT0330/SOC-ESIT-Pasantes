@@ -23,8 +23,9 @@ const updateHostState = (env: VirtualEnvironment, hostIp: string, updates: Parti
         const hostIndex = newEnv.networks[networkId].hosts.findIndex(h => h.ip === hostIp);
         if (hostIndex !== -1) {
             const hostPath = ['networks', networkId, 'hosts', hostIndex, 'systemState'];
-            const currentSystemState = R.path(hostPath, newEnv) || {};
-            const newSystemState = { ...currentSystemState, ...updates };
+            // FIX: Replaced object spread with a safer method to avoid type errors.
+            const currentSystemState = R.path(hostPath, newEnv);
+            const newSystemState = Object.assign({}, currentSystemState, updates);
             return R.set(R.lensPath(hostPath), newSystemState, newEnv);
         }
     }
