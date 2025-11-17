@@ -1,9 +1,10 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import type { User } from '@supabase/supabase-js';
 import type { SessionData, SimulationSession } from '../types';
-import { Icon, DEFAULT_SIMULATION_STATE } from '../constants';
+import { Icon } from '../constants';
 
 interface SessionManagerProps {
     user: User;
@@ -68,16 +69,11 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
 
             if (sessionError) throw sessionError;
 
-            // Prompts are local-only state and should not be persisted in the database.
-            const { 
-                prompt_red, 
-                prompt_blue, 
-                ...stateForDb 
-            } = DEFAULT_SIMULATION_STATE;
-
+            // Insert a minimal row into simulation_state to establish the session.
+            // The full state will be populated when a scenario is started.
             const { error: stateError } = await supabase
                 .from('simulation_state')
-                .insert({ session_id: sessionData.id, ...stateForDb });
+                .insert({ session_id: sessionData.id });
             
             if (stateError) {
                 // Attempt to clean up the session if state creation fails
@@ -90,8 +86,6 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
             let userMessage = `Error creando la sesión: ${err.message}`;
             if (err.message?.includes('violates row-level security policy')) {
                 userMessage = "Error creando la sesión: La política de seguridad (RLS) de la base de datos lo impidió. Asegúrese de que la política de inserción en 'simulation_sessions' sea correcta.";
-            } else if (err.message?.includes('column') || err.message?.includes('violates check constraint')) {
-                 userMessage = `Error creando la sesión: ${err.message}. Hay una discrepancia entre la aplicación y el esquema de la base de datos. Verifique que las columnas en la tabla 'simulation_state' coincidan con los campos en 'DEFAULT_SIMULATION_STATE'.`;
             }
             setError(userMessage);
             console.error(err);
@@ -151,7 +145,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
     };
 
     const handleJoinSession = async (sessionId: string, sessionName: string, team: 'red' | 'blue' | 'spectator') => {
-        if (isAdmin) {
+        if (team === 'spectator' && isAdmin) {
             setSessionData({ sessionId, sessionName, team: 'spectator' });
             return;
         }
@@ -289,7 +283,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
                     )}
 
                     <div className="space-y-3 max-h-[30vh] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-                        <h3 className="font-semibold text-lg text-yellow-300 mb-3 sticky top-0 bg-[rgba(45,80,22,0.95)] backdrop-blur-sm py-2">{isAdmin ? "Sesiones Activas para Observar" : "Sesiones Personalizadas Activas"}</h3>
+                        <h3 className="font-semibold text-lg text-yellow-300 mb-3 sticky top-0 bg-[rgba(45,80,22,0.95)] backdrop-blur-sm py-2 z-10">{isAdmin ? "Sesiones Activas para Observar" : "Sesiones Personalizadas Activas"}</h3>
                         {loading && !isCreating && <p className="text-center text-gray-300">Cargando sesiones...</p>}
                         {!loading && sessionsForUser.length === 0 && <p className="text-center text-gray-400">{isAdmin ? "No hay sesiones activas." : "No hay sesiones personalizadas. ¡Crea una!"}</p>}
                         {sessionsForUser.map(session => {
