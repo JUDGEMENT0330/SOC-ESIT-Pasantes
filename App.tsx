@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useContext } from 'react';
 import { DualTerminalView } from './components/DualTerminalView';
 import { Auth } from './components/Auth';
@@ -361,7 +362,7 @@ interface TrainingSectionProps {
     updateProgress: (scenarioId: string) => void;
 }
 const TrainingSection: React.FC<TrainingSectionProps> = ({ completedScenarios, updateProgress }) => {
-    const { environment } = useContext(SimulationContext);
+    const { environment, activeScenario } = useContext(SimulationContext);
 
     return (
         <SectionWrapper title="Talleres de Operaciones de Seguridad (SOC) - Nivel Pasante" subtitle="DE: CISO, CYBER VALTORIX S.A. DE C.V.">
@@ -374,7 +375,7 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({ completedScenarios, u
                     <div className="text-[var(--text-secondary)] text-sm sm:text-base leading-relaxed space-y-4 prose prose-invert prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-pre:my-2 prose-code:text-amber-300 prose-code:bg-black/30 prose-code:p-1 prose-code:rounded-md prose-code:font-mono prose-code:before:content-none prose-code:after:content-none">
                         <p>Tienen tiempo asignado para completar estos escenarios. Los documentos en la pestaña "Recursos" son su base teórica. Esta es la aplicación práctica.</p>
                         <p>No busquen "la respuesta correcta". Quiero su análisis, su proceso de pensamiento y las acciones de contención que proponen. Usen el modelo "Maestro/Estudiante": preparen su solución y estén listos para defenderla.</p>
-                         <p className="text-yellow-300 font-bold">¡Nuevo! El Escenario 7 ahora es interactivo y valida tus acciones en tiempo real.</p>
+                         <p className="text-yellow-300 font-bold">¡Nuevo! Ahora puedes iniciar escenarios interactivos desde la terminal con el comando <code>start-scenario [id]</code> (ej. <code>start-scenario escenario7</code>).</p>
                     </div>
                 </CisoCard>
             </div>
@@ -384,7 +385,9 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({ completedScenarios, u
                     scenario={scenario} 
                     isCompleted={completedScenarios.includes(scenario.id)}
                     onToggleComplete={() => updateProgress(scenario.id)}
-                    environment={environment}
+                    // Pass the live environment ONLY to the active scenario
+                    environment={activeScenario?.id === scenario.id ? environment : null}
+                    activeScenarioId={activeScenario?.id ?? null}
                 />)}
             </div>
         </SectionWrapper>
@@ -438,11 +441,19 @@ interface TrainingModuleProps {
     scenario: TrainingScenario | InteractiveScenario;
     isCompleted: boolean;
     onToggleComplete: () => void;
-    environment: VirtualEnvironment | null;
+    environment: VirtualEnvironment | null; // Null if not the active scenario
+    activeScenarioId: string | null;
 }
-const TrainingModule: React.FC<TrainingModuleProps> = ({ scenario, isCompleted, onToggleComplete, environment }) => {
+const TrainingModule: React.FC<TrainingModuleProps> = ({ scenario, isCompleted, onToggleComplete, environment, activeScenarioId }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     
+    // Auto-expand the module if it becomes the active scenario
+    useEffect(() => {
+        if (scenario.isInteractive && activeScenarioId === scenario.id) {
+            setIsExpanded(true);
+        }
+    }, [activeScenarioId, scenario.id, scenario.isInteractive]);
+
     const handleToggleComplete = (e: React.MouseEvent) => {
         e.stopPropagation();
         onToggleComplete();
@@ -456,18 +467,18 @@ const TrainingModule: React.FC<TrainingModuleProps> = ({ scenario, isCompleted, 
     const currentStatus = isCompleted ? statusConfig.completed : statusConfig.initial;
 
     const renderContent = () => {
-        // FIX: Use the 'in' operator for robust type guarding. This checks for the
-        // 'content' property to correctly identify a TrainingScenario.
         if ('content' in scenario) {
-            // This path is for the standard TrainingScenario.
             return scenario.content;
         } else {
-            // This path is for an InteractiveScenario.
-            if (environment) {
-                return <ScenarioView scenario={scenario} environment={environment} />;
-            }
-            // Fallback for when the interactive environment is not yet available.
-            return <div className="text-center text-gray-400 p-4">Cargando entorno interactivo...</div>;
+            // If this is the active scenario, 'environment' will be the live state.
+            // Otherwise, it's null, so we show the initial state.
+            const envForDisplay = environment ?? scenario.initialEnvironment;
+
+            return <ScenarioView 
+                scenario={scenario} 
+                environment={envForDisplay}
+                isActive={activeScenarioId === scenario.id}
+            />;
         }
     };
 
@@ -484,14 +495,15 @@ const TrainingModule: React.FC<TrainingModuleProps> = ({ scenario, isCompleted, 
                         <div className="min-w-0">
                              <div className="flex items-center">
                                 <h4 className="font-bold text-white truncate">{scenario.title}</h4>
-                                {scenario.isInteractive && (
-                                    <span className="ml-3 px-2 py-0.5 text-xs font-semibold text-indigo-800 bg-indigo-300 rounded-full animate-fade-in-fast flex-shrink-0">
-                                        Interactivo
+                                {activeScenarioId === scenario.id && (
+                                    <span className="ml-3 px-2 py-0.5 text-xs font-semibold text-green-800 bg-green-300 rounded-full animate-fade-in-fast flex items-center gap-1">
+                                        <div className="w-2 h-2 rounded-full bg-green-600 animate-pulse"></div>
+                                        Activo
                                     </span>
                                 )}
-                                {isCompleted && !scenario.isInteractive && (
-                                    <span className="ml-3 px-2 py-0.5 text-xs font-semibold text-green-800 bg-green-300 rounded-full animate-fade-in-fast flex-shrink-0">
-                                        ✓ Completado
+                                {scenario.isInteractive && activeScenarioId !== scenario.id && (
+                                    <span className="ml-3 px-2 py-0.5 text-xs font-semibold text-indigo-800 bg-indigo-300 rounded-full animate-fade-in-fast flex-shrink-0">
+                                        Interactivo
                                     </span>
                                 )}
                             </div>
@@ -549,9 +561,10 @@ const LearningModule: React.FC<{ resource: ResourceModule }> = ({ resource }) =>
 interface ScenarioViewProps {
     scenario: InteractiveScenario;
     environment: VirtualEnvironment;
+    isActive: boolean;
 }
 
-export const ScenarioView: React.FC<ScenarioViewProps> = ({ scenario, environment }) => {
+export const ScenarioView: React.FC<ScenarioViewProps> = ({ scenario, environment, isActive }) => {
     const [completedObjectives, setCompletedObjectives] = useState<Set<string>>(new Set());
     const [activeHints, setActiveHints] = useState<string[]>([]);
     const { userTeam } = useContext(SimulationContext);
@@ -585,7 +598,7 @@ export const ScenarioView: React.FC<ScenarioViewProps> = ({ scenario, environmen
     const progressPercent = totalPoints > 0 ? (earnedPoints / totalPoints) * 100 : 0;
     
     return <div className="space-y-6 mt-4">
-            <div className="bg-gradient-to-r from-indigo-900/50 to-purple-900/50 p-6 rounded-xl border border-indigo-500/30">
+            <div className={`p-6 rounded-xl border transition-all duration-500 ${isActive ? 'bg-gradient-to-r from-indigo-900/50 to-purple-900/50 border-indigo-500/30' : 'bg-gray-900/20 border-gray-700/50'}`}>
                 <div className="flex items-center justify-between mb-4">
                     <div>
                         <h3 className="text-xl font-bold text-white">{scenario.title}</h3>
@@ -600,21 +613,23 @@ export const ScenarioView: React.FC<ScenarioViewProps> = ({ scenario, environmen
                     </span>
                 </div>
                 
-                <div className="mt-4">
-                    <div className="flex justify-between text-sm mb-2">
-                        <span className="text-gray-400">Progreso del Equipo</span>
-                        <span className="text-white font-bold">{earnedPoints} / {totalPoints} Puntos</span>
+                {isActive && (
+                    <div className="mt-4 animate-fade-in-fast">
+                        <div className="flex justify-between text-sm mb-2">
+                            <span className="text-gray-400">Progreso del Equipo</span>
+                            <span className="text-white font-bold">{earnedPoints} / {totalPoints} Puntos</span>
+                        </div>
+                        <div className="w-full bg-gray-700 rounded-full h-3">
+                            <div 
+                                className="bg-gradient-to-r from-green-500 to-blue-500 h-3 rounded-full transition-all duration-500"
+                                style={{ width: `${progressPercent}%` }}
+                            />
+                        </div>
                     </div>
-                    <div className="w-full bg-gray-700 rounded-full h-3">
-                        <div 
-                            className="bg-gradient-to-r from-green-500 to-blue-500 h-3 rounded-full transition-all duration-500"
-                            style={{ width: `${progressPercent}%` }}
-                        />
-                    </div>
-                </div>
+                )}
             </div>
             
-            {activeHints.length > 0 && (
+            {isActive && activeHints.length > 0 && (
                 <div className="space-y-2">
                     {activeHints.map((hint, idx) => (
                         <div key={idx} className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-4 animate-fade-in-fast">
