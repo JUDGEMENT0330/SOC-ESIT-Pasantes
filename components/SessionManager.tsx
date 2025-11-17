@@ -243,14 +243,22 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
                     
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                         <button onClick={() => handleJoinDefaultSession('red')} className="p-6 text-left bg-red-900/30 border border-red-500/50 rounded-lg hover:bg-red-900/60 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-4" disabled={loading || isAdmin}>
-                            <Icon name="sword" className="h-10 w-10 text-red-400 flex-shrink-0"/>
+                            <img 
+                                src="https://cybervaltorix.com/wp-content/uploads/2025/11/pngwing.com-2.png" 
+                                alt="Logo Equipo Rojo" 
+                                className="h-10 w-10 object-contain flex-shrink-0"
+                            />
                             <div>
                                 <h3 className="font-bold text-red-300 text-lg">Entrenamiento Equipo Rojo</h3>
                                 <p className="text-red-400/80 text-sm">Únete como atacante para auditar sistemas.</p>
                             </div>
                         </button>
                          <button onClick={() => handleJoinDefaultSession('blue')} className="p-6 text-left bg-blue-900/30 border border-blue-500/50 rounded-lg hover:bg-blue-900/60 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-4" disabled={loading || isAdmin}>
-                            <Icon name="shield-check" className="h-10 w-10 text-blue-400 flex-shrink-0"/>
+                            <img 
+                                src="https://cybervaltorix.com/wp-content/uploads/2025/09/Cyber-Valtorix-Full.png" 
+                                alt="Logo Equipo Azul" 
+                                className="h-10 w-10 object-contain flex-shrink-0"
+                            />
                             <div>
                                 <h3 className="font-bold text-blue-300 text-lg">Entrenamiento Equipo Azul</h3>
                                 <p className="text-blue-400/80 text-sm">Únete como defensor para asegurar y monitorear.</p>
