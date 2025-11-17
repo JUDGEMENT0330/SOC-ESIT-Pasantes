@@ -21,6 +21,7 @@ export interface TerminalState {
     name: string;
     output: TerminalLine[];
     prompt: PromptState;
+    originalPrompt?: PromptState;
     history: string[];
     historyIndex: number;
     input: string;
