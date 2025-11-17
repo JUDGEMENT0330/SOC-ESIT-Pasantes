@@ -513,8 +513,13 @@ const TrainingModule: React.FC<TrainingModuleProps> = ({ scenario, isCompleted, 
     const currentStatus = isCompleted ? statusConfig.completed : statusConfig.initial;
 
     const renderContent = () => {
-        // FIX: Use the 'isInteractive' property as a type guard to differentiate between scenario types.
-        if (scenario.isInteractive) {
+        // FIX: Use the 'in' operator for a more robust type guard, as the optional
+        // `isInteractive` property on TrainingScenario can be ambiguous for the compiler.
+        if ('content' in scenario) {
+            // This is a TrainingScenario
+            return scenario.content;
+        } else {
+            // This is an InteractiveScenario
             // If this is the active scenario, 'environment' will be the live state.
             // Otherwise, it's null, so we show the initial state.
             const envForDisplay = environment ?? scenario.initialEnvironment;
@@ -524,8 +529,6 @@ const TrainingModule: React.FC<TrainingModuleProps> = ({ scenario, isCompleted, 
                 environment={envForDisplay}
                 isActive={activeScenarioId === scenario.id}
             />;
-        } else {
-            return scenario.content;
         }
     };
 
