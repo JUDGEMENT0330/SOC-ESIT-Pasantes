@@ -374,15 +374,18 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             if (payload.red_terminal_state) spectatorTerminals.push(payload.red_terminal_state);
             if (payload.blue_terminal_state) spectatorTerminals.push(payload.blue_terminal_state);
             setTerminals(spectatorTerminals);
-        } else {
+        } else if (team === 'red' || team === 'blue') {
             const myTerminalState = team === 'red' ? payload.red_terminal_state : payload.blue_terminal_state;
+            
             if (myTerminalState) {
                 setTerminals([myTerminalState]);
-            } else if (scenario) {
-                // If my terminal is missing, but a scenario is active, create it.
-                setTerminals([createNewTerminal(`${team}-1`, `Terminal ${team === 'red' ? 'Rojo' : 'Azul'}`, team, scenario.title)]);
             } else {
-                setTerminals([]);
+                // If no terminal state exists for this team in the DB, create a default local one.
+                // This ensures the user always has a terminal, even in an empty/new session.
+                // It will be replaced by the DB state once a scenario starts.
+                setTerminals([
+                    createNewTerminal(`${team}-1`, `Terminal ${team === 'red' ? 'Rojo' : 'Azul'}`, team, scenario?.title)
+                ]);
             }
         }
     }, [team]);
@@ -401,6 +404,9 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             }
             if (data) {
                 updateStateFromPayload(data);
+            } else if (team === 'red' || team === 'blue') {
+                // If no state row exists at all, create an initial idle terminal.
+                setTerminals([createNewTerminal(`${team}-1`, `Terminal ${team === 'red' ? 'Rojo' : 'Azul'}`, team)]);
             }
         };
 
@@ -428,7 +434,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                 channelRef.current = null;
             }
         };
-    }, [sessionId, updateStateFromPayload]);
+    }, [sessionId, updateStateFromPayload, team]);
 
     const startScenario = useCallback(async (scenarioId: string): Promise<boolean> => {
         const scenario = TRAINING_SCENARIOS.find(s => s.id === scenarioId && s.isInteractive) as InteractiveScenario | undefined;
@@ -467,7 +473,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         const cmdStr = command.trim().split(' ')[0].toLowerCase();
         const handler = commandLibrary[cmdStr];
         
-        const context: CommandContext = { userTeam: team, terminalState: terminal, environment: environment, setEnvironment, startScenario };
+        const context: CommandContext = { userTeam: team as 'red' | 'blue', terminalState: terminal, environment: environment, setEnvironment, startScenario };
 
         let result: CommandResult;
         if (handler) {
@@ -478,9 +484,20 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         
         const finalEnvironment = result.newEnvironment || environment;
         const timestamp = new Date().toISOString();
-        // FIX: Explicitly type the source to satisfy the LogEntry type.
         const source: LogEntry['source'] = team === 'red' ? 'Red Team' : 'Blue Team';
-        const finalTimelineEnv = { ...finalEnvironment, timeline: [...finalEnvironment.timeline, { id: finalEnvironment.timeline.length + 1, timestamp, source, message: command, teamVisible: 'all' }] };
+        
+        // FIX: Create the new log entry with an explicit type to prevent type widening issues.
+        const newLogEntry: LogEntry = {
+            id: finalEnvironment.timeline.length + 1,
+            timestamp,
+            source,
+            message: command,
+            teamVisible: 'all',
+        };
+        const finalTimelineEnv = {
+            ...finalEnvironment,
+            timeline: [...finalEnvironment.timeline, newLogEntry]
+        };
 
         const updatedTerminalState: TerminalState = {
             ...terminal,
