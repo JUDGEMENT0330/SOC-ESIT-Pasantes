@@ -5,58 +5,74 @@ import { Icon } from '../constants';
 import { SimulationContext } from '../SimulationContext';
 
 export const DualTerminalView: React.FC = () => {
-    const { terminals, addTerminal, updateTerminalInput, processCommand, userTeam, navigateHistory, environment } = useContext(SimulationContext);
+    const { terminals, processCommand, userTeam, environment } = useContext(SimulationContext);
     
     // Ensure there's always an active terminal if terminals exist
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
     useEffect(() => {
-        if (!activeTerminalId && terminals.length > 0) {
+        if (!activeTerminalId && terminals.length > 0 && userTeam !== 'spectator') {
             setActiveTerminalId(terminals[0].id);
         }
-    }, [terminals, activeTerminalId]);
+    }, [terminals, activeTerminalId, userTeam]);
 
 
     const activeTerminal = terminals.find(t => t.id === activeTerminalId);
-
-    const handleAddTerminal = () => {
-        const newTerminal = addTerminal();
-        setActiveTerminalId(newTerminal.id);
-    };
 
     const handleCommand = (command: string) => {
         if (activeTerminalId) {
             processCommand(activeTerminalId, command);
         }
     };
-    
-    const handleInputChange = (input: string) => {
-        if (activeTerminalId) {
-            updateTerminalInput(activeTerminalId, input);
-        }
-    };
-
-    const handleHistoryNav = (direction: 'up' | 'down') => {
-        if (activeTerminalId) {
-            navigateHistory(activeTerminalId, direction);
-        }
-    };
 
     if (userTeam === 'spectator') {
+        const redTerminal = terminals.find(t => t.id.startsWith('red'));
+        const blueTerminal = terminals.find(t => t.id.startsWith('blue'));
+
         return (
-             <div className="bg-[rgba(45,80,22,0.85)] p-4 md:p-6 rounded-2xl border border-[rgba(184,134,11,0.3)] text-center h-[500px] flex flex-col justify-center items-center">
-                <Icon name="binoculars" className="h-16 w-16 text-yellow-400 mb-4"/>
-                <h2 className="text-2xl font-bold text-white mb-4">Modo Espectador</h2>
-                <p className="text-gray-300 max-w-md">El dashboard de administración para monitorear todas las sesiones y terminales en tiempo real está en desarrollo y reemplazará esta vista.</p>
+             <div className="bg-[rgba(45,80,22,0.85)] p-4 md:p-6 rounded-2xl border border-[rgba(184,134,11,0.3)]">
+                <div className="text-center mb-6">
+                    <h2 className="text-2xl md:text-3xl font-bold text-white">Vista de Espectador</h2>
+                    <p className="text-gray-300 max-w-3xl mx-auto mt-2">
+                        Observando la sesión en tiempo real. Use el Panel de Admin para tomar control de un equipo.
+                    </p>
+                </div>
+                {!redTerminal && !blueTerminal && (
+                    <div className="text-center py-10 text-gray-400 h-[400px] flex items-center justify-center bg-black/20 rounded-lg">Esperando que los equipos inicien un escenario...</div>
+                )}
+                <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                        <h3 className="font-bold text-red-400 mb-2 text-center">Terminal Equipo Rojo</h3>
+                        {redTerminal ? (
+                            <TerminalInstance terminalState={redTerminal} environment={environment} onCommand={() => {}} isReadOnly={true} />
+                        ) : <div className="h-[400px] bg-black/20 rounded-lg flex items-center justify-center text-gray-500">Terminal inactiva</div>}
+                    </div>
+                     <div>
+                        <h3 className="font-bold text-blue-400 mb-2 text-center">Terminal Equipo Azul</h3>
+                        {blueTerminal ? (
+                            <TerminalInstance terminalState={blueTerminal} environment={environment} onCommand={() => {}} isReadOnly={true} />
+                        ) : <div className="h-[400px] bg-black/20 rounded-lg flex items-center justify-center text-gray-500">Terminal inactiva</div>}
+                    </div>
+                </div>
              </div>
-        )
+        );
     }
 
+    if (terminals.length === 0) {
+        return (
+            <div className="bg-[rgba(45,80,22,0.85)] p-4 md:p-6 rounded-2xl border border-[rgba(184,134,11,0.3)] text-center h-[500px] flex flex-col justify-center items-center">
+                <Icon name="terminal" className="h-16 w-16 text-gray-400 mb-4"/>
+                <h2 className="text-2xl font-bold text-white mb-4">Terminal No Disponible</h2>
+                <p className="text-gray-300 max-w-md">Inicie un escenario desde la pestaña de Capacitación para activar la terminal.</p>
+            </div>
+        );
+    }
+    
     return (
         <div className="bg-[rgba(45,80,22,0.85)] p-4 md:p-6 rounded-2xl border border-[rgba(184,134,11,0.3)]">
             <div className="text-center mb-6">
                 <h2 className="text-2xl md:text-3xl font-bold text-white">Consola de Operaciones</h2>
                 <p className="text-gray-300 max-w-3xl mx-auto mt-2">
-                    Utilice múltiples terminales para gestionar tareas complejas. Las tareas persistentes como listeners continuarán en segundo plano.
+                   Ejecute comandos para completar los objetivos de su equipo.
                 </p>
             </div>
 
@@ -74,13 +90,6 @@ export const DualTerminalView: React.FC = () => {
                         {term.name}
                     </button>
                 ))}
-                <button
-                    onClick={handleAddTerminal}
-                    className="ml-2 px-3 py-1 text-sm text-gray-300 hover:bg-gray-700 rounded"
-                    title="Nueva Terminal"
-                >
-                    <Icon name="plus-circle" className="h-5 w-5" />
-                </button>
             </div>
 
             <div className="w-full mx-auto">
@@ -91,11 +100,10 @@ export const DualTerminalView: React.FC = () => {
                             terminalState={activeTerminal}
                             environment={environment}
                             onCommand={handleCommand}
-                            onInputChange={handleInputChange}
                         />
                     ) : (
                         <div className="bg-[#0a0f1c] border border-gray-700 rounded-lg h-[400px] flex items-center justify-center text-gray-400">
-                           Crea una nueva terminal para empezar.
+                           Seleccione una terminal.
                         </div>
                     )}
                     <LogViewer />
