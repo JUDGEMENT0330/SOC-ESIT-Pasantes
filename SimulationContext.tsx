@@ -1,8 +1,8 @@
 import React, { createContext, useState, useEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
 import { supabase } from './supabaseClient';
-import type { VirtualEnvironment, LogEntry, SessionData, TerminalLine, PromptState, TerminalState, ActiveProcess, CommandHandler, CommandContext, CommandResult, VirtualHost, FirewallState } from './types';
+import type { VirtualEnvironment, LogEntry, SessionData, TerminalLine, PromptState, TerminalState, ActiveProcess, CommandHandler, CommandContext, CommandResult, VirtualHost, FirewallState, InteractiveScenario } from './types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, GENERAL_HELP_TEXT, fortressScenario, rageScenario } from './constants';
+import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, GENERAL_HELP_TEXT, SCENARIO_HELP_TEXTS, TRAINING_SCENARIOS } from './constants';
 import * as R from 'https://aistudiocdn.com/ramda@^0.32.0';
 
 // ============================================================================
@@ -10,12 +10,15 @@ import * as R from 'https://aistudiocdn.com/ramda@^0.32.0';
 // ============================================================================
 
 const findHost = (env: VirtualEnvironment, hostnameOrIp: string): VirtualHost | undefined => {
+    if (!hostnameOrIp) return undefined;
+    const searchTerm = hostnameOrIp.toLowerCase();
     for (const network of Object.values(env.networks)) {
-        const host = network.hosts.find(h => h.ip === hostnameOrIp || h.hostname === hostnameOrIp);
+        const host = network.hosts.find(h => h.ip === searchTerm || h.hostname.toLowerCase() === searchTerm);
         if (host) return host;
     }
     return undefined;
 };
+
 
 const updateHostState = (env: VirtualEnvironment, hostIp: string, updates: Partial<VirtualHost['systemState']>) => {
     const newEnv = R.clone(env);
@@ -23,7 +26,6 @@ const updateHostState = (env: VirtualEnvironment, hostIp: string, updates: Parti
         const hostIndex = newEnv.networks[networkId].hosts.findIndex(h => h.ip === hostIp);
         if (hostIndex !== -1) {
             const hostPath = ['networks', networkId, 'hosts', hostIndex, 'systemState'];
-            // FIX: Replaced object spread with a safer method to avoid type errors.
             const currentSystemState = R.path(hostPath, newEnv);
             const newSystemState = Object.assign({}, currentSystemState, updates);
             return R.set(R.lensPath(hostPath), newSystemState, newEnv);
@@ -37,9 +39,23 @@ const updateHostState = (env: VirtualEnvironment, hostIp: string, updates: Parti
 // ============================================================================
 
 const commandLibrary: { [key: string]: CommandHandler } = {
-    help: async (args, { userTeam }) => ({
-        output: [{ html: (userTeam === 'red' ? RED_TEAM_HELP_TEXT : BLUE_TEAM_HELP_TEXT) + GENERAL_HELP_TEXT, type: 'html' }]
-    }),
+    help: async (args, { userTeam }) => {
+        const scenarioId = args[0];
+        if (scenarioId && SCENARIO_HELP_TEXTS[scenarioId]) {
+            const helpTexts = SCENARIO_HELP_TEXTS[scenarioId];
+            const teamHelp = userTeam === 'red' ? helpTexts.red : helpTexts.blue;
+            return { output: [{ html: helpTexts.general + teamHelp, type: 'html' }] };
+        }
+        return { output: [{ html: (userTeam === 'red' ? RED_TEAM_HELP_TEXT : BLUE_TEAM_HELP_TEXT) + GENERAL_HELP_TEXT, type: 'html' }] };
+    },
+    'start-scenario': async(args, { startScenario }) => {
+        if (!args[0]) return { output: [{ text: "Uso: start-scenario <id_escenario>", type: 'error'}] };
+        const success = startScenario(args[0]);
+        if (success) {
+            return { output: [{ html: `Escenario <strong class="text-amber-300">${args[0]}</strong> activado. Entorno reiniciado.`, type: 'html' }] };
+        }
+        return { output: [{ text: `Error: Escenario '${args[0]}' no encontrado o no es interactivo.`, type: 'error' }] };
+    },
     clear: async () => ({ output: [], clear: true }),
     marca: async () => ({ output: [{ html: `<pre class="text-yellow-300">
    ______      __           __      __            __  _
@@ -252,9 +268,9 @@ MiB Swap:    0.0 total,    0.0 free,    0.0 used.`;
         if (!targetHost) return { output: [{ text: `Host desconocido: ${target}`, type: 'error' }] };
 
         const originalCpuLoad = targetHost.systemState?.cpuLoad || 5.0;
-        setEnvironment(env => updateHostState(env, targetHost.ip, { cpuLoad: 99.8 }));
+        setEnvironment(env => updateHostState(env!, targetHost.ip, { cpuLoad: 99.8 }));
         setTimeout(() => {
-             setEnvironment(env => updateHostState(env, targetHost.ip, { cpuLoad: originalCpuLoad }));
+             setEnvironment(env => updateHostState(env!, targetHost.ip, { cpuLoad: originalCpuLoad }));
         }, 20000); // DoS lasts for 20 seconds
 
         return {
@@ -295,6 +311,7 @@ MiB Swap:    0.0 total,    0.0 free,    0.0 used.`;
 // ============================================================================
 interface SimulationContextType {
     environment: VirtualEnvironment | null;
+    activeScenario: InteractiveScenario | null;
     logs: LogEntry[];
     terminals: TerminalState[];
     userTeam: 'red' | 'blue' | 'spectator' | null;
@@ -303,6 +320,7 @@ interface SimulationContextType {
     updateTerminalInput: (terminalId: string, input: string) => void;
     processCommand: (terminalId: string, command: string) => Promise<void>;
     navigateHistory: (terminalId: string, direction: 'up' | 'down') => void;
+    startScenario: (scenarioId: string) => boolean;
 }
 
 export const SimulationContext = createContext<SimulationContextType>({} as SimulationContextType);
@@ -312,12 +330,16 @@ interface SimulationProviderProps {
     sessionData: SessionData;
 }
 
-const createNewTerminal = (id: string, name: string, userTeam: 'red' | 'blue'): TerminalState => {
+const createNewTerminal = (id: string, name: string, userTeam: 'red' | 'blue', scenarioTitle?: string): TerminalState => {
     const user = userTeam === 'red' ? 'pasante-red' : 'pasante-blue';
+    const welcomeMessage = scenarioTitle 
+        ? `Bienvenido a <strong>${name}</strong>. Escenario activo: <strong>${scenarioTitle}</strong>.`
+        : `Bienvenido a <strong>${name}</strong>. Use 'start-scenario [id]' para comenzar.`;
+    
     return {
         id,
         name,
-        output: [{ html: `Bienvenido a la <strong>${name}</strong>. Escriba 'help' para ver los comandos.`, type: 'html' }],
+        output: [{ html: `${welcomeMessage} Escriba 'help' para ver los comandos.`, type: 'html' }],
         prompt: { user, host: 'soc-valtorix', dir: '~' },
         history: [],
         historyIndex: -1,
@@ -328,8 +350,8 @@ const createNewTerminal = (id: string, name: string, userTeam: 'red' | 'blue'): 
 };
 
 export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children, sessionData }) => {
-    // TODO: Select scenario based on session/user choice.
-    const [environment, setEnvironment] = useState<VirtualEnvironment>(R.clone(rageScenario.initialEnvironment));
+    const [environment, setEnvironment] = useState<VirtualEnvironment | null>(null);
+    const [activeScenario, setActiveScenario] = useState<InteractiveScenario | null>(null);
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [terminals, setTerminals] = useState<TerminalState[]>([]);
     const [processes, setProcesses] = useState<ActiveProcess[]>([]);
@@ -368,16 +390,30 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         }));
     }, []);
 
+    const startScenario = useCallback((scenarioId: string): boolean => {
+        const scenario = TRAINING_SCENARIOS.find(s => s.id === scenarioId && s.isInteractive) as InteractiveScenario | undefined;
+        if (!scenario || team === 'spectator') {
+            return false;
+        }
+
+        setActiveScenario(scenario);
+        setEnvironment(R.clone(scenario.initialEnvironment));
+        // Reset all terminals for the new scenario
+        setTerminals(prev => prev.map(t => createNewTerminal(t.id, t.name, team, scenario.title)));
+        
+        return true;
+    }, [team]);
+
     const addTerminal = useCallback(() => {
         if (team === 'spectator') return null as any;
         let newTerminal: TerminalState;
         setTerminals(prev => {
             const newId = (prev.length + 1).toString();
-            newTerminal = createNewTerminal(newId, `Terminal ${newId}`, team);
+            newTerminal = createNewTerminal(newId, `Terminal ${newId}`, team, activeScenario?.title);
             return [...prev, newTerminal];
         });
         return newTerminal!;
-    }, [team]);
+    }, [team, activeScenario]);
 
      const updateTerminalInput = useCallback((terminalId: string, input: string) => {
         updateTerminalState(terminalId, { input });
@@ -389,7 +425,15 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
 
     const processCommand = useCallback(async (terminalId: string, command: string) => {
         const terminal = terminals.find(t => t.id === terminalId);
-        if (!terminal || team === 'spectator' || !environment) return;
+        if (!terminal || team === 'spectator') return;
+
+        if (!environment && !command.trim().startsWith('start-scenario')) {
+            updateTerminalState(terminalId, (prev) => ({
+                output: [...prev.output, { type: 'prompt', ...prev.prompt }, { text: command, type: 'command' }, { text: "⚠️ Ningún escenario activo. Use 'start-scenario <id>' para comenzar.", type: 'error' }],
+                input: ''
+            }));
+            return;
+        }
         
         // Rate Limiting
         const now = Date.now();
@@ -408,12 +452,10 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
 
         updateTerminalState(terminalId, { isBusy: true });
         
-        const timestamp = new Date().toISOString();
-        const logMessage = `User executed command: ${command}`;
-        // addLog({ source: team === 'red' ? 'Red Team' : 'Blue Team', message: logMessage, teamVisible: 'all' });
-        
-        setEnvironment(env => ({ ...env!, timeline: [...env!.timeline, { id: env!.timeline.length + 1, timestamp, source: team === 'red' ? 'Red Team' : 'Blue Team', source_team: team === 'red' ? 'Red' : 'Blue', message: command, teamVisible: 'all'}] }));
-
+        if(environment) {
+            const timestamp = new Date().toISOString();
+            setEnvironment(env => ({ ...env!, timeline: [...env!.timeline, { id: env!.timeline.length + 1, timestamp, source: team === 'red' ? 'Red Team' : 'Blue Team', source_team: team === 'red' ? 'Red' : 'Blue', message: command, teamVisible: 'all'}] }));
+        }
 
         updateTerminalState(terminalId, {
             output: [...terminal.output, { type: 'prompt', ...terminal.prompt }, { text: command, type: 'command' }],
@@ -423,7 +465,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         const cmdStr = command.trim().split(' ')[0].toLowerCase();
         const handler = commandLibrary[cmdStr];
         
-        const context: CommandContext = { userTeam: team, terminalState: terminal, environment, setEnvironment };
+        const context: CommandContext = { userTeam: team, terminalState: terminal, environment: environment!, setEnvironment, startScenario };
 
         const result: CommandResult = handler 
             ? await handler(command.trim().split(' ').slice(1), context)
@@ -446,13 +488,13 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
              handleResult();
         }
 
-    }, [terminals, team, addLog, updateTerminalState, environment]);
+    }, [terminals, team, environment, updateTerminalState, startScenario]);
 
 
     const value = useMemo(() => ({
-        environment, logs, terminals, userTeam: team,
-        addLog, addTerminal, updateTerminalInput, processCommand, navigateHistory,
-    }), [environment, logs, terminals, team, addLog, addTerminal, updateTerminalInput, processCommand, navigateHistory]);
+        environment, activeScenario, logs, terminals, userTeam: team,
+        addLog, addTerminal, updateTerminalInput, processCommand, navigateHistory, startScenario,
+    }), [environment, activeScenario, logs, terminals, team, addLog, addTerminal, updateTerminalInput, processCommand, navigateHistory, startScenario]);
 
     return <SimulationContext.Provider value={value}>{children}</SimulationContext.Provider>;
 };
