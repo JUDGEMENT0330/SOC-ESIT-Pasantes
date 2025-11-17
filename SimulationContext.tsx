@@ -13,7 +13,7 @@ import * as R from 'https://aistudiocdn.com/ramda@^0.32.0';
 interface SimulationStateRow {
     session_id: string;
     scenario_id?: string;
-    environment?: VirtualEnvironment;
+    virtual_environment?: VirtualEnvironment;
     // NEW: A single jsonb column to hold all terminals, replacing the individual red/blue columns.
     terminals?: TerminalState[]; 
 }
@@ -370,7 +370,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
     const updateStateFromPayload = useCallback((payload: SimulationStateRow) => {
         const scenario = TRAINING_SCENARIOS.find(s => s.id === payload.scenario_id) as InteractiveScenario | undefined;
         setActiveScenario(scenario ?? null);
-        setEnvironment(payload.environment ?? null);
+        setEnvironment(payload.virtual_environment ?? null);
         setTerminals(payload.terminals ?? []);
     }, []);
     
@@ -411,7 +411,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                     .upsert({
                         session_id: sessionId,
                         scenario_id: data?.scenario_id || null,
-                        environment: data?.environment || null,
+                        virtual_environment: data?.virtual_environment || null,
                         terminals: updatedTerminals,
                     });
 
@@ -478,7 +478,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
 
         const initialState: Omit<SimulationStateRow, 'session_id'> = {
             scenario_id: scenarioId,
-            environment: initialEnv,
+            virtual_environment: initialEnv,
             terminals: initialTerminals
         };
 
@@ -558,7 +558,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         }
 
         const dbUpdatePayload: Partial<SimulationStateRow> = {
-            environment: finalEnvironment,
+            virtual_environment: finalEnvironment,
             terminals: finalTerminals,
         };
 
