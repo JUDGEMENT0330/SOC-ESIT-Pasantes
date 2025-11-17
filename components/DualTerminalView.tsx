@@ -1,3 +1,4 @@
+
 import React, { useContext, useState, useEffect } from 'react';
 import { TerminalInstance } from './TerminalInstance';
 import { LogViewer } from './LogViewer';
@@ -7,11 +8,16 @@ import { SimulationContext } from '../SimulationContext';
 export const DualTerminalView: React.FC = () => {
     const { terminals, processCommand, userTeam, environment, activeScenario } = useContext(SimulationContext);
     
-    // Ensure there's always an active terminal if terminals exist
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
+    
     useEffect(() => {
-        if (!activeTerminalId && terminals.length > 0 && userTeam !== 'spectator') {
-            setActiveTerminalId(terminals[0].id);
+        if (terminals.length > 0 && userTeam !== 'spectator') {
+            const currentActiveTerminal = terminals.find(t => t.id === activeTerminalId);
+            // Si la terminal activa no está en la lista (o no está establecida), selecciona una nueva.
+            if (!currentActiveTerminal) { 
+                const preferredTerminal = terminals.find(t => t.id.startsWith(userTeam as string));
+                setActiveTerminalId(preferredTerminal ? preferredTerminal.id : terminals[0].id);
+            }
         }
     }, [terminals, activeTerminalId, userTeam]);
 
