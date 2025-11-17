@@ -90,8 +90,8 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
             let userMessage = `Error creando la sesión: ${err.message}`;
             if (err.message?.includes('violates row-level security policy')) {
                 userMessage = "Error creando la sesión: La política de seguridad (RLS) de la base de datos lo impidió. Asegúrese de que la política de inserción en 'simulation_sessions' sea correcta.";
-            } else if (err.message?.includes('Could not find the')) {
-                 userMessage = `Error creando la sesión: ${err.message}. Verifique que el esquema de la base de datos coincide con DEFAULT_SIMULATION_STATE.`;
+            } else if (err.message?.includes('column') || err.message?.includes('violates check constraint')) {
+                 userMessage = `Error creando la sesión: ${err.message}. Hay una discrepancia entre la aplicación y el esquema de la base de datos. Verifique que las columnas en la tabla 'simulation_state' coincidan con los campos en 'DEFAULT_SIMULATION_STATE'.`;
             }
             setError(userMessage);
             console.error(err);
@@ -250,7 +250,7 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
                             </div>
                         </button>
                          <button onClick={() => handleJoinDefaultSession('blue')} className="p-6 text-left bg-blue-900/30 border border-blue-500/50 rounded-lg hover:bg-blue-900/60 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-4" disabled={loading || isAdmin}>
-                            <Icon name="shield" className="h-10 w-10 text-blue-400 flex-shrink-0"/>
+                            <Icon name="shield-check" className="h-10 w-10 text-blue-400 flex-shrink-0"/>
                             <div>
                                 <h3 className="font-bold text-blue-300 text-lg">Entrenamiento Equipo Azul</h3>
                                 <p className="text-blue-400/80 text-sm">Únete como defensor para asegurar y monitorear.</p>
