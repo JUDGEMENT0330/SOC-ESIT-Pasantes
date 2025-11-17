@@ -35,7 +35,7 @@ export interface ActiveProcess {
     id: string;
     terminalId: string;
     command: string;
-    type: 'listener' | 'capture' | 'bruteforce';
+    type: 'listener' | 'capture' | 'bruteforce' | 'dos';
     port?: number;
     startTime: number;
     output?: string;
@@ -74,6 +74,12 @@ export interface VirtualHost {
         content?: string;
         hash: string;
     }[];
+    systemState?: {
+        cpuLoad: number; // percentage
+        memoryUsage: number; // percentage
+        networkConnections: number;
+        failedLogins: number;
+    };
 }
 
 export interface FirewallState {
@@ -136,7 +142,7 @@ export interface CommandResult {
     output: TerminalLine[];
     newEnvironment?: VirtualEnvironment;
     newTerminalState?: Partial<TerminalState>;
-    process?: ActiveProcess;
+    process?: Omit<ActiveProcess, 'id' | 'terminalId' | 'startTime'>;
     duration?: number;
     clear?: boolean;
 }
