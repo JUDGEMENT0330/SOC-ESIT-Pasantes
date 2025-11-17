@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
+import React, { createContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import type { VirtualEnvironment, LogEntry, SessionData, TerminalLine, PromptState, TerminalState, ActiveProcess, CommandHandler, CommandContext, CommandResult, VirtualHost, FirewallState, InteractiveScenario } from './types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
@@ -6,7 +6,19 @@ import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, GENERAL_HELP_TEXT, SCENARIO_HE
 import * as R from 'https://aistudiocdn.com/ramda@^0.32.0';
 
 // ============================================================================
-// Command Processor & Simulator (NEW Architecture)
+// DB State Type
+// ============================================================================
+
+interface SimulationStateRow {
+    session_id: string;
+    active_scenario_id?: string;
+    live_environment?: VirtualEnvironment;
+    red_terminal_state?: TerminalState;
+    blue_terminal_state?: TerminalState;
+}
+
+// ============================================================================
+// Command Helpers
 // ============================================================================
 
 const findHost = (env: VirtualEnvironment, hostnameOrIp: string): VirtualHost | undefined => {
@@ -19,15 +31,14 @@ const findHost = (env: VirtualEnvironment, hostnameOrIp: string): VirtualHost | 
     return undefined;
 };
 
-
 const updateHostState = (env: VirtualEnvironment, hostIp: string, updates: Partial<VirtualHost['systemState']>) => {
     const newEnv = R.clone(env);
     for (const networkId in newEnv.networks) {
         const hostIndex = newEnv.networks[networkId].hosts.findIndex(h => h.ip === hostIp);
         if (hostIndex !== -1) {
             const hostPath = ['networks', networkId, 'hosts', hostIndex, 'systemState'];
-            const currentSystemState = R.path(hostPath, newEnv);
-            const newSystemState = Object.assign({}, currentSystemState, updates);
+            const currentSystemState = R.path(hostPath, newEnv) || {};
+            const newSystemState = { ...currentSystemState, ...updates };
             return R.set(R.lensPath(hostPath), newSystemState, newEnv);
         }
     }
@@ -50,7 +61,7 @@ const commandLibrary: { [key: string]: CommandHandler } = {
     },
     'start-scenario': async(args, { startScenario }) => {
         if (!args[0]) return { output: [{ text: "Uso: start-scenario <id_escenario>", type: 'error'}] };
-        const success = startScenario(args[0]);
+        const success = await startScenario(args[0]);
         if (success) {
             return { output: [{ html: `Escenario <strong class="text-amber-300">${args[0]}</strong> activado. Entorno reiniciado.`, type: 'html' }] };
         }
@@ -315,12 +326,8 @@ interface SimulationContextType {
     logs: LogEntry[];
     terminals: TerminalState[];
     userTeam: 'red' | 'blue' | 'spectator' | null;
-    addLog: (log: Omit<LogEntry, 'id' | 'timestamp' | 'session_id'>) => Promise<void>;
-    addTerminal: () => TerminalState;
-    updateTerminalInput: (terminalId: string, input: string) => void;
     processCommand: (terminalId: string, command: string) => Promise<void>;
-    navigateHistory: (terminalId: string, direction: 'up' | 'down') => void;
-    startScenario: (scenarioId: string) => boolean;
+    startScenario: (scenarioId: string) => Promise<boolean>;
 }
 
 export const SimulationContext = createContext<SimulationContextType>({} as SimulationContextType);
@@ -352,149 +359,160 @@ const createNewTerminal = (id: string, name: string, userTeam: 'red' | 'blue', s
 export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children, sessionData }) => {
     const [environment, setEnvironment] = useState<VirtualEnvironment | null>(null);
     const [activeScenario, setActiveScenario] = useState<InteractiveScenario | null>(null);
-    const [logs, setLogs] = useState<LogEntry[]>([]);
     const [terminals, setTerminals] = useState<TerminalState[]>([]);
-    const [processes, setProcesses] = useState<ActiveProcess[]>([]);
     
-    const commandCount = useRef(0);
-    const resetTime = useRef(Date.now());
-
+    const channelRef = useRef<RealtimeChannel | null>(null);
     const { sessionId, team } = sessionData;
 
-    useEffect(() => {
-        if (team !== 'spectator') {
-            setTerminals([createNewTerminal('1', 'Terminal 1', team)]);
+    const updateStateFromPayload = useCallback((payload: SimulationStateRow) => {
+        const scenario = TRAINING_SCENARIOS.find(s => s.id === payload.active_scenario_id) as InteractiveScenario | undefined;
+        setActiveScenario(scenario ?? null);
+        setEnvironment(payload.live_environment ?? null);
+
+        if (team === 'spectator') {
+            const spectatorTerminals = [];
+            if (payload.red_terminal_state) spectatorTerminals.push(payload.red_terminal_state);
+            if (payload.blue_terminal_state) spectatorTerminals.push(payload.blue_terminal_state);
+            setTerminals(spectatorTerminals);
+        } else {
+            const myTerminalState = team === 'red' ? payload.red_terminal_state : payload.blue_terminal_state;
+            if (myTerminalState) {
+                setTerminals([myTerminalState]);
+            } else if (scenario) {
+                // If my terminal is missing, but a scenario is active, create it.
+                setTerminals([createNewTerminal(`${team}-1`, `Terminal ${team === 'red' ? 'Rojo' : 'Azul'}`, team, scenario.title)]);
+            } else {
+                setTerminals([]);
+            }
         }
     }, [team]);
 
+    useEffect(() => {
+        const fetchAndSetInitialState = async () => {
+            const { data, error } = await supabase
+                .from('simulation_state')
+                .select('*')
+                .eq('session_id', sessionId)
+                .single();
 
-    const addLog = useCallback(async (log: Omit<LogEntry, 'id' | 'timestamp' | 'session_id'>) => {
-        const sourceTeamMap = { 'Red Team': 'Red', 'Blue Team': 'Blue', 'System': 'System', 'Network': 'Network' } as const;
-        const newLog = { 
-            session_id: sessionId, 
-            source_team: sourceTeamMap[log.source] || 'System', 
-            message: log.message, 
-            team_visible: log.teamVisible 
-        };
-        const { error } = await supabase.from('simulation_logs').insert(newLog);
-        if (error) console.error('Error adding log:', error);
-    }, [sessionId]);
-
-    const updateTerminalState = useCallback((terminalId: string, updates: Partial<TerminalState> | ((prevState: TerminalState) => Partial<TerminalState>)) => {
-        setTerminals(prev => prev.map(t => {
-            if (t.id === terminalId) {
-                const changes = typeof updates === 'function' ? updates(t) : updates;
-                return { ...t, ...changes };
+            if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found, which is fine.
+                console.error("Error fetching initial state:", error);
+                return;
             }
-            return t;
-        }));
-    }, []);
+            if (data) {
+                updateStateFromPayload(data);
+            }
+        };
 
-    const startScenario = useCallback((scenarioId: string): boolean => {
+        fetchAndSetInitialState();
+        
+        const channel = supabase.channel(`session-${sessionId}`)
+            .on<SimulationStateRow>('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'simulation_state',
+                filter: `session_id=eq.${sessionId}`
+            }, (payload) => {
+                updateStateFromPayload(payload.new as SimulationStateRow);
+            })
+            .subscribe((status, err) => {
+                if (status === 'SUBSCRIBED') console.log('Connected to session channel!');
+                if (err) console.error('Channel subscription error:', err);
+            });
+        
+        channelRef.current = channel;
+
+        return () => {
+            if (channelRef.current) {
+                supabase.removeChannel(channelRef.current);
+                channelRef.current = null;
+            }
+        };
+    }, [sessionId, updateStateFromPayload]);
+
+    const startScenario = useCallback(async (scenarioId: string): Promise<boolean> => {
         const scenario = TRAINING_SCENARIOS.find(s => s.id === scenarioId && s.isInteractive) as InteractiveScenario | undefined;
-        if (!scenario || team === 'spectator') {
+        if (!scenario) return false;
+
+        const initialEnv = R.clone(scenario.initialEnvironment);
+        const redTerminal = createNewTerminal('red-1', 'Equipo Rojo', 'red', scenario.title);
+        const blueTerminal = createNewTerminal('blue-1', 'Equipo Azul', 'blue', scenario.title);
+
+        const initialState: Omit<SimulationStateRow, 'session_id'> = {
+            active_scenario_id: scenarioId,
+            live_environment: initialEnv,
+            red_terminal_state: redTerminal,
+            blue_terminal_state: blueTerminal
+        };
+
+        const { error } = await supabase
+            .from('simulation_state')
+            .upsert({ session_id: sessionId, ...initialState });
+
+        if (error) {
+            console.error("Error starting scenario:", error);
             return false;
         }
-
-        setActiveScenario(scenario);
-        setEnvironment(R.clone(scenario.initialEnvironment));
-        // Reset all terminals for the new scenario
-        setTerminals(prev => prev.map(t => createNewTerminal(t.id, t.name, team, scenario.title)));
-        
         return true;
-    }, [team]);
-
-    const addTerminal = useCallback(() => {
-        if (team === 'spectator') return null as any;
-        let newTerminal: TerminalState;
-        setTerminals(prev => {
-            const newId = (prev.length + 1).toString();
-            newTerminal = createNewTerminal(newId, `Terminal ${newId}`, team, activeScenario?.title);
-            return [...prev, newTerminal];
-        });
-        return newTerminal!;
-    }, [team, activeScenario]);
-
-     const updateTerminalInput = useCallback((terminalId: string, input: string) => {
-        updateTerminalState(terminalId, { input });
-    }, [updateTerminalState]);
+    }, [sessionId]);
     
-    const navigateHistory = useCallback((terminalId: string, direction: 'up' | 'down') => {
-        // This is now handled locally in TerminalInstance with CommandHistory class
-    }, []);
-
     const processCommand = useCallback(async (terminalId: string, command: string) => {
         const terminal = terminals.find(t => t.id === terminalId);
-        if (!terminal || team === 'spectator') return;
+        if (!terminal || !environment || team === 'spectator') return;
 
-        if (!environment && !command.trim().startsWith('start-scenario')) {
-            updateTerminalState(terminalId, (prev) => ({
-                output: [...prev.output, { type: 'prompt', ...prev.prompt }, { text: command, type: 'command' }, { text: "⚠️ Ningún escenario activo. Use 'start-scenario <id>' para comenzar.", type: 'error' }],
-                input: ''
-            }));
-            return;
-        }
-        
-        // Rate Limiting
-        const now = Date.now();
-        if (now - resetTime.current > 60000) { // Reset every minute
-            commandCount.current = 0;
-            resetTime.current = now;
-        }
-        if (commandCount.current >= 30) { // 30 commands per minute
-             updateTerminalState(terminalId, (prev) => ({
-                output: [...prev.output, { type: 'prompt', ...prev.prompt }, { text: command, type: 'command' }, { text: '⚠️ Rate limit excedido. Espere 60 segundos.', type: 'error' }],
-                input: ''
-            }));
-            return;
-        }
-        commandCount.current++;
-
-        updateTerminalState(terminalId, { isBusy: true });
-        
-        if(environment) {
-            const timestamp = new Date().toISOString();
-            setEnvironment(env => ({ ...env!, timeline: [...env!.timeline, { id: env!.timeline.length + 1, timestamp, source: team === 'red' ? 'Red Team' : 'Blue Team', source_team: team === 'red' ? 'Red' : 'Blue', message: command, teamVisible: 'all'}] }));
-        }
-
-        updateTerminalState(terminalId, {
-            output: [...terminal.output, { type: 'prompt', ...terminal.prompt }, { text: command, type: 'command' }],
-            input: ''
-        });
+        // Optimistic UI update for responsiveness
+         const newOutput: TerminalLine[] = [...terminal.output, { type: 'prompt', ...terminal.prompt }, { text: command, type: 'command' }];
+         setTerminals(prev => prev.map(t => t.id === terminalId ? { ...t, output: newOutput, isBusy: true, history: [...t.history, command] } : t));
         
         const cmdStr = command.trim().split(' ')[0].toLowerCase();
         const handler = commandLibrary[cmdStr];
         
-        const context: CommandContext = { userTeam: team, terminalState: terminal, environment: environment!, setEnvironment, startScenario };
+        const context: CommandContext = { userTeam: team, terminalState: terminal, environment: environment, setEnvironment, startScenario };
 
-        const result: CommandResult = handler 
-            ? await handler(command.trim().split(' ').slice(1), context)
-            : { output: [{ text: `comando no encontrado: ${cmdStr}`, type: 'error' }] };
+        let result: CommandResult;
+        if (handler) {
+            result = await handler(command.trim().split(' ').slice(1), context);
+        } else {
+            result = { output: [{ text: `comando no encontrado: ${cmdStr}`, type: 'error' }] };
+        }
+        
+        const finalEnvironment = result.newEnvironment || environment;
+        const timestamp = new Date().toISOString();
+        // FIX: Explicitly type the source to satisfy the LogEntry type.
+        const source: LogEntry['source'] = team === 'red' ? 'Red Team' : 'Blue Team';
+        const finalTimelineEnv = { ...finalEnvironment, timeline: [...finalEnvironment.timeline, { id: finalEnvironment.timeline.length + 1, timestamp, source, message: command, teamVisible: 'all' }] };
 
-        const handleResult = () => {
-             updateTerminalState(terminalId, (prev) => ({
-                output: result.clear ? [] : [...prev.output, ...result.output],
-                isBusy: false,
-                ...(result.newTerminalState || {})
-            }));
-            if (result.newEnvironment) {
-                setEnvironment(result.newEnvironment);
-            }
+        const updatedTerminalState: TerminalState = {
+            ...terminal,
+            ...result.newTerminalState,
+            history: [...terminal.history, command],
+            output: result.clear ? result.output : [...newOutput, ...result.output],
+            isBusy: false,
         };
 
-        if (result.duration) {
-             setTimeout(handleResult, result.duration);
-        } else {
-             handleResult();
+        const dbUpdatePayload: Partial<SimulationStateRow> = {
+            live_environment: finalTimelineEnv,
+            ...(team === 'red' && { red_terminal_state: updatedTerminalState }),
+            ...(team === 'blue' && { blue_terminal_state: updatedTerminalState }),
+        };
+
+        const { error } = await supabase
+            .from('simulation_state')
+            .update(dbUpdatePayload)
+            .eq('session_id', sessionId);
+
+        if (error) {
+            console.error('Failed to sync state:', error);
+            // Revert optimistic update or show an error
+             setTerminals(prev => prev.map(t => t.id === terminalId ? { ...t, isBusy: false, output: [...t.output, {text: "Error de sincronización con el servidor.", type: 'error'}] } : t));
         }
+    }, [terminals, team, environment, sessionId, startScenario]);
 
-    }, [terminals, team, environment, updateTerminalState, startScenario]);
+    const logs = environment?.timeline || [];
 
-
-    const value = useMemo(() => ({
-        environment, activeScenario, logs, terminals, userTeam: team,
-        addLog, addTerminal, updateTerminalInput, processCommand, navigateHistory, startScenario,
-    }), [environment, activeScenario, logs, terminals, team, addLog, addTerminal, updateTerminalInput, processCommand, navigateHistory, startScenario]);
-
-    return <SimulationContext.Provider value={value}>{children}</SimulationContext.Provider>;
+    return (
+        <SimulationContext.Provider value={{ environment, activeScenario, logs, terminals, userTeam: team, processCommand, startScenario }}>
+            {children}
+        </SimulationContext.Provider>
+    );
 };
