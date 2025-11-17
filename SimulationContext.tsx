@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 import type { VirtualEnvironment, LogEntry, SessionData, TerminalLine, PromptState, TerminalState, ActiveProcess, CommandHandler, CommandContext, CommandResult, VirtualHost, FirewallState } from './types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, GENERAL_HELP_TEXT, fortressScenario, rageScenario } from './constants';
-import * as R from 'ramda';
+import * as R from 'https://aistudiocdn.com/ramda@^0.32.0';
 
 // ============================================================================
 // Command Processor & Simulator (NEW Architecture)
