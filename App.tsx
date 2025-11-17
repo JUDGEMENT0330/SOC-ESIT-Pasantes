@@ -1,12 +1,14 @@
 
 
+
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { DualTerminalView } from './components/DualTerminalView';
 import { Auth } from './components/Auth';
 import { supabase } from './supabaseClient';
 import { GLOSSARY_TERMS, TRAINING_SCENARIOS, RESOURCE_MODULES, Icon, CisoCard } from './constants';
 import type { TrainingScenario, ResourceModule, LogEntry, SessionData, InteractiveScenario, VirtualEnvironment } from './types';
-import type { Session } from '@supabase/supabase-js';
+// FIX: The `Session` type might not be exported directly in this version. Aliasing `AuthSession` is a common workaround.
+import type { AuthSession as Session } from '@supabase/supabase-js';
 import { SessionManager } from './components/SessionManager';
 import { SimulationContext, SimulationProvider } from './SimulationContext';
 
