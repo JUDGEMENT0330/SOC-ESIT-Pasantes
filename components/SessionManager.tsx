@@ -1,8 +1,10 @@
 
 
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import type { User } from '@supabase/supabase-js';
+// FIX: The `User` type might not be exported directly in this version. Aliasing `AuthUser` is a common workaround.
+import type { AuthUser as User } from '@supabase/supabase-js';
 import type { SessionData, SimulationSession } from '../types';
 import { Icon } from '../constants';
 
