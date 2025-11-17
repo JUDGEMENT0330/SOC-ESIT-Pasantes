@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import type { NetworkState, LogEntry, SessionData, TerminalLine, PromptState, TerminalState, ActiveProcess } from './types';
@@ -127,7 +128,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
     const { sessionId, team } = sessionData;
 
     useEffect(() => {
-        if(team !== 'spectator') {
+        if (team !== 'spectator') {
             setTerminals([createNewTerminal('1', 'Terminal 1', team)]);
         }
     }, [team]);
@@ -146,7 +147,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
     }, [sessionId]);
 
     const addTerminal = () => {
-        if(team === 'spectator') return null as any;
+        if (team === 'spectator') return null as any;
         const newId = (terminals.length + 1).toString();
         const newTerminal = createNewTerminal(newId, `Terminal ${newId}`, team);
         setTerminals(prev => [...prev, newTerminal]);
