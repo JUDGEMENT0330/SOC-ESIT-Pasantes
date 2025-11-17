@@ -135,7 +135,8 @@ export interface CommandContext {
     userTeam: 'red' | 'blue';
     terminalState: TerminalState;
     environment: VirtualEnvironment;
-    setEnvironment: React.Dispatch<React.SetStateAction<VirtualEnvironment>>;
+    setEnvironment: React.Dispatch<React.SetStateAction<VirtualEnvironment | null>>;
+    startScenario: (scenarioId: string) => boolean;
 }
 
 export interface CommandResult {
