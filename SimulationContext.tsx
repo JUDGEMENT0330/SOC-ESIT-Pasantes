@@ -1,4 +1,5 @@
 
+
 import React, { createContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import type { VirtualEnvironment, LogEntry, SessionData, TerminalLine, PromptState, TerminalState, ActiveProcess, CommandHandler, CommandContext, CommandResult, VirtualHost, FirewallState, InteractiveScenario } from './types';
@@ -497,11 +498,27 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         }
         
         const finalEnvironment = result.newEnvironment || environment;
+
+        // FIX: If there's no environment after the command (e.g., 'help' in an empty session),
+        // we only update the terminal display without trying to modify a null environment or sync to DB.
+        // The 'start-scenario' command handles its own DB update, so this is safe.
+        if (!finalEnvironment) {
+            const updatedTerminalState: TerminalState = {
+                ...terminal,
+                ...result.newTerminalState,
+                history: optimisticHistory,
+                output: result.clear ? result.output : [...newOutput, ...result.output],
+                isBusy: false,
+            };
+            setTerminals(prev => prev.map(t => t.id === terminalId ? updatedTerminalState : t));
+            return;
+        }
+        
         const timestamp = new Date().toISOString();
         const source: LogEntry['source'] = team === 'red' ? 'Red Team' : 'Blue Team';
         
         const newLogEntry: LogEntry = {
-            id: finalEnvironment!.timeline.length + 1,
+            id: finalEnvironment.timeline.length + 1,
             timestamp,
             source,
             message: command,
@@ -509,7 +526,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         };
         const finalTimelineEnv = {
             ...finalEnvironment,
-            timeline: [...finalEnvironment!.timeline, newLogEntry]
+            timeline: [...finalEnvironment.timeline, newLogEntry]
         };
 
         const updatedTerminalState: TerminalState = {
