@@ -27,7 +27,9 @@ export interface TerminalState {
     input: string;
     mode: 'normal' | 'msf'; // For special modes like msfconsole
     isBusy: boolean;
+    currentHostIp?: string; // Track if SSH'd into a host
 }
+
 
 export interface ActiveProcess {
     id: string;
@@ -39,29 +41,146 @@ export interface ActiveProcess {
     output?: string;
 }
 
+// ============================================================================
+// NEW: Virtual Environment Types
+// ============================================================================
+
+export interface Vulnerability {
+    cve: string;
+    description: string;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+}
+
 export interface VirtualHost {
     ip: string;
     hostname: string;
-    owner: 'red' | 'blue' | 'neutral';
-    ports: { [port: number]: { service: string; state: 'open' | 'closed' | 'filtered' } };
+    os: 'linux' | 'windows';
+    services: {
+        [port: number]: {
+            name: string;
+            version: string;
+            state: 'open' | 'closed' | 'filtered';
+            vulnerabilities: Vulnerability[];
+        }
+    };
+    users: {
+        username: string;
+        password: string; 
+        privileges: 'root' | 'admin' | 'user';
+    }[];
+    files: {
+        path: string;
+        permissions: string;
+        content?: string;
+        hash: string;
+    }[];
 }
 
-// This replaces the old SimulationState. It's the shared state for the whole session.
-export interface NetworkState {
-    session_id: string;
-    hosts: VirtualHost[];
-    last_updated?: string;
-    // The following properties are preserved for compatibility with the original structure
-    // but should be considered deprecated in favor of the new granular state.
-    firewall_enabled: boolean;
-    ssh_hardened: boolean;
-    banned_ips: string[];
-    payload_deployed: boolean;
-    is_dos_active: boolean;
-    admin_password_found: boolean;
-    db_config_permissions: string;
-    hydra_run_count: number;
-    server_load: number;
+export interface FirewallState {
+    enabled: boolean;
+    rules: {
+        id: string;
+        action: 'allow' | 'deny';
+        protocol: 'tcp' | 'udp' | 'icmp' | 'any';
+        sourceIP?: string;
+        destPort?: number;
+    }[];
+}
+
+export interface IDSState {
+    enabled: boolean;
+    signatures: string[];
+    alerts: {
+        timestamp: string;
+        severity: 'low' | 'medium' | 'high' | 'critical';
+        message: string;
+        sourceIP: string;
+    }[];
+}
+
+export interface VirtualEnvironment {
+    networks: {
+        [networkId: string]: {
+            hosts: VirtualHost[];
+            firewall: FirewallState;
+            ids: IDSState;
+        }
+    };
+    attackProgress: {
+        reconnaissance: string[]; // IPs escaneadas
+        compromised: string[]; // Hosts comprometidos
+        credentials: { [key: string]: string }; // user@host -> password
+        persistence: string[]; // Backdoors instalados
+    };
+    defenseProgress: {
+        hardenedHosts: string[];
+        blockedIPs: string[];
+        patchedVulnerabilities: string[];
+    };
+    timeline: LogEntry[];
+}
+
+
+// ============================================================================
+// NEW: Command System Types
+// ============================================================================
+
+export interface CommandContext {
+    userTeam: 'red' | 'blue';
+    terminalState: TerminalState;
+    environment: VirtualEnvironment;
+    setEnvironment: React.Dispatch<React.SetStateAction<VirtualEnvironment>>;
+}
+
+export interface CommandResult {
+    output: TerminalLine[];
+    newEnvironment?: VirtualEnvironment;
+    newTerminalState?: Partial<TerminalState>;
+    process?: ActiveProcess;
+    duration?: number;
+    clear?: boolean;
+}
+
+export type CommandHandler = (
+    args: string[],
+    context: CommandContext
+) => Promise<CommandResult>;
+
+
+// ============================================================================
+// NEW: Interactive Scenario Types
+// ============================================================================
+
+export interface Objective {
+    id: string;
+    description: string;
+    points: number;
+    required: boolean;
+    validator: (env: VirtualEnvironment) => boolean;
+    hint?: string;
+}
+
+export interface InteractiveScenario {
+    id: string;
+    isInteractive: true;
+    icon: string;
+    color: string;
+    title: string;
+    subtitle: string;
+    description: string;
+    difficulty: 'beginner' | 'intermediate' | 'advanced';
+    team: 'red' | 'blue' | 'both';
+    initialEnvironment: VirtualEnvironment;
+    objectives: Objective[];
+    hints: {
+        trigger: (env: VirtualEnvironment) => boolean;
+        message: string;
+    }[];
+    evaluation: (env: VirtualEnvironment) => {
+        completed: boolean;
+        score: number;
+        feedback: string[];
+    };
 }
 
 
@@ -76,6 +195,7 @@ export interface TrainingScenario {
     title: string;
     subtitle: string;
     content: React.ReactNode;
+    isInteractive?: false;
 }
 
 export interface ResourceModule {
