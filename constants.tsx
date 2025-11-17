@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { TrainingScenario, ResourceModule, GlossaryTerm, TerminalLine, PromptState, InteractiveScenario, VirtualEnvironment } from './types';
 
@@ -277,6 +278,7 @@ export const rageScenario: InteractiveScenario = {
     icon: 'bomb',
     color: 'bg-orange-600',
     title: 'Furia en la Red: Ataque Combinado',
+    subtitle: 'Equipo Rojo vs. Equipo Azul',
     description: 'DoS + Bruteforce simultáneos. Azul debe priorizar y contener bajo presión.',
     difficulty: 'advanced',
     team: 'both',
