@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import type { TerminalState, PromptState } from '../types';
-import DOMPurify from 'dompurify';
+import DOMPurify from 'https://esm.sh/dompurify';
 
 const COMMANDS = ['help', 'nmap', 'hydra', 'nc', 'msfconsole', 'clear', 'marca', 'exit', 'ssh', 'sudo', 'ufw', 'ls', 'whoami'];
 
