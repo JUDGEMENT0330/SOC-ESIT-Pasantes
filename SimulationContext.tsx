@@ -1,121 +1,243 @@
 
-
 import React, { createContext, useState, useEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
 import { supabase } from './supabaseClient';
-import type { NetworkState, LogEntry, SessionData, TerminalLine, PromptState, TerminalState, ActiveProcess } from './types';
+// FIX: Import FirewallState type to resolve 'Cannot find name' error.
+import type { VirtualEnvironment, LogEntry, SessionData, TerminalLine, PromptState, TerminalState, ActiveProcess, CommandHandler, CommandContext, CommandResult, VirtualHost, FirewallState } from './types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, GENERAL_HELP_TEXT } from './constants';
+import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, GENERAL_HELP_TEXT, fortressScenario } from './constants';
+import * as R from 'ramda';
 
 // ============================================================================
-// Command Processor & Simulator (Simulated Backend)
+// Command Processor & Simulator (NEW Architecture)
 // ============================================================================
 
-const generateNmapOutput = (target: string, isFirewallEnabled: boolean): string => {
-    const commonPorts = `
-PORT     STATE  SERVICE
-22/tcp   open   ssh
-80/tcp   open   http
-443/tcp  open   https`;
-    const extraPorts = `
-3306/tcp open   mysql
-5432/tcp open   postgresql`;
-    return `
-Starting Nmap 7.92 ( https://nmap.org ) at ${new Date().toUTCString()}
-Nmap scan report for ${target}
-Host is up (0.021s latency).
-Not shown: 995 closed tcp ports (reset)
-${commonPorts}${isFirewallEnabled ? '' : extraPorts}
-
-Nmap done: 1 IP address (1 host up) scanned in 2.58 seconds`;
+const findHost = (env: VirtualEnvironment, hostnameOrIp: string): VirtualHost | undefined => {
+    for (const network of Object.values(env.networks)) {
+        const host = network.hosts.find(h => h.ip === hostnameOrIp || h.hostname === hostnameOrIp);
+        if (host) return host;
+    }
+    return undefined;
 };
 
-const commandSimulator = async (
-    command: string, 
-    userTeam: 'red' | 'blue',
-    currentPrompt: PromptState
-): Promise<{ outputLines: TerminalLine[], process?: Omit<ActiveProcess, 'id' | 'terminalId' | 'startTime'>, duration?: number, newPrompt?: PromptState, clear?: boolean }> => {
-    
-    const args = command.trim().split(' ');
-    const cmd = args[0].toLowerCase();
-    const target = args[1] || '10.0.2.15'; // Default target
+// ============================================================================
+// COMMAND LIBRARY
+// ============================================================================
 
-    // Mock network state
-    const isFirewallEnabled = Math.random() > 0.5;
-
-    switch (cmd) {
-        case 'help':
-            return { outputLines: [{ html: (userTeam === 'red' ? RED_TEAM_HELP_TEXT : BLUE_TEAM_HELP_TEXT) + GENERAL_HELP_TEXT, type: 'html' }] };
-        case 'clear':
-            return { outputLines: [], clear: true };
-        case 'marca':
-            return { outputLines: [{ html: `<pre class="text-yellow-300">
+const commandLibrary: { [key: string]: CommandHandler } = {
+    help: async (args, { userTeam }) => ({
+        output: [{ html: (userTeam === 'red' ? RED_TEAM_HELP_TEXT : BLUE_TEAM_HELP_TEXT) + GENERAL_HELP_TEXT, type: 'html' }]
+    }),
+    clear: async () => ({ output: [], clear: true }),
+    marca: async () => ({ output: [{ html: `<pre class="text-yellow-300">
    ______      __           __      __            __  _
   / ____/_  __ / /_ _____   / /__   / /_   ____ _ / /_ (_)____   ____ _
  / /    / / / // __// ___/  / //_/  / __ \\ / __ \`// __// // __ \\ / __ \`/
 / /___ / /_/ // /_ / /__   / ,<    / / / // /_/ // /_ / // / / // /_/ /
 \\____/ \\__,_/ \\__//\\___/  /_/|_|  /_/ /_/ \\__,_/ \\__//_//_/ /_/ \\__, /
                                                                /____/
-</pre>`, type: 'html'}]};
-        case 'nmap':
+</pre>`, type: 'html'}]}),
+    whoami: async (args, { terminalState }) => ({ output: [{ text: terminalState.prompt.user, type: 'output' }] }),
+    exit: async (args, { terminalState }) => {
+        if (!terminalState.originalPrompt) return { output: [{text: "No estás en una sesión SSH.", type: 'error'}]};
+        return {
+            output: [{ text: `Cerrando conexión con ${terminalState.prompt.host}...`, type: 'output' }],
+            newTerminalState: { prompt: terminalState.originalPrompt, originalPrompt: undefined, currentHostIp: undefined }
+        };
+    },
+    ssh: async (args, { environment, terminalState }) => {
+        if (args.length < 1) return { output: [{ text: "Uso: ssh <usuario>@<host>", type: 'error' }] };
+        const [user, host] = args[0].split('@');
+        if (!user || !host) return { output: [{ text: "Formato incorrecto. Uso: ssh <usuario>@<host>", type: 'error' }] };
+
+        const targetHost = findHost(environment, host);
+        if (!targetHost) return { output: [{ text: `Host desconocido: ${host}`, type: 'error' }] };
+        
+        const userAccount = targetHost.users.find(u => u.username === user);
+        // Simplified: Assume password is known if user is in `credentials` or is blue-team
+        const hasCredentials = environment.attackProgress.credentials[`${user}@${targetHost.ip}`] === userAccount?.password || user === 'blue-team';
+
+        if (!userAccount || !hasCredentials) return { output: [{ text: `Permiso denegado, por favor intente de nuevo.`, type: 'error' }], duration: 1500 };
+        
+        return {
+            output: [{ text: `Bienvenido a ${targetHost.hostname}.`, type: 'output' }],
+            duration: 1000,
+            newTerminalState: {
+                prompt: { user, host: targetHost.hostname, dir: '~' },
+                originalPrompt: terminalState.prompt,
+                currentHostIp: targetHost.ip
+            }
+        };
+    },
+    nmap: async (args, { environment }) => {
+        const target = args.find(arg => !arg.startsWith('-'));
+        if (!target) return { output: [{ text: 'Se requiere un objetivo. Uso: nmap [opciones] <host>', type: 'error' }]};
+
+        const targetHost = findHost(environment, target);
+        if (!targetHost) return { output: [{ text: `Note: Host ${target} seems down.`, type: 'output' }], duration: 1500 };
+
+        const fw = environment.networks.dmz.firewall;
+        const visiblePorts = Object.entries(targetHost.services).filter(([port]) => {
+            if (!fw.enabled) return true;
+            const portNum = parseInt(port);
+            return fw.rules.some(r => r.destPort === portNum && r.action === 'allow');
+        });
+        
+        let outputText = `\nStarting Nmap...\nNmap scan report for ${targetHost.hostname} (${targetHost.ip})\nHost is up.\n`;
+        if (fw.enabled) outputText += `Not shown: ${Object.keys(targetHost.services).length - visiblePorts.length} filtered ports\n`;
+        outputText += 'PORT\tSTATE\tSERVICE\n';
+        visiblePorts.forEach(([port, service]) => {
+            outputText += `${port}/tcp\t${service.state}\t${service.name}\n`;
+        });
+        
+        const newEnv = R.clone(environment);
+        if (!newEnv.attackProgress.reconnaissance.includes(targetHost.ip)) {
+            newEnv.attackProgress.reconnaissance.push(targetHost.ip);
+        }
+        
+        return { output: [{ text: outputText, type: 'output' }], duration: 2500, newEnvironment: newEnv };
+    },
+     hydra: async (args, { environment }) => {
+        const userArg = args.indexOf('-l') > -1 ? args[args.indexOf('-l') + 1] : null;
+        const targetArg = args.find(a => a.startsWith('ssh://'));
+        if (!userArg || !targetArg) return { output: [{ text: "Uso: hydra -l <user> -P <wordlist> ssh://<host>", type: 'error'}] };
+        
+        const host = targetArg.replace('ssh://', '');
+        const targetHost = findHost(environment, host);
+        if (!targetHost) return { output: [{ text: `Host desconocido: ${host}`, type: 'error' }] };
+
+        const userAccount = targetHost.users.find(u => u.username === userArg);
+        if (userAccount && userAccount.password === 'toor') {
+            const newEnv = R.clone(environment);
+            newEnv.attackProgress.credentials[`${userArg}@${targetHost.ip}`] = 'toor';
             return {
-                outputLines: [{ text: `Simulating nmap scan on ${target}...`, type: 'output' }],
-                duration: 2500,
-            };
-        case 'hydra':
-             return {
-                outputLines: [{ text: `[22][ssh] host: ${target} login: admin password: password123`, type: 'output' }],
-                process: { command, type: 'bruteforce' },
+                output: [{ text: `[22][ssh] host: ${host} login: ${userArg} password: toor`, type: 'output' }],
                 duration: 5000,
+                newEnvironment: newEnv
             };
-        case 'ssh':
-            const [user, host] = (args[1] || '').split('@');
-            if (user && host) {
-                return {
-                    // FIX: Add missing 'type' property to TerminalLine objects
-                    outputLines: [{text: `Connecting to ${host}...`, type: 'output'}, {text: `Logged in as ${user}.`, type: 'output'}],
-                    newPrompt: { user, host, dir: '~' }
-                }
-            }
-            return { outputLines: [{ text: `Usage: ssh <user>@<host>`, type: 'error' }]};
-        case 'exit':
-            // This is handled in processCommand by checking originalPrompt
-            // FIX: Add missing 'type' property to TerminalLine object
-            return { outputLines: [{text: 'Logging out...', type: 'output'}] };
-        case 'ls':
-            return { outputLines: [{ text: 'drwxr-xr-x 2 user user 4096 Jan 1 12:00 Documents\n-rw-r--r-- 1 user user 1024 Jan 1 12:00 notes.txt', type: 'output' }] };
-        case 'whoami':
-            return { outputLines: [{ text: currentPrompt.user, type: 'output' }] };
-        case 'sudo':
-            if (args[1] === 'ufw') {
-                const status = isFirewallEnabled ? 'active' : 'inactive';
-                 return { outputLines: [{ text: `Firewall is ${status}`, type: 'output' }] };
-            }
-            return { outputLines: [{ text: 'Sudo command simulation.', type: 'output'}]};
-        case 'nc':
-             if (args.includes('-lvnp')) {
-                const port = parseInt(args[args.indexOf('-lvnp') + 1] || '4444');
-                return {
-                    outputLines: [{ text: `Listening on 0.0.0.0 ${port}`, type: 'output' }],
-                    process: { command, type: 'listener', port }
-                };
-            }
-            return { outputLines: [{ text: `nc: command not found or invalid arguments`, type: 'error' }]};
-        case 'msfconsole':
-            return {
-                outputLines: [{
-                    html: `
-<pre class="text-red-400">
-      =[ metasploit v6.3.30-dev                         ]
-      + -- --=[ 2378 exploits - 1232 auxiliary - 416 post       ]
-      + -- --=[ 1387 payloads - 46 encoders - 11 nops           ]
-      + -- --=[ 9 evasion                                        ]
-</pre>`,
-                    type: 'html'
-                }]
-            };
-        default:
-            return { outputLines: [{ text: `comando no encontrado: ${cmd}`, type: 'error' }] };
-    }
+        }
+        return { output: [{ text: 'No se encontraron contraseñas válidas.', type: 'output' }], duration: 5000 };
+    },
+    'sudo': async (args, context) => {
+        const cmd = args[0];
+        if (!cmd) return { output: [{text: "sudo: se requiere un comando", type: 'error'}] };
+        const handler = commandLibrary[cmd];
+        if (!handler) return { output: [{text: `sudo: ${cmd}: comando no encontrado`, type: 'error'}]};
+        // Simplified sudo: just run the command
+        return handler(args.slice(1), context);
+    },
+    ufw: async (args, { environment, terminalState }) => {
+        if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
+        const host = findHost(environment, terminalState.currentHostIp);
+        if (!host) return { output: [], newEnvironment: environment };
+
+        const newEnv = R.clone(environment);
+        const fwPath = ['networks', 'dmz', 'firewall'];
+        let fw = R.path(fwPath, newEnv) as FirewallState;
+        
+        let outputText = '';
+
+        switch (args[0]) {
+            case 'enable':
+                fw.enabled = true;
+                outputText = 'Firewall is active and enabled on system startup';
+                break;
+            case 'disable':
+                fw.enabled = false;
+                outputText = 'Firewall stopped and disabled on system startup';
+                break;
+            case 'status':
+                outputText = `Status: ${fw.enabled ? 'active' : 'inactive'}\n\nTo                         Action      From\n--                         ------      ----\n`;
+                fw.rules.forEach(r => {
+                    outputText += `${r.destPort || 'Any'}/${r.protocol || 'any'}                  ${r.action.toUpperCase()}        ${r.sourceIP || 'Anywhere'}\n`;
+                });
+                break;
+            case 'allow':
+                const allowPort = parseInt(args[1]);
+                if (isNaN(allowPort)) return { output: [{text: "Regla inválida", type: 'error'}]};
+                fw.rules = fw.rules.filter(r => r.destPort !== allowPort);
+                fw.rules.push({ id: `allow-${allowPort}`, action: 'allow', destPort: allowPort, protocol: 'any'});
+                outputText = `Rule added`;
+                break;
+            case 'deny':
+                 const denyPort = parseInt(args[1]);
+                if (isNaN(denyPort)) return { output: [{text: "Regla inválida", type: 'error'}]};
+                fw.rules = fw.rules.filter(r => r.destPort !== denyPort);
+                fw.rules.push({ id: `deny-${denyPort}`, action: 'deny', destPort: denyPort, protocol: 'any'});
+                outputText = `Rule added`;
+                break;
+            default:
+                return { output: [{text: "Comando no reconocido", type: 'error'}] };
+        }
+        
+        return { output: [{ text: outputText, type: 'output' }], newEnvironment: R.set(R.lensPath(fwPath), fw, newEnv) };
+    },
+    chmod: async (args, { environment, terminalState }) => {
+         if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
+        if (args.length < 2) return { output: [{text: "chmod: falta un operando", type: 'error'}] };
+        
+        const perms = args[0];
+        const path = args[1];
+        
+        const newEnv = R.clone(environment);
+        const hostPath = ['networks', 'dmz', 'hosts', 0]; // Assuming one host for now
+        let host = R.path(hostPath, newEnv) as VirtualHost;
+
+        const fileIndex = host.files.findIndex(f => f.path === path);
+        if (fileIndex === -1) return { output: [{text: `chmod: no se puede acceder a '${path}': No existe el fichero o el directorio`, type: 'error'}] };
+        
+        host.files[fileIndex].permissions = perms;
+
+        return { output: [], newEnvironment: R.set(R.lensPath(hostPath), host, newEnv) };
+    },
+    ls: async (args, { environment, terminalState }) => {
+        if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
+        const host = findHost(environment, terminalState.currentHostIp);
+        if (!host) return { output: [] };
+
+        if (args.includes('/var/www/html/')) {
+            const file = host.files.find(f => f.path.includes('db_config'));
+             if (file) return { output: [{ text: `-rwx-r----- 1 www-data www-data 1024 Jan 1 12:00 db_config.php`, type: 'output' }] };
+        }
+        return { output: [{ text: 'drwxr-xr-x 2 user user 4096 Jan 1 12:00 Documents\n-rw-r--r-- 1 user user 1024 Jan 1 12:00 notes.txt', type: 'output' }] };
+    },
+    nano: async (args, { environment, terminalState }) => {
+         if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
+        if (args.length < 1) return { output: [{text: "nano: se requiere un nombre de archivo para editar", type: 'error'}] };
+        const path = args[0];
+        
+        const newEnv = R.clone(environment);
+        const hostPath = ['networks', 'dmz', 'hosts', 0];
+        let host = R.path(hostPath, newEnv) as VirtualHost;
+        const fileIndex = host.files.findIndex(f => f.path === path);
+        
+        if (fileIndex !== -1 && path === '/etc/ssh/sshd_config') {
+            host.files[fileIndex].content = host.files[fileIndex].content?.replace('PermitRootLogin yes', 'PermitRootLogin no');
+            return { output: [{text: `Archivo guardado. (Simulado)`, type: 'output'}], newEnvironment: R.set(R.lensPath(hostPath), host, newEnv) };
+        }
+        return { output: [{text: `Archivo guardado. (Simulado)`, type: 'output'}] };
+    },
+    systemctl: async (args, { environment }) => {
+        if (args[0] === 'restart' && args[1] === 'sshd') {
+            return { output: [{text: `Servicio sshd reiniciado. (Simulado)`, type: 'output'}], duration: 800 };
+        }
+        return { output: [{text: `Comando systemctl no reconocido.`, type: 'error'}] };
+    },
+    curl: async (args, { environment, terminalState }) => {
+        if (args.length < 1) return { output: [{text: "curl: la URL no tiene el formato correcto", type: 'error'}]};
+        const url = args[0].replace('http://', '').split('/')[0];
+        const file = args[0].replace('http://', '').split('/')[1];
+
+        const host = findHost(environment, url);
+        if (!host || !file) return { output: [{text: "No se pudo resolver el host.", type: 'error'}] };
+        
+        const targetFile = host.files.find(f => f.path.includes(file));
+        const canRead = parseInt(targetFile?.permissions || '0', 8) & 0b00000100; // Check "other" read bit
+
+        if (targetFile && canRead) {
+            return { output: [{text: targetFile.content || '', type: 'output'}] };
+        }
+        return { output: [{text: `curl: (7) Failed to connect to ${url} port 80: Connection refused`, type: 'error'}]};
+    },
 };
 
 
@@ -123,7 +245,7 @@ const commandSimulator = async (
 // Simulation Context
 // ============================================================================
 interface SimulationContextType {
-    networkState: NetworkState | null;
+    environment: VirtualEnvironment | null;
     logs: LogEntry[];
     terminals: TerminalState[];
     userTeam: 'red' | 'blue' | 'spectator' | null;
@@ -157,7 +279,7 @@ const createNewTerminal = (id: string, name: string, userTeam: 'red' | 'blue'): 
 };
 
 export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children, sessionData }) => {
-    const [networkState, setNetworkState] = useState<NetworkState | null>(null);
+    const [environment, setEnvironment] = useState<VirtualEnvironment>(R.clone(fortressScenario.initialEnvironment));
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [terminals, setTerminals] = useState<TerminalState[]>([]);
     const [processes, setProcesses] = useState<ActiveProcess[]>([]);
@@ -229,7 +351,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
 
     const processCommand = useCallback(async (terminalId: string, command: string) => {
         const terminal = terminals.find(t => t.id === terminalId);
-        if (!terminal || team === 'spectator') return;
+        if (!terminal || team === 'spectator' || !environment) return;
         
         // Rate Limiting
         const now = Date.now();
@@ -237,9 +359,9 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             commandCount.current = 0;
             resetTime.current = now;
         }
-        if (commandCount.current >= 20) { // 20 commands per minute
+        if (commandCount.current >= 30) { // 30 commands per minute
              updateTerminalState(terminalId, (prev) => ({
-                output: [...prev.output, { type: 'prompt' }, { text: command, type: 'command' }, { text: '⚠️ Rate limit excedido. Espere 60 segundos.', type: 'error' }],
+                output: [...prev.output, { type: 'prompt', ...prev.prompt }, { text: command, type: 'command' }, { text: '⚠️ Rate limit excedido. Espere 60 segundos.', type: 'error' }],
                 input: ''
             }));
             return;
@@ -248,58 +370,47 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
 
         updateTerminalState(terminalId, { isBusy: true });
 
-        updateTerminalState(terminalId, (prev) => ({
-            output: [...prev.output, { type: 'prompt' }, { text: command, type: 'command' }],
-            history: prev.history[prev.history.length - 1] === command ? prev.history : [...prev.history, command],
+        const newHistory = terminal.history[terminal.history.length - 1] === command ? terminal.history : [...terminal.history, command];
+        updateTerminalState(terminalId, {
+            output: [...terminal.output, { type: 'prompt', ...terminal.prompt }, { text: command, type: 'command' }],
+            history: newHistory,
             historyIndex: -1,
             input: ''
-        }));
-        
-        await addLog({
-            source: team === 'red' ? 'Red Team' : 'Blue Team',
-            message: `Ejecutó el comando: '${command}' en ${terminal.name}`,
-            teamVisible: 'all',
         });
         
-        if (command.toLowerCase() === 'exit' && terminal.originalPrompt) {
-            updateTerminalState(terminalId, { prompt: terminal.originalPrompt, originalPrompt: undefined, isBusy: false, output: [...terminal.output, {type: 'prompt'}, {type: 'command', text: 'exit'}, {type: 'output', text:'Connection closed.'}] });
-            return;
-        }
+        const cmdStr = command.trim().split(' ')[0].toLowerCase();
+        const handler = commandLibrary[cmdStr];
         
-        const { outputLines, process, duration, newPrompt, clear } = await commandSimulator(command, team, terminal.prompt);
+        const context: CommandContext = { userTeam: team, terminalState: terminal, environment, setEnvironment };
+
+        const result: CommandResult = handler 
+            ? await handler(command.trim().split(' ').slice(1), context)
+            : { output: [{ text: `comando no encontrado: ${cmdStr}`, type: 'error' }] };
 
         const handleResult = () => {
              updateTerminalState(terminalId, (prev) => ({
-                output: clear ? [] : [...prev.output, ...outputLines],
-                prompt: newPrompt || prev.prompt,
-                originalPrompt: newPrompt ? prev.prompt : prev.originalPrompt,
-                isBusy: false
+                output: result.clear ? [] : [...prev.output, ...result.output],
+                isBusy: false,
+                ...(result.newTerminalState || {})
             }));
+            if (result.newEnvironment) {
+                setEnvironment(result.newEnvironment);
+            }
         };
 
-        if (duration) {
-             setTimeout(handleResult, duration);
+        if (result.duration) {
+             setTimeout(handleResult, result.duration);
         } else {
              handleResult();
         }
 
-        if (process) {
-            const newProcess: ActiveProcess = {
-                id: crypto.randomUUID(),
-                terminalId,
-                startTime: Date.now(),
-                ...process,
-            };
-            setProcesses(prev => [...prev, newProcess]);
-            await addLog({ source: 'System', message: `Proceso persistente '${command}' iniciado.`, teamVisible: team });
-        }
-    }, [terminals, team, addLog, updateTerminalState]);
+    }, [terminals, team, addLog, updateTerminalState, environment]);
 
 
     const value = useMemo(() => ({
-        networkState, logs, terminals, userTeam: team,
+        environment, logs, terminals, userTeam: team,
         addLog, addTerminal, updateTerminalInput, processCommand, navigateHistory,
-    }), [networkState, logs, terminals, team, addLog, addTerminal, updateTerminalInput, processCommand, navigateHistory]);
+    }), [environment, logs, terminals, team, addLog, addTerminal, updateTerminalInput, processCommand, navigateHistory]);
 
     return <SimulationContext.Provider value={value}>{children}</SimulationContext.Provider>;
 };
