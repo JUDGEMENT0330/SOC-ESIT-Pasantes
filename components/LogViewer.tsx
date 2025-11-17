@@ -14,7 +14,7 @@ const LogSourceIndicator: React.FC<{ source: LogEntry['source'] }> = ({ source }
     return <span className={`font-bold mr-2 ${color}`}>{text}</span>;
 };
 
-export const LogViewer: React.FC = () => {
+const LogViewerComponent: React.FC = () => {
     const endOfLogsRef = useRef<HTMLDivElement>(null);
     const { logs, userTeam } = useContext(SimulationContext);
 
@@ -48,3 +48,5 @@ export const LogViewer: React.FC = () => {
         </div>
     );
 };
+
+export const LogViewer = React.memo(LogViewerComponent);
