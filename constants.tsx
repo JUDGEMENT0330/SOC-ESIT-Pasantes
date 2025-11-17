@@ -1,8 +1,9 @@
 
 
 
+
 import React from 'react';
-import type { TrainingScenario, ResourceModule, GlossaryTerm, TerminalLine, PromptState } from './types';
+import type { TrainingScenario, ResourceModule, GlossaryTerm, TerminalLine, PromptState, InteractiveScenario } from './types';
 
 // ============================================================================
 // Icon Component (Lucide SVG paths)
@@ -64,6 +65,7 @@ export const Icon: React.FC<IconProps> = ({ name, className, ...props }) => {
         'shield': <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></>,
         'key': <><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></>,
         'crosshair': <><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></>,
+        'star': <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>,
     };
 
     return (
@@ -180,7 +182,87 @@ export const GLOSSARY_TERMS: GlossaryTerm[] = [
     { term: "PDU (Unidad de Datos de Protocolo)", definition: "El nombre genérico de los \"datos\" en cada capa: Trama (Capa 2), Paquete (Capa 3), Segmento/Datagrama (Capa 4). (Ver: Recursos)" },
 ];
 
-export const TRAINING_SCENARIOS: TrainingScenario[] = [
+export const fortressScenario: InteractiveScenario = {
+    id: 'escenario7',
+    isInteractive: true,
+    icon: 'shield-check', 
+    color: 'bg-indigo-500',
+    title: 'Fortaleza Digital (Hardening vs. Pentest)',
+    subtitle: 'Equipo Rojo vs. Equipo Azul',
+    description: 'El servidor BOVEDA-WEB es vulnerable. El Equipo Azul debe asegurarlo antes de que el Equipo Rojo lo comprometa.',
+    difficulty: 'intermediate',
+    team: 'both',
+    initialEnvironment: {
+        networks: {
+            'dmz': {
+                hosts: [{
+                    ip: '10.0.10.5',
+                    hostname: 'BOVEDA-WEB',
+                    os: 'linux',
+                    services: {
+                        22: { name: 'ssh', version: 'OpenSSH 7.4', state: 'open', vulnerabilities: [] },
+                        80: { name: 'http', version: 'Apache 2.4.6', state: 'open', vulnerabilities: [{ cve: 'CVE-2021-CUSTOM', description: 'Weak default config', severity: 'medium' }] },
+                        443: { name: 'https', version: 'Apache 2.4.6', state: 'open', vulnerabilities: [{ cve: 'CVE-2021-SSL', description: 'Weak SSL cipher', severity: 'high' }] },
+                        3306: { name: 'mysql', version: 'MySQL 5.5', state: 'open', vulnerabilities: [] }
+                    },
+                    users: [
+                        { username: 'root', password: 'toor', privileges: 'root' },
+                        { username: 'blue-team', password: 'SecureP@ss2024!', privileges: 'admin' }
+                    ],
+                    files: [
+                        { path: '/var/www/html/db_config.php', permissions: '644', content: '<?php\n$db_user = "root";\n$db_pass = "mysql_root_pass";\n?>', hash: 'abc123def' },
+                        { path: '/etc/ssh/sshd_config', permissions: '600', content: '#Default Config\nPermitRootLogin yes\n', hash: 'def456abc' }
+                    ]
+                }],
+                firewall: { enabled: false, rules: [] },
+                ids: { enabled: false, signatures: [], alerts: [] }
+            }
+        },
+        attackProgress: { reconnaissance: [], compromised: [], credentials: {}, persistence: [] },
+        defenseProgress: { hardenedHosts: [], blockedIPs: [], patchedVulnerabilities: [] },
+        timeline: []
+    },
+    objectives: [
+        { id: 'blue-firewall', description: 'Activar el firewall UFW y permitir solo SSH y HTTP/HTTPS', points: 20, required: true, validator: (env) => {
+                const fw = env.networks.dmz.firewall;
+                return fw.enabled && 
+                       fw.rules.some(r => r.action === 'allow' && r.destPort === 22) &&
+                       fw.rules.some(r => r.action === 'allow' && r.destPort === 80) &&
+                       fw.rules.some(r => r.action === 'allow' && r.destPort === 443) &&
+                       fw.rules.some(r => r.action === 'deny' && r.destPort === 3306);
+            }, hint: 'Comandos: sudo ufw enable, sudo ufw allow <puerto>, sudo ufw deny <puerto>'
+        },
+        { id: 'blue-ssh-hardening', description: 'Deshabilitar login directo de root en SSH', points: 15, required: true, validator: (env) => {
+                const host = env.networks.dmz.hosts.find(h => h.hostname === 'BOVEDA-WEB');
+                const sshConfig = host?.files.find(f => f.path === '/etc/ssh/sshd_config');
+                return sshConfig?.content?.includes('PermitRootLogin no') ?? false;
+            }, hint: 'Usa "sudo nano /etc/ssh/sshd_config" para editar y "sudo systemctl restart sshd" para aplicar.'
+        },
+        { id: 'blue-file-permissions', description: 'Asegurar db_config.php (permisos 640 o más restrictivos)', points: 15, required: true, validator: (env) => {
+                const host = env.networks.dmz.hosts.find(h => h.hostname === 'BOVEDA-WEB');
+                const dbConfig = host?.files.find(f => f.path === '/var/www/html/db_config.php');
+                return parseInt(dbConfig?.permissions ?? '644', 8) <= parseInt('640', 8);
+            }, hint: 'Comando: sudo chmod 640 /var/www/html/db_config.php'
+        },
+        { id: 'red-reconnaissance', description: 'Escanear BOVEDA-WEB y descubrir servicios vulnerables', points: 10, required: true, validator: (env) => env.attackProgress.reconnaissance.includes('10.0.10.5'), hint: 'Usa nmap con flags -sV y -sC para detectar versiones y vulnerabilidades.'
+        },
+        { id: 'red-bruteforce', description: 'Obtener credenciales SSH de root mediante fuerza bruta', points: 25, required: true, validator: (env) => env.attackProgress.credentials['root@10.0.10.5'] === 'toor', hint: 'Usa hydra con un wordlist contra el servicio SSH.'
+        },
+        { id: 'red-compromise', description: 'Comprometer BOVEDA-WEB completamente (acceso root)', points: 30, required: true, validator: (env) => env.attackProgress.compromised.includes('10.0.10.5'), hint: 'Después de obtener credenciales, usa SSH para conectarte.'
+        },
+    ],
+    hints: [
+        { trigger: (env) => env.timeline.filter(log => log.message.includes('hydra')).length > 5, message: '🚨 [EQUIPO AZUL] ¡Ataque de fuerza bruta detectado! Revisa los logs de autenticación y bloquea la IP de origen con UFW.' },
+        { trigger: (env) => {
+            const sshSecured = env.networks.dmz.hosts[0]?.files.find(f => f.path === '/etc/ssh/sshd_config')?.content?.includes('PermitRootLogin no');
+            return env.timeline.length > 10 && !sshSecured;
+          }, message: '💡 [EQUIPO AZUL] Tip: El login directo de root es una vulnerabilidad crítica. Desactívalo en /etc/ssh/sshd_config.'
+        }
+    ],
+    evaluation: (env) => ({ completed: false, score: 0, feedback: [] }) // Simplified for now
+};
+
+export const TRAINING_SCENARIOS: (TrainingScenario | InteractiveScenario)[] = [
     {
         id: 'escenario1', icon: 'layers', color: 'bg-blue-500', title: 'Escenario 1: El Diagnóstico (OSI/TCP-IP)',
         subtitle: 'Tiempo Estimado: 20 minutos',
@@ -314,32 +396,7 @@ export const TRAINING_SCENARIOS: TrainingScenario[] = [
             </CisoCard>
         </>
     },
-    {
-        id: 'escenario7', icon: 'shield-check', color: 'bg-indigo-500', title: 'Escenario 7: Fortaleza Digital (Hardening vs. Pentest)',
-        subtitle: 'Equipo Rojo vs. Equipo Azul',
-        content: <>
-            <CisoCard icon="users" title="Taller Operativo: Fortaleza Digital">
-                <p>Tenemos un nuevo activo de alto valor: <strong>"Bóveda-Web"</strong>. Actualmente, está en configuración "por defecto", lo que significa "inseguro".</p>
-                <p>Host del Defensor (Azul): <code>ssh blue-team@BOVEDA-WEB</code></p>
-                <p>Host del Atacante (Rojo): <code>pasante@soc-valtorix</code> (su terminal local)</p>
-            </CisoCard>
-            <CisoCard icon="shield" title="MISIÓN EQUIPO AZUL: LOS GUARDIANES (Hardening)">
-                <p><strong>Objetivo:</strong> Asegurar el servidor <code>BOVEDA-WEB</code>.</p>
-                <h5>Objetivo 1: Validación de Cifrado (SSL/HTTPS)</h5>
-                <pre><code>openssl s_client -connect BOVEDA-WEB:443</code></pre>
-                <h5>Objetivo 2: Permisos (Menor Privilegio)</h5>
-                <pre><code>ls -l /var/www/html/db_config.php
-chmod 640 /var/www/html/db_config.php</code></pre>
-            </CisoCard>
-            <CisoCard icon="sword" title="MISIÓN EQUIPO ROJO: LOS AUDITORES (Pentest)">
-                <p><strong>Objetivo:</strong> Encontrar las grietas antes que los criminales.</p>
-                 <h5>1. Reconocimiento (Nmap)</h5>
-                <pre><code>nmap -sV -sC BOVEDA-WEB</code></pre>
-                <h5>5. Fuerza Bruta (Hydra)</h5>
-                <pre><code>hydra -l root -P /path/to/wordlist.txt ssh://BOVEDA-WEB</code></pre>
-            </CisoCard>
-        </>
-    },
+    fortressScenario,
     {
         id: 'escenario8', icon: 'bomb', color: 'bg-orange-600', title: 'Escenario 8: Furia en la Red (Ataque Combinado)',
         subtitle: 'Equipo Rojo vs. Equipo Azul',
@@ -574,19 +631,24 @@ export const RED_TEAM_HELP_TEXT = `<pre class="whitespace-pre-wrap font-mono tex
 Use <strong class="text-amber-300">help [id]</strong> para una guía detallada (ej. help escenario8).
 
 <strong>Fase 1: Reconocimiento</strong>
-  <strong class="text-amber-300">nmap [host]</strong>              - Escanea puertos y servicios.
+  <strong class="text-amber-300">nmap [opciones] [host]</strong>    - Escanea puertos y servicios.
   <strong class="text-amber-300">dirb http://[host]</strong>       - Busca directorios web ocultos.
   <strong class="text-amber-300">curl http://[host]/[file]</strong> - Intenta leer archivos sensibles.
   <strong class="text-amber-300">nikto -h http://[host]</strong>   - Escáner de vulnerabilidades web.
+  <strong class="text-amber-300">ping [host]</strong>              - Verifica conectividad.
 
 <strong>Fase 2: Intrusión y Explotación</strong>
-  <strong class="text-amber-300">hydra ssh://[host]</strong>       - Lanza un ataque de fuerza bruta a SSH. <strong class="text-red-500">(¡RUIDOSO!)</strong>
+  <strong class="text-amber-300">hydra -l [user] -P [file] ssh://[host]</strong> - Lanza ataque de fuerza bruta. <strong class="text-red-500">(¡RUIDOSO!)</strong>
   <strong class="text-amber-300">john [hash_file]</strong>       - Simula cracking de contraseñas offline.
   <strong class="text-amber-300">ssh [user]@[host]</strong>      - Intenta acceder con credenciales encontradas.
   <strong class="text-amber-300">wget [url]</strong>             - (Dentro del host) Descarga un 'payload'.
+  <strong class="text-amber-300">nc -lvnp [port]</strong>        - Crea un listener para reverse shells.
 
-<strong>Fase 3: Disrupción</strong>
-  <strong class="text-amber-300">hping3 --flood [host]</strong>    - Simula un ataque de Denegación de Servicio (DoS).
+<strong>Fase 3: Post-Explotación</strong>
+  <strong class="text-amber-300">ls -la</strong>                 - Lista archivos y permisos.
+  <strong class="text-amber-300">cat [file]</strong>               - Muestra contenido de un archivo.
+  <strong class="text-amber-300">ps aux</strong>                 - Muestra procesos en ejecución.
+  <strong class="text-amber-300">whoami</strong>                 - Muestra el usuario actual.
 </pre>`;
 
 export const BLUE_TEAM_HELP_TEXT = `<pre class="whitespace-pre-wrap font-mono text-xs">
@@ -596,15 +658,15 @@ Use <strong class="text-amber-300">help [id]</strong> para una guía detallada (
 <strong>Fase 1: Conexión y Hardening</strong>
   <strong class="text-amber-300">ssh blue-team@[host]</strong>     - Conéctese al servidor para asegurarlo.
   <strong class="text-amber-300">sudo ufw [cmd]</strong>           - Gestiona el firewall (status, enable, allow, deny).
-  <strong class="text-amber-300">sudo nano sshd_config</strong>      - Simula editar la config de SSH.
-  <strong class="text-amber-300">sudo systemctl restart sshd</strong>- Aplica los cambios a SSH.
+  <strong class="text-amber-300">sudo nano [file]</strong>         - Simula editar un archivo de configuración.
+  <strong class="text-amber-300">sudo systemctl restart [svc]</strong>- Aplica los cambios a un servicio (ej. sshd).
   <strong class="text-amber-300">ls -l [file]</strong>             - Lista permisos de archivos.
-  <strong class="text-amber-300">chmod [perm] [file]</strong>      - Cambia permisos de archivos.
+  <strong class="text-amber-300">sudo chmod [perm] [file]</strong>   - Cambia permisos de archivos.
 
 <strong>Fase 2: Monitoreo y Detección</strong>
   <strong class="text-amber-300">top</strong> / <strong class="text-amber-300">htop</strong>               - Muestra la carga del sistema (Detectar DoS).
   <strong class="text-amber-300">sudo ss -tulnp</strong>               - Muestra servicios escuchando en puertos.
-  <strong class="text-amber-300">grep "Failed" auth.log</strong>     - Busca intentos de login fallidos.
+  <strong class="text-amber-300">grep "Failed" /var/log/auth.log</strong> - Busca intentos de login fallidos.
   <strong class="text-amber-300">journalctl -u sshd</strong>       - Revisa logs del servicio SSH.
   <strong class="text-amber-300">openssl s_client -connect [host]:443</strong> - Valida el certificado SSL/TLS.
 
@@ -631,15 +693,15 @@ El orden es crítico.
     <strong class="text-amber-300">sudo ufw enable</strong>        (¡Actívalo!)
 
 2.  <strong>Asegurar SSH:</strong> Deshabilita el login directo de 'root'.
-    <strong class="text-amber-300">sudo nano sshd_config</strong>  (Simula la edición, cambiarás PermitRootLogin a 'no')
+    <strong class="text-amber-300">sudo nano /etc/ssh/sshd_config</strong>  (Simula la edición, cambiarás PermitRootLogin a 'no')
     <strong class="text-amber-300">sudo systemctl restart sshd</strong> (Aplica los cambios)
 
 3.  <strong>Principio de Menor Privilegio:</strong> Protege archivos sensibles.
     <strong class="text-amber-300">ls -l /var/www/html/db_config.php</strong> (Verás permisos peligrosos como 644)
-    <strong class="text-amber-300">chmod 640 /var/www/html/db_config.php</strong>  (Quita permisos de lectura a 'otros')
+    <strong class="text-amber-300">sudo chmod 640 /var/www/html/db_config.php</strong>  (Quita permisos de lectura a 'otros')
 
 4.  <strong>Monitoreo Activo:</strong> Caza al Equipo Rojo.
-    <strong class="text-amber-300">grep "Failed" auth.log</strong> (Ejecuta esto repetidamente mientras el Equipo Rojo
+    <strong class="text-amber-300">grep "Failed" /var/log/auth.log</strong> (Ejecuta esto repetidamente mientras el Equipo Rojo
                            usa 'hydra' para ver los ataques en tiempo real)
     <strong class="text-amber-300">sudo ss -tulnp</strong>       (Verifica qué puertos están abiertos. Deberían ser
                            menos después de activar el firewall)
@@ -653,7 +715,7 @@ Tu misión es encontrar una ventana de oportunidad antes de que el Equipo Azul l
                            puertos. Si está encendido, solo los permitidos)
 
 2.  <strong>Intento de Fuerza Bruta:</strong> El ataque más ruidoso.
-    <strong class="text-amber-300">hydra ssh://BOVEDA-WEB</strong> (Esto SOLO FUNCIONARÁ si el Equipo Azul no ha
+    <strong class="text-amber-300">hydra -l root -P rockyou.txt ssh://BOVEDA-WEB</strong> (Esto SOLO FUNCIONARÁ si el Equipo Azul no ha
                            asegurado SSH para deshabilitar el login de root)
                            Si tienes éxito, entra con <strong class="text-amber-300">ssh root@BOVEDA-WEB</strong>
 
@@ -715,3 +777,10 @@ El ejercicio termina cuando el Equipo Azul bloquea tu IP o cuando despliegas el 
 </pre>`
  }
 };
+
+export const ALL_COMMANDS = [
+    'help', 'nmap', 'hydra', 'nc', 'msfconsole', 'clear', 'marca', 'exit', 
+    'ssh', 'sudo', 'ufw', 'ls', 'whoami', 'ping', 'dirb', 'curl', 'nikto',
+    'john', 'wget', 'cat', 'ps', 'systemctl', 'chmod', 'nano', 'grep', 'top', 'htop', 'ss',
+    'journalctl', 'openssl', 'fail2ban-client', 'sha256sum'
+];
