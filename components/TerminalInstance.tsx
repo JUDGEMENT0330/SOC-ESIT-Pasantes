@@ -1,68 +1,238 @@
-import React, { useEffect, useRef } from 'react';
-import type { TerminalState, PromptState } from '../types';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
+import type { TerminalState, PromptState, VirtualEnvironment } from '../types';
 import DOMPurify from 'https://esm.sh/dompurify';
-import { ALL_COMMANDS } from '../constants';
 
-interface TerminalInstanceProps {
-    terminalState: TerminalState;
-    onCommand: (command: string) => void;
-    onInputChange: (input: string) => void;
-    onHistoryNav: (direction: 'up' | 'down') => void;
+// ============================================================================
+// Command History Class
+// ============================================================================
+class CommandHistory {
+    private history: string[] = [];
+    private maxSize: number = 1000;
+    private currentIndex: number = -1;
+    
+    constructor() { this.loadFromStorage(); }
+    
+    add(command: string): void {
+        if (!command.trim() || this.history[this.history.length - 1] === command) return;
+        this.history.push(command);
+        if (this.history.length > this.maxSize) this.history.shift();
+        this.currentIndex = this.history.length;
+        this.saveToStorage();
+    }
+    
+    navigateUp(): string | null {
+        if (this.currentIndex > 0) {
+            this.currentIndex--;
+            return this.history[this.currentIndex];
+        }
+        return this.history.length > 0 ? this.history[0] : '';
+    }
+    
+    navigateDown(): string | null {
+        if (this.currentIndex < this.history.length - 1) {
+            this.currentIndex++;
+            return this.history[this.currentIndex];
+        } else if (this.currentIndex === this.history.length - 1) {
+            this.currentIndex = this.history.length;
+            return '';
+        }
+        return null;
+    }
+    
+    search(query: string): string[] {
+        if (!query) return [];
+        return this.history.filter(cmd => cmd.toLowerCase().includes(query.toLowerCase())).reverse();
+    }
+    
+    reset(): void { this.currentIndex = this.history.length; }
+    
+    private saveToStorage(): void {
+        try { localStorage.setItem('terminal_history', JSON.stringify(this.history)); } 
+        catch (e) { console.warn('No se pudo guardar el historial:', e); }
+    }
+    
+    private loadFromStorage(): void {
+        try {
+            const stored = localStorage.getItem('terminal_history');
+            if (stored) {
+                this.history = JSON.parse(stored);
+                this.currentIndex = this.history.length;
+            }
+        } catch (e) { console.warn('No se pudo cargar el historial:', e); }
+    }
 }
 
-export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalState, onCommand, onInputChange, onHistoryNav }) => {
-    const { output, prompt, input, isBusy, history } = terminalState;
+// ============================================================================
+// Autocomplete Engine Class
+// ============================================================================
+interface AutocompleteResult {
+    suggestions: string[];
+    commonPrefix: string;
+}
+
+class AutocompleteEngine {
+    private commands: Map<string, string[]> = new Map([
+        ['nmap', ['-sS', '-sT', '-sU', '-sV', '-sC', '-A', '-O', '-p', '-T0', '-T1', '-T2', '-T3', '-T4', '-T5', '--script', '--open', '-Pn', '-n']],
+        ['hydra', ['-l', '-L', '-p', '-P', '-t', '-w', '-f', '-V']],
+        ['ufw', ['status', 'enable', 'disable', 'allow', 'deny', 'delete', 'reset', 'reload', 'from']],
+        ['ssh', []], ['ping', []], ['curl', []], ['hping3', ['--flood', '-S']],
+        ['sudo', []], ['nano', []], ['cat', []], ['sha256sum', []]
+    ]);
+    private hosts: Set<string> = new Set();
+    
+    constructor(environment: VirtualEnvironment | null) {
+        if (!environment) return;
+        for (const network of Object.values(environment.networks)) {
+            for (const host of network.hosts) {
+                this.hosts.add(host.ip);
+                this.hosts.add(host.hostname);
+            }
+        }
+        // Add sudo subcommands
+        this.commands.set('sudo', Array.from(this.commands.keys()));
+    }
+    
+    autocomplete(input: string): AutocompleteResult {
+        const tokens = input.split(' ');
+        const currentToken = tokens[tokens.length - 1];
+        const command = tokens[0];
+        
+        let suggestions: string[] = [];
+        
+        if (tokens.length === 1) {
+            suggestions = Array.from(this.commands.keys()).filter(cmd => cmd.startsWith(currentToken));
+        } else if (this.commands.has(command)) {
+            const cmdFlags = this.commands.get(command) ?? [];
+            if (currentToken.startsWith('-')) {
+                suggestions = cmdFlags.filter(flag => flag.startsWith(currentToken));
+            } else if (['ssh', 'ping', 'nmap', 'hydra', 'curl', 'hping3'].includes(command)) {
+                suggestions = Array.from(this.hosts).filter(host => host.toLowerCase().startsWith(currentToken.toLowerCase()));
+            } else if (command === 'ufw' && tokens[tokens.length - 2] === 'from') {
+                suggestions = ['192.168.1.100']; // Simulating attacker IP
+            }
+        }
+        
+        const commonPrefix = this.findCommonPrefix(suggestions);
+        return { suggestions, commonPrefix };
+    }
+    
+    private findCommonPrefix(strings: string[]): string {
+        if (!strings || strings.length === 0) return '';
+        if (strings.length === 1) return strings[0];
+        let prefix = strings[0];
+        for (let i = 1; i < strings.length; i++) {
+            while (!strings[i].startsWith(prefix)) {
+                prefix = prefix.substring(0, prefix.length - 1);
+                if (prefix === '') return '';
+            }
+        }
+        return prefix;
+    }
+}
+
+// ============================================================================
+// Terminal Component
+// ============================================================================
+interface TerminalInstanceProps {
+    terminalState: TerminalState;
+    environment: VirtualEnvironment | null;
+    onCommand: (command: string) => void;
+    onInputChange: (input: string) => void;
+}
+
+export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalState, environment, onCommand, onInputChange }) => {
+    const { output, prompt, input, isBusy } = terminalState;
     
     const endOfOutputRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const history = useRef(new CommandHistory());
+    
+    const [searchMode, setSearchMode] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<string[]>([]);
+    const [autocomplete, setAutocomplete] = useState<AutocompleteResult | null>(null);
+
+    const autocompleteEngine = useMemo(() => new AutocompleteEngine(environment), [environment]);
 
     useEffect(() => {
         endOfOutputRef.current?.scrollIntoView({ behavior: "instant" });
     }, [output]);
     
     useEffect(() => {
-        if (inputRef.current && inputRef.current.value !== input) {
-            inputRef.current.value = input;
+        if (!searchMode && inputRef.current && document.activeElement !== inputRef.current) {
+             inputRef.current.focus();
         }
-    }, [input]);
+    }, [searchMode, terminalState.id]);
+
+    useEffect(() => {
+        if (searchMode) setSearchResults(history.current.search(searchQuery));
+    }, [searchQuery, searchMode]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (isBusy) return;
 
-        if (e.key === 'Enter' && input.trim()) {
+        if (e.ctrlKey && e.key === 'r') {
             e.preventDefault();
-            onCommand(input);
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            onHistoryNav('up');
-        } else if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            onHistoryNav('down');
-        } else if (e.key === 'Tab') {
-             e.preventDefault();
-             const currentInput = input.split(' ').pop() || '';
-             if (!currentInput) return;
-             
-             const matching = ALL_COMMANDS.filter(cmd => cmd.startsWith(currentInput));
-             if (matching.length === 1) {
-                 const newCommand = matching[0];
-                 const parts = input.split(' ');
-                 parts[parts.length - 1] = newCommand;
-                 onInputChange(parts.join(' ') + ' ');
-             }
+            setSearchMode(true);
+            setSearchQuery('');
+            onInputChange('');
+        } else if (searchMode) {
+             if (e.key === 'Escape') {
+                e.preventDefault();
+                setSearchMode(false);
+                onInputChange('');
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                const bestMatch = searchResults[0] || searchQuery;
+                onInputChange(bestMatch);
+                setSearchMode(false);
+                setTimeout(() => inputRef.current?.focus(), 0);
+            }
+        } else { // Normal Mode
+            if (e.key === 'Enter' && input.trim()) {
+                e.preventDefault();
+                history.current.add(input);
+                history.current.reset();
+                onCommand(input);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                onInputChange(history.current.navigateUp() ?? input);
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                onInputChange(history.current.navigateDown() ?? '');
+            } else if (e.key === 'Tab') {
+                e.preventDefault();
+                const result = autocompleteEngine.autocomplete(input);
+                if (result.suggestions.length === 1) {
+                    const tokens = input.split(' ');
+                    tokens[tokens.length - 1] = result.suggestions[0];
+                    onInputChange(tokens.join(' ') + ' ');
+                    setAutocomplete(null);
+                } else if (result.suggestions.length > 1) {
+                    if (result.commonPrefix) {
+                        const tokens = input.split(' ');
+                        const currentToken = tokens[tokens.length - 1];
+                        if (result.commonPrefix.length > currentToken.length) {
+                             tokens[tokens.length - 1] = result.commonPrefix;
+                             onInputChange(tokens.join(' '));
+                        }
+                    }
+                    setAutocomplete(result);
+                }
+            } else if (e.key !== 'Tab') {
+                setAutocomplete(null);
+            }
         }
     };
 
     const placeholder = isBusy ? "Procesando comando..." : "Escriba un comando y presione Enter...";
+    const currentInput = searchMode ? searchQuery : input;
+    const handleInputChange = searchMode ? setSearchQuery : onInputChange;
 
     return (
         <div 
-            className="bg-[#0a0f1c] border border-gray-700 rounded-lg h-[400px] p-3 flex flex-col font-mono"
+            className="bg-[#0a0f1c] border border-gray-700 rounded-lg h-[400px] p-3 flex flex-col font-mono relative"
             onClick={() => inputRef.current?.focus()}
-            role="application"
-            aria-label="Terminal de simulación"
-            aria-live="polite"
-            aria-atomic="false"
         >
             <div className="flex-grow overflow-y-auto text-sm pr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
                 {output.map((line, index) => (
@@ -70,37 +240,47 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalStat
                         {line.type === 'prompt' && <Prompt {...prompt} />}
                         {line.type === 'command' && <span className="text-white break-all">{line.text}</span>}
                         {line.type === 'output' && <pre className="whitespace-pre-wrap text-slate-300">{line.text}</pre>}
-                        {line.type === 'html' && <div className="text-slate-300" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(line.html || '', {
-                            ALLOWED_TAGS: ['strong', 'span', 'pre', 'br'],
-                            ALLOWED_ATTR: ['class']
-                        }) }} />}
+                        {line.type === 'html' && <div className="text-slate-300" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(line.html || '', { ALLOWED_TAGS: ['strong', 'span', 'pre', 'br'], ALLOWED_ATTR: ['class'] }) }} />}
                         {line.type === 'error' && <pre className="whitespace-pre-wrap text-red-500">{line.text}</pre>}
                     </div>
                 ))}
                 <div ref={endOfOutputRef} />
             </div>
-            <div className="flex items-center mt-2 flex-shrink-0">
-                <Prompt {...prompt} />
-                <input
-                    ref={inputRef}
-                    type="text"
-                    className="bg-transparent border-none outline-none text-white font-mono text-sm w-full"
-                    defaultValue={input}
-                    onChange={e => onInputChange(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    autoFocus
-                    autoComplete="off"
-                    autoCapitalize="off"
-                    spellCheck="false"
-                    disabled={isBusy}
-                    placeholder={placeholder}
-                    aria-label="Línea de comandos"
-                    aria-describedby="terminal-help"
-                />
+            
+            <div className="mt-2 flex-shrink-0">
+                {searchMode && (
+                    <div className="text-yellow-400 text-xs mb-1">
+                        (reverse-i-search)`{searchQuery}': {searchResults[0] || 'ninguna coincidencia'}
+                    </div>
+                )}
+                <div className="flex items-center">
+                    {!searchMode && <Prompt {...prompt} />}
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        className="bg-transparent border-none outline-none text-white font-mono text-sm w-full"
+                        value={currentInput}
+                        onChange={e => handleInputChange(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        autoFocus
+                        autoComplete="off"
+                        autoCapitalize="off"
+                        spellCheck="false"
+                        disabled={isBusy && !searchMode}
+                        placeholder={placeholder}
+                    />
+                </div>
             </div>
-            <div id="terminal-help" className="sr-only">
-                Use flechas arriba/abajo para historial. Tab para autocompletar.
-            </div>
+
+            {autocomplete && autocomplete.suggestions.length > 1 && (
+                <div className="absolute bottom-10 left-3 bg-gray-900 border border-gray-700 rounded p-1 z-10 grid grid-cols-3 gap-x-4 gap-y-1">
+                    {autocomplete.suggestions.map((suggestion) => (
+                        <div key={suggestion} className="px-2 text-xs text-slate-300">
+                            {suggestion}
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 };
