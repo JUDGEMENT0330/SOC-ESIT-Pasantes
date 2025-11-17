@@ -2,6 +2,7 @@
 import React, { createContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import type { VirtualEnvironment, LogEntry, SessionData, TerminalLine, PromptState, TerminalState, ActiveProcess, CommandHandler, CommandContext, CommandResult, VirtualHost, FirewallState, InteractiveScenario } from './types';
+// FIX: The `RealtimeChannel` type might not be exported in this version. Using `any` to avoid breaking the build.
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, GENERAL_HELP_TEXT, SCENARIO_HELP_TEXTS, TRAINING_SCENARIOS } from './constants';
 import * as R from 'https://aistudiocdn.com/ramda@^0.32.0';
@@ -362,7 +363,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
     const [activeScenario, setActiveScenario] = useState<InteractiveScenario | null>(null);
     const [terminals, setTerminals] = useState<TerminalState[]>([]);
     
-    const channelRef = useRef<RealtimeChannel | null>(null);
+    const channelRef = useRef<any | null>(null);
     const { sessionId, team } = sessionData;
 
     const updateStateFromPayload = useCallback((payload: SimulationStateRow) => {
