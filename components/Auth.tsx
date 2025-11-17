@@ -32,6 +32,7 @@ export const Auth: React.FC = () => {
             }
             
             // 2. Verificar contra whitelist en Supabase (simulado, asume que la tabla 'allowed_emails' existe)
+            /*
             const { data: isWhitelisted, error: whitelistError } = await supabase
                 .from('allowed_emails')
                 .select('email')
@@ -43,6 +44,7 @@ export const Auth: React.FC = () => {
             if (!isWhitelisted) {
                 throw new Error('Email no autorizado. Contacte al administrador.');
             }
+            */
 
             // 3. Activar MFA y registrar
             const { error: signUpError } = await supabase.auth.signUp({
