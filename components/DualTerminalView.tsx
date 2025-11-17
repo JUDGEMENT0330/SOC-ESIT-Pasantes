@@ -6,7 +6,7 @@ import { Icon } from '../constants';
 import { SimulationContext } from '../SimulationContext';
 
 export const DualTerminalView: React.FC = () => {
-    const { terminals, processCommand, userTeam, environment, activeScenario } = useContext(SimulationContext);
+    const { terminals, processCommand, userTeam, environment, activeScenario, addNewTerminal } = useContext(SimulationContext);
     
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
     
@@ -123,6 +123,13 @@ export const DualTerminalView: React.FC = () => {
                         {term.name}
                     </button>
                 ))}
+                 <button
+                    onClick={addNewTerminal}
+                    className="px-3 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
+                    title="Abrir nueva terminal (local, no se guarda)"
+                >
+                    <Icon name="plus-circle" className="h-5 w-5" />
+                </button>
             </div>
 
             <div className="w-full mx-auto">
