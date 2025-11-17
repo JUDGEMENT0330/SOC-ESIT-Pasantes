@@ -1,6 +1,6 @@
 
 
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { DualTerminalView } from './components/DualTerminalView';
 import { Auth } from './components/Auth';
 import { supabase } from './supabaseClient';
@@ -15,7 +15,7 @@ import { SimulationContext, SimulationProvider } from './SimulationContext';
 // Main App Component
 // ============================================================================
 
-const ADMIN_EMAIL = process.env.VITE_ADMIN_EMAIL || 'admin@cybervaltorix.com';
+const ADMIN_EMAIL = process.env.VITE_ADMIN_EMAIL || 'alexmancia@cybervaltorix.com';
 
 export default function App() {
     const [session, setSession] = useState<Session | null>(null);
@@ -23,6 +23,7 @@ export default function App() {
     const [completedScenarios, setCompletedScenarios] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [impersonatedTeam, setImpersonatedTeam] = useState<'red' | 'blue' | null>(null);
 
     // Effect for handling authentication state changes. Runs only once on mount.
     useEffect(() => {
@@ -99,6 +100,7 @@ export default function App() {
 
     const handleExitSession = () => {
         setSessionData(null);
+        setImpersonatedTeam(null);
     };
 
     const handleLogout = async () => {
@@ -108,6 +110,14 @@ export default function App() {
         }
     };
     
+     const effectiveSessionData = useMemo(() => {
+        if (sessionData && isAdmin && impersonatedTeam) {
+            return { ...sessionData, team: impersonatedTeam };
+        }
+        return sessionData;
+    }, [isAdmin, impersonatedTeam, sessionData]);
+
+
     if (loading) {
         return <div className="flex items-center justify-center min-h-screen text-white">Cargando sesión...</div>;
     }
@@ -116,19 +126,21 @@ export default function App() {
         return <Auth />;
     }
 
-    if (!sessionData) {
+    if (!effectiveSessionData) {
         return <SessionManager user={session.user} setSessionData={setSessionData} isAdmin={isAdmin} />;
     }
 
     return (
-        <SimulationProvider sessionData={sessionData}>
+        <SimulationProvider sessionData={effectiveSessionData} key={effectiveSessionData.sessionId}>
             <MainApp 
                 session={session}
-                sessionData={sessionData} 
+                sessionData={effectiveSessionData} 
                 completedScenarios={completedScenarios} 
                 updateProgress={updateProgress}
                 exitSession={handleExitSession}
                 logout={handleLogout}
+                isAdmin={isAdmin}
+                setImpersonatedTeam={setImpersonatedTeam}
             />
         </SimulationProvider>
     );
@@ -145,14 +157,25 @@ interface MainAppProps {
     updateProgress: (scenarioId: string) => void;
     exitSession: () => void;
     logout: () => void;
+    isAdmin: boolean;
+    setImpersonatedTeam: (team: 'red' | 'blue' | null) => void;
 }
 
-const MainApp: React.FC<MainAppProps> = ({ session, sessionData, completedScenarios, updateProgress, exitSession, logout }) => {
+const MainApp: React.FC<MainAppProps> = ({ session, sessionData, completedScenarios, updateProgress, exitSession, logout, isAdmin, setImpersonatedTeam }) => {
     const [activeTab, setActiveTab] = useState('terminal');
+    const impersonatedTeam = sessionData.team === 'spectator' ? null : sessionData.team;
 
     return (
         <div className="flex flex-col min-h-screen">
-            <Header activeTab={activeTab} sessionData={sessionData} exitSession={exitSession} logout={logout} />
+            <Header 
+                activeTab={activeTab} 
+                sessionData={sessionData} 
+                exitSession={exitSession} 
+                logout={logout}
+                isAdmin={isAdmin}
+                impersonatedTeam={impersonatedTeam}
+                setImpersonatedTeam={setImpersonatedTeam}
+            />
             <main className="container mx-auto p-4 md:p-8 mt-4 md:mt-8 flex-grow">
                 <Tabs activeTab={activeTab} setActiveTab={setActiveTab} />
                 <TabContent 
@@ -176,9 +199,12 @@ interface HeaderProps {
     sessionData: SessionData;
     exitSession: () => void;
     logout: () => void;
+    isAdmin: boolean;
+    impersonatedTeam: 'red' | 'blue' | null;
+    setImpersonatedTeam: (team: 'red' | 'blue' | null) => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ activeTab, sessionData, exitSession, logout }) => {
+const Header: React.FC<HeaderProps> = ({ activeTab, sessionData, exitSession, logout, isAdmin, impersonatedTeam, setImpersonatedTeam }) => {
     const tabs = ['inicio', 'capacitacion', 'recursos', 'terminal'];
     const tabIndex = tabs.indexOf(activeTab);
     const progressWidth = ((tabIndex + 1) / tabs.length) * 100;
@@ -228,6 +254,26 @@ const Header: React.FC<HeaderProps> = ({ activeTab, sessionData, exitSession, lo
                     </div>
                 </div>
             </div>
+            {isAdmin && (
+                 <div className="bg-yellow-900/50 text-center py-2 px-4 border-t border-yellow-500/30">
+                    <div className="flex items-center justify-center gap-4">
+                        <span className="text-yellow-200 font-bold text-sm">Panel de Admin:</span>
+                        {sessionData.team === 'spectator' ? (
+                            <>
+                                <button onClick={() => setImpersonatedTeam('red')} className="px-3 py-1 text-xs font-bold text-white bg-red-600/80 rounded-full hover:bg-red-600">Actuar como Rojo</button>
+                                <button onClick={() => setImpersonatedTeam('blue')} className="px-3 py-1 text-xs font-bold text-white bg-blue-600/80 rounded-full hover:bg-blue-600">Actuar como Azul</button>
+                            </>
+                        ) : (
+                             <div className="flex items-center gap-2">
+                                 <p className="text-white text-sm">
+                                    Actuando como <strong className={impersonatedTeam === 'red' ? 'text-red-400' : 'text-blue-400'}>Equipo {impersonatedTeam === 'red' ? 'Rojo' : 'Azul'}</strong>
+                                </p>
+                                <button onClick={() => setImpersonatedTeam(null)} className="px-3 py-1 text-xs font-bold text-black bg-yellow-400 rounded-full hover:bg-yellow-300">Volver a Observador</button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
             <div 
                 className="h-1 bg-gradient-to-r from-[var(--cv-dark-green)] to-[var(--cv-gold)] rounded-r-full transition-all duration-500 ease-out" 
                 style={{ width: `${progressWidth}%` }}
@@ -467,18 +513,19 @@ const TrainingModule: React.FC<TrainingModuleProps> = ({ scenario, isCompleted, 
     const currentStatus = isCompleted ? statusConfig.completed : statusConfig.initial;
 
     const renderContent = () => {
-        if ('content' in scenario) {
-            return scenario.content;
-        } else {
+        // FIX: Use the 'isInteractive' property as a type guard to differentiate between scenario types.
+        if (scenario.isInteractive) {
             // If this is the active scenario, 'environment' will be the live state.
             // Otherwise, it's null, so we show the initial state.
             const envForDisplay = environment ?? scenario.initialEnvironment;
 
-            return <ScenarioView 
-                scenario={scenario} 
+            return <ScenarioView
+                scenario={scenario}
                 environment={envForDisplay}
                 isActive={activeScenarioId === scenario.id}
             />;
+        } else {
+            return scenario.content;
         }
     };
 
