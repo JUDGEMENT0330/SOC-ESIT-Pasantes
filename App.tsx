@@ -456,17 +456,18 @@ const TrainingModule: React.FC<TrainingModuleProps> = ({ scenario, isCompleted, 
     const currentStatus = isCompleted ? statusConfig.completed : statusConfig.initial;
 
     const renderContent = () => {
-        // FIX: Properly handle the union type to avoid accessing 'content' on an InteractiveScenario.
-        if (scenario.isInteractive) {
-            // This path is for InteractiveScenario
+        // FIX: Use the 'in' operator for robust type guarding. This checks for the
+        // 'content' property to correctly identify a TrainingScenario.
+        if ('content' in scenario) {
+            // This path is for the standard TrainingScenario.
+            return scenario.content;
+        } else {
+            // This path is for an InteractiveScenario.
             if (environment) {
                 return <ScenarioView scenario={scenario} environment={environment} />;
             }
             // Fallback for when the interactive environment is not yet available.
             return <div className="text-center text-gray-400 p-4">Cargando entorno interactivo...</div>;
-        } else {
-            // This path is for the standard TrainingScenario, which is guaranteed to have 'content'.
-            return scenario.content;
         }
     };
 
