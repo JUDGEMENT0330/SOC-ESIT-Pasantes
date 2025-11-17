@@ -1,4 +1,3 @@
-
 import React, { useContext, useState, useEffect } from 'react';
 import { TerminalInstance } from './TerminalInstance';
 import { LogViewer } from './LogViewer';
@@ -6,18 +5,21 @@ import { Icon } from '../constants';
 import { SimulationContext } from '../SimulationContext';
 
 export const DualTerminalView: React.FC = () => {
-    const { terminals, processCommand, userTeam, environment, activeScenario, addNewTerminal } = useContext(SimulationContext);
+    const { terminals, processCommand, userTeam, environment, activeScenario, addNewTerminal, removeTerminal } = useContext(SimulationContext);
     
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
     
     useEffect(() => {
+        // Ensure an active terminal is always selected if terminals exist
         if (terminals.length > 0 && userTeam !== 'spectator') {
             const currentActiveTerminal = terminals.find(t => t.id === activeTerminalId);
-            // Si la terminal activa no está en la lista (o no está establecida), selecciona una nueva.
-            if (!currentActiveTerminal) { 
-                const preferredTerminal = terminals.find(t => t.id.startsWith(userTeam as string));
-                setActiveTerminalId(preferredTerminal ? preferredTerminal.id : terminals[0].id);
+            if (!currentActiveTerminal) {
+                // Prefer the user's team's primary terminal if available
+                const preferredTerminal = terminals.find(t => t.id === `${userTeam}-1`);
+                setActiveTerminalId(preferredTerminal ? preferredTerminal.id : terminals[terminals.length - 1].id);
             }
+        } else if (terminals.length === 0) {
+            setActiveTerminalId(null);
         }
     }, [terminals, activeTerminalId, userTeam]);
 
@@ -30,10 +32,15 @@ export const DualTerminalView: React.FC = () => {
         }
     };
 
+    const handleRemoveTerminal = (e: React.MouseEvent, terminalId: string) => {
+        e.stopPropagation(); // Prevent tab selection when clicking the close button
+        removeTerminal(terminalId);
+    };
+
     if (userTeam === 'spectator') {
         const [spectatorViewMode, setSpectatorViewMode] = useState<'dual' | 'red' | 'blue'>('dual');
-        const redTerminal = terminals.find(t => t.id.startsWith('red'));
-        const blueTerminal = terminals.find(t => t.id.startsWith('blue'));
+        const redTerminals = terminals.filter(t => t.id.startsWith('red'));
+        const blueTerminals = terminals.filter(t => t.id.startsWith('blue'));
 
         const getButtonClass = (mode: 'dual' | 'red' | 'blue') => {
             const base = 'px-3 py-1 text-xs font-bold rounded-full transition-colors';
@@ -67,17 +74,17 @@ export const DualTerminalView: React.FC = () => {
                     <div className={`grid gap-4 ${spectatorViewMode === 'dual' ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
                         {(spectatorViewMode === 'dual' || spectatorViewMode === 'red') && (
                             <div>
-                                <h3 className="font-bold text-red-400 mb-2 text-center">Terminal Equipo Rojo</h3>
-                                {redTerminal ? (
-                                    <TerminalInstance terminalState={redTerminal} environment={environment} onCommand={() => {}} isReadOnly={true} />
+                                <h3 className="font-bold text-red-400 mb-2 text-center">Terminales Equipo Rojo ({redTerminals.length})</h3>
+                                {redTerminals.length > 0 ? (
+                                    redTerminals.map(term => <TerminalInstance key={term.id} terminalState={term} environment={environment} onCommand={() => {}} isReadOnly={true} />)
                                 ) : <div className="h-[400px] bg-black/20 rounded-lg flex items-center justify-center text-gray-500">Terminal inactiva</div>}
                             </div>
                         )}
                         {(spectatorViewMode === 'dual' || spectatorViewMode === 'blue') && (
                             <div>
-                                <h3 className="font-bold text-blue-400 mb-2 text-center">Terminal Equipo Azul</h3>
-                                {blueTerminal ? (
-                                    <TerminalInstance terminalState={blueTerminal} environment={environment} onCommand={() => {}} isReadOnly={true} />
+                                <h3 className="font-bold text-blue-400 mb-2 text-center">Terminales Equipo Azul ({blueTerminals.length})</h3>
+                                {blueTerminals.length > 0 ? (
+                                    blueTerminals.map(term => <TerminalInstance key={term.id} terminalState={term} environment={environment} onCommand={() => {}} isReadOnly={true} />)
                                 ) : <div className="h-[400px] bg-black/20 rounded-lg flex items-center justify-center text-gray-500">Terminal inactiva</div>}
                             </div>
                         )}
@@ -110,23 +117,35 @@ export const DualTerminalView: React.FC = () => {
             </div>
 
             <div className="flex items-center border-b border-gray-700 mb-2">
-                {terminals.map(term => (
-                    <button
-                        key={term.id}
-                        onClick={() => setActiveTerminalId(term.id)}
-                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                            activeTerminalId === term.id
-                                ? 'border-[var(--cv-gold)] text-white'
-                                : 'border-transparent text-gray-400 hover:text-white'
-                        }`}
-                    >
-                        {term.name}
-                    </button>
-                ))}
+                {terminals.map(term => {
+                    const isPrimary = term.id === 'red-1' || term.id === 'blue-1';
+                    return (
+                        <button
+                            key={term.id}
+                            onClick={() => setActiveTerminalId(term.id)}
+                            className={`flex items-center gap-2 pr-2 pl-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                activeTerminalId === term.id
+                                    ? 'border-[var(--cv-gold)] text-white'
+                                    : 'border-transparent text-gray-400 hover:text-white'
+                            }`}
+                        >
+                            <span>{term.name}</span>
+                            {!isPrimary && (
+                                <span 
+                                    onClick={(e) => handleRemoveTerminal(e, term.id)} 
+                                    className="p-1 rounded-full hover:bg-red-500/50" 
+                                    title="Cerrar terminal"
+                                >
+                                    <Icon name="trash" className="h-3 w-3" />
+                                </span>
+                            )}
+                        </button>
+                    )
+                })}
                  <button
                     onClick={addNewTerminal}
                     className="px-3 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
-                    title="Abrir nueva terminal (local, no se guarda)"
+                    title="Abrir nueva terminal"
                 >
                     <Icon name="plus-circle" className="h-5 w-5" />
                 </button>
