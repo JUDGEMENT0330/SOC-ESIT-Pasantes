@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 
@@ -39,7 +40,7 @@ export const Auth: React.FC = () => {
                          <div className="flex justify-center items-center space-x-3 md:space-x-4 mb-4">
                             <div className="p-2 bg-gray-900/50 rounded-lg shadow-lg flex-shrink-0">
                                 <img 
-                                    src="https://cybervaltorix.com/wp-content/uploads/2025/09/Logo-Valtorix-1.png" 
+                                    src="https://cybervaltorix.com/wp-content/uploads/2025/09/Cyber-Valtorix-1.png" 
                                     alt="Logo Cyber Valtorix" 
                                     className="h-10 w-10 md:h-12 md:w-12 object-contain"
                                     onError={(e) => (e.currentTarget.src = 'https://placehold.co/48x48/2d5016/b8860b?text=CV')}
