@@ -10,14 +10,16 @@ class CommandHistory {
     private maxSize: number = 1000;
     private currentIndex: number = -1;
     
-    constructor() { this.loadFromStorage(); }
+    constructor(initialHistory: string[] = []) { 
+        this.history = initialHistory;
+        this.currentIndex = this.history.length;
+    }
     
     add(command: string): void {
         if (!command.trim() || this.history[this.history.length - 1] === command) return;
         this.history.push(command);
         if (this.history.length > this.maxSize) this.history.shift();
         this.currentIndex = this.history.length;
-        this.saveToStorage();
     }
     
     navigateUp(): string | null {
@@ -45,21 +47,6 @@ class CommandHistory {
     }
     
     reset(): void { this.currentIndex = this.history.length; }
-    
-    private saveToStorage(): void {
-        try { localStorage.setItem('terminal_history', JSON.stringify(this.history)); } 
-        catch (e) { console.warn('No se pudo guardar el historial:', e); }
-    }
-    
-    private loadFromStorage(): void {
-        try {
-            const stored = localStorage.getItem('terminal_history');
-            if (stored) {
-                this.history = JSON.parse(stored);
-                this.currentIndex = this.history.length;
-            }
-        } catch (e) { console.warn('No se pudo cargar el historial:', e); }
-    }
 }
 
 // ============================================================================
@@ -137,15 +124,16 @@ interface TerminalInstanceProps {
     terminalState: TerminalState;
     environment: VirtualEnvironment | null;
     onCommand: (command: string) => void;
-    onInputChange: (input: string) => void;
+    isReadOnly?: boolean;
 }
 
-export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalState, environment, onCommand, onInputChange }) => {
-    const { output, prompt, input, isBusy } = terminalState;
+export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalState, environment, onCommand, isReadOnly = false }) => {
+    const { output, prompt, isBusy } = terminalState;
     
+    const [input, setInput] = useState('');
     const endOfOutputRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
-    const history = useRef(new CommandHistory());
+    const history = useRef(new CommandHistory(terminalState.history));
     
     const [searchMode, setSearchMode] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -153,6 +141,10 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalStat
     const [autocomplete, setAutocomplete] = useState<AutocompleteResult | null>(null);
 
     const autocompleteEngine = useMemo(() => new AutocompleteEngine(environment), [environment]);
+
+    useEffect(() => {
+        history.current = new CommandHistory(terminalState.history);
+    }, [terminalState.history]);
 
     useEffect(() => {
         endOfOutputRef.current?.scrollIntoView({ behavior: "instant" });
@@ -169,22 +161,22 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalStat
     }, [searchQuery, searchMode]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (isBusy) return;
+        if (isBusy || isReadOnly) return;
 
         if (e.ctrlKey && e.key === 'r') {
             e.preventDefault();
             setSearchMode(true);
             setSearchQuery('');
-            onInputChange('');
+            setInput('');
         } else if (searchMode) {
              if (e.key === 'Escape') {
                 e.preventDefault();
                 setSearchMode(false);
-                onInputChange('');
+                setInput('');
             } else if (e.key === 'Enter') {
                 e.preventDefault();
                 const bestMatch = searchResults[0] || searchQuery;
-                onInputChange(bestMatch);
+                setInput(bestMatch);
                 setSearchMode(false);
                 setTimeout(() => inputRef.current?.focus(), 0);
             }
@@ -194,19 +186,20 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalStat
                 history.current.add(input);
                 history.current.reset();
                 onCommand(input);
+                setInput('');
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
-                onInputChange(history.current.navigateUp() ?? input);
+                setInput(history.current.navigateUp() ?? input);
             } else if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                onInputChange(history.current.navigateDown() ?? '');
+                setInput(history.current.navigateDown() ?? '');
             } else if (e.key === 'Tab') {
                 e.preventDefault();
                 const result = autocompleteEngine.autocomplete(input);
                 if (result.suggestions.length === 1) {
                     const tokens = input.split(' ');
                     tokens[tokens.length - 1] = result.suggestions[0];
-                    onInputChange(tokens.join(' ') + ' ');
+                    setInput(tokens.join(' ') + ' ');
                     setAutocomplete(null);
                 } else if (result.suggestions.length > 1) {
                     if (result.commonPrefix) {
@@ -214,7 +207,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalStat
                         const currentToken = tokens[tokens.length - 1];
                         if (result.commonPrefix.length > currentToken.length) {
                              tokens[tokens.length - 1] = result.commonPrefix;
-                             onInputChange(tokens.join(' '));
+                             setInput(tokens.join(' '));
                         }
                     }
                     setAutocomplete(result);
@@ -225,9 +218,9 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalStat
         }
     };
 
-    const placeholder = isBusy ? "Procesando comando..." : "Escriba un comando y presione Enter...";
+    const placeholder = isReadOnly ? "Modo de solo lectura" : isBusy ? "Procesando comando..." : "Escriba un comando y presione Enter...";
     const currentInput = searchMode ? searchQuery : input;
-    const handleInputChange = searchMode ? setSearchQuery : onInputChange;
+    const handleInputChange = searchMode ? setSearchQuery : setInput;
 
     return (
         <div 
@@ -247,30 +240,32 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalStat
                 <div ref={endOfOutputRef} />
             </div>
             
-            <div className="mt-2 flex-shrink-0">
-                {searchMode && (
-                    <div className="text-yellow-400 text-xs mb-1">
-                        (reverse-i-search)`{searchQuery}': {searchResults[0] || 'ninguna coincidencia'}
+             {!isReadOnly && (
+                <div className="mt-2 flex-shrink-0">
+                    {searchMode && (
+                        <div className="text-yellow-400 text-xs mb-1">
+                            (reverse-i-search)`{searchQuery}': {searchResults[0] || 'ninguna coincidencia'}
+                        </div>
+                    )}
+                    <div className="flex items-center">
+                        {!searchMode && <Prompt {...prompt} />}
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            className="bg-transparent border-none outline-none text-white font-mono text-sm w-full"
+                            value={currentInput}
+                            onChange={e => handleInputChange(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            autoFocus
+                            autoComplete="off"
+                            autoCapitalize="off"
+                            spellCheck="false"
+                            disabled={(isBusy && !searchMode) || isReadOnly}
+                            placeholder={placeholder}
+                        />
                     </div>
-                )}
-                <div className="flex items-center">
-                    {!searchMode && <Prompt {...prompt} />}
-                    <input
-                        ref={inputRef}
-                        type="text"
-                        className="bg-transparent border-none outline-none text-white font-mono text-sm w-full"
-                        value={currentInput}
-                        onChange={e => handleInputChange(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        autoFocus
-                        autoComplete="off"
-                        autoCapitalize="off"
-                        spellCheck="false"
-                        disabled={isBusy && !searchMode}
-                        placeholder={placeholder}
-                    />
                 </div>
-            </div>
+            )}
 
             {autocomplete && autocomplete.suggestions.length > 1 && (
                 <div className="absolute bottom-10 left-3 bg-gray-900 border border-gray-700 rounded p-1 z-10 grid grid-cols-3 gap-x-4 gap-y-1">
