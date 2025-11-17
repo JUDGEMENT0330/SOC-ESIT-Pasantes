@@ -367,6 +367,13 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         };
     }, []);
 
+    const updateStateFromPayload = useCallback((payload: SimulationStateRow) => {
+        const scenario = TRAINING_SCENARIOS.find(s => s.id === payload.scenario_id) as InteractiveScenario | undefined;
+        setActiveScenario(scenario ?? null);
+        setEnvironment(payload.live_environment ?? null);
+        setTerminals(payload.terminals ?? []);
+    }, []);
+    
     const updateDbState = useCallback(async (state: Partial<SimulationStateRow>) => {
         const { error } = await supabase
             .from('simulation_state')
@@ -374,30 +381,6 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             .eq('session_id', sessionId);
         if (error) console.error('Failed to sync state:', error);
     }, [sessionId]);
-
-    const addNewTerminal = useCallback(() => {
-        if (team === 'spectator' || !team) return;
-        const teamTerminals = terminals.filter(t => t.id.startsWith(team));
-        const newId = `${team}-${crypto.randomUUID()}`;
-        const newName = `Terminal #${teamTerminals.length + 1}`;
-        const newTerminal = createNewTerminal(newId, newName, team, activeScenario?.title);
-        const newTerminals = [...terminals, newTerminal];
-        setTerminals(newTerminals);
-        updateDbState({ terminals: newTerminals });
-    }, [team, terminals, activeScenario, createNewTerminal, updateDbState]);
-
-    const removeTerminal = useCallback((terminalId: string) => {
-        const newTerminals = terminals.filter(t => t.id !== terminalId);
-        setTerminals(newTerminals);
-        updateDbState({ terminals: newTerminals });
-    }, [terminals, updateDbState]);
-
-    const updateStateFromPayload = useCallback((payload: SimulationStateRow) => {
-        const scenario = TRAINING_SCENARIOS.find(s => s.id === payload.scenario_id) as InteractiveScenario | undefined;
-        setActiveScenario(scenario ?? null);
-        setEnvironment(payload.live_environment ?? null);
-        setTerminals(payload.terminals ?? []);
-    }, []);
 
     useEffect(() => {
         const fetchAndSetInitialState = async () => {
@@ -407,16 +390,36 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                 .eq('session_id', sessionId)
                 .single();
 
-            if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found, which is fine.
+            if (error && error.code !== 'PGRST116') { // PGRST116 is "No rows found", which is not an error here.
                 console.error("Error fetching initial state:", error);
                 return;
             }
-            if (data) {
+
+            const currentUserTeam = team as 'red' | 'blue' | 'spectator';
+            const existingTerminals = data?.terminals || [];
+            const userTerminalExists = existingTerminals.some(t => t.id.startsWith(currentUserTeam));
+
+            if ((currentUserTeam === 'red' || currentUserTeam === 'blue') && !userTerminalExists) {
+                const teamName = currentUserTeam === 'red' ? 'Rojo' : 'Azul';
+                const newUserTerminal = createNewTerminal(`${currentUserTeam}-1`, `Terminal ${teamName}`, currentUserTeam);
+                const updatedTerminals = [...existingTerminals, newUserTerminal];
+
+                updateStateFromPayload({ ...(data || { session_id: sessionId }), terminals: updatedTerminals });
+
+                const { error: upsertError } = await supabase
+                    .from('simulation_state')
+                    .upsert({
+                        session_id: sessionId,
+                        scenario_id: data?.scenario_id || null,
+                        live_environment: data?.live_environment || null,
+                        terminals: updatedTerminals,
+                    });
+
+                if (upsertError) {
+                    console.error("Failed to create or update terminal state in DB:", upsertError);
+                }
+            } else if (data) {
                 updateStateFromPayload(data);
-            } else if (team === 'red' || team === 'blue') {
-                // Initial state for a new session if no state row exists yet
-                const initialTerminals = [createNewTerminal(`${team}-1`, `Terminal ${team === 'red' ? 'Rojo' : 'Azul'}`, team)];
-                setTerminals(initialTerminals);
             }
         };
 
@@ -444,7 +447,24 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                 channelRef.current = null;
             }
         };
-    }, [sessionId, updateStateFromPayload, team, createNewTerminal]);
+    }, [sessionId, team, createNewTerminal, updateStateFromPayload, updateDbState]);
+
+    const addNewTerminal = useCallback(() => {
+        if (team === 'spectator' || !team) return;
+        const teamTerminals = terminals.filter(t => t.id.startsWith(team));
+        const newId = `${team}-${crypto.randomUUID()}`;
+        const newName = `Terminal #${teamTerminals.length + 1}`;
+        const newTerminal = createNewTerminal(newId, newName, team, activeScenario?.title);
+        const newTerminals = [...terminals, newTerminal];
+        setTerminals(newTerminals);
+        updateDbState({ terminals: newTerminals });
+    }, [team, terminals, activeScenario, createNewTerminal, updateDbState]);
+
+    const removeTerminal = useCallback((terminalId: string) => {
+        const newTerminals = terminals.filter(t => t.id !== terminalId);
+        setTerminals(newTerminals);
+        updateDbState({ terminals: newTerminals });
+    }, [terminals, updateDbState]);
 
     const startScenario = useCallback(async (scenarioId: string): Promise<boolean> => {
         const scenario = TRAINING_SCENARIOS.find(s => s.id === scenarioId && s.isInteractive) as InteractiveScenario | undefined;
