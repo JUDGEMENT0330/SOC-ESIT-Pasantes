@@ -5,7 +5,7 @@ import { Icon } from '../constants';
 import { SimulationContext } from '../SimulationContext';
 
 export const DualTerminalView: React.FC = () => {
-    const { terminals, addTerminal, updateTerminalInput, processCommand, userTeam } = useContext(SimulationContext);
+    const { terminals, addTerminal, updateTerminalInput, processCommand, userTeam, navigateHistory } = useContext(SimulationContext);
     
     // Ensure there's always an active terminal if terminals exist
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
@@ -32,6 +32,12 @@ export const DualTerminalView: React.FC = () => {
     const handleInputChange = (input: string) => {
         if (activeTerminalId) {
             updateTerminalInput(activeTerminalId, input);
+        }
+    };
+
+    const handleHistoryNav = (direction: 'up' | 'down') => {
+        if (activeTerminalId) {
+            navigateHistory(activeTerminalId, direction);
         }
     };
 
@@ -85,6 +91,7 @@ export const DualTerminalView: React.FC = () => {
                             terminalState={activeTerminal}
                             onCommand={handleCommand}
                             onInputChange={handleInputChange}
+                            onHistoryNav={handleHistoryNav}
                         />
                     ) : (
                         <div className="bg-[#0a0f1c] border border-gray-700 rounded-lg h-[400px] flex items-center justify-center text-gray-400">
