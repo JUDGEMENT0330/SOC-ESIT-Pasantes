@@ -5,23 +5,25 @@ import { Icon } from '../constants';
 import { SimulationContext } from '../SimulationContext';
 
 export const DualTerminalView: React.FC = () => {
-    const { terminals, processCommand, userTeam, environment, activeScenario } = useContext(SimulationContext);
+    const { terminals, processCommand, userTeam, environment, activeScenario, addNewTerminal, removeTerminal } = useContext(SimulationContext);
     
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
     
+    // Filter to only show terminals for the current user's team
+    const teamTerminals = userTeam !== 'spectator' ? terminals.filter(t => t.id.startsWith(userTeam as string)) : [];
+
     useEffect(() => {
-        // Ensure an active terminal is always selected if terminals exist
-        if (terminals.length > 0 && userTeam !== 'spectator') {
-            const currentActiveTerminal = terminals.find(t => t.id === activeTerminalId);
+        // Automatically select a terminal for the user
+        if (teamTerminals.length > 0) {
+            const currentActiveTerminal = teamTerminals.find(t => t.id === activeTerminalId);
+            // If the active terminal is no longer valid (e.g., it was removed) or none is selected, select one.
             if (!currentActiveTerminal) {
-                // Prefer the user's team's primary terminal if available
-                const preferredTerminal = terminals.find(t => t.id === `${userTeam}-1`);
-                setActiveTerminalId(preferredTerminal ? preferredTerminal.id : terminals[terminals.length - 1].id);
+                setActiveTerminalId(teamTerminals[teamTerminals.length - 1].id);
             }
-        } else if (terminals.length === 0) {
+        } else {
             setActiveTerminalId(null);
         }
-    }, [terminals, activeTerminalId, userTeam]);
+    }, [terminals, userTeam, activeTerminalId]); // Rerun when terminals change
 
 
     const activeTerminal = terminals.find(t => t.id === activeTerminalId);
@@ -92,7 +94,7 @@ export const DualTerminalView: React.FC = () => {
         );
     }
 
-    if (terminals.length === 0) {
+    if (teamTerminals.length === 0) {
         return (
             <div className="bg-[rgba(45,80,22,0.85)] p-4 md:p-6 rounded-2xl border border-[rgba(184,134,11,0.3)] text-center h-[500px] flex flex-col justify-center items-center">
                 <Icon name="terminal" className="h-16 w-16 text-gray-400 mb-4"/>
@@ -112,7 +114,7 @@ export const DualTerminalView: React.FC = () => {
             </div>
 
             <div className="flex items-center border-b border-gray-700 mb-2">
-                {terminals.map(term => {
+                {teamTerminals.map(term => {
                     return (
                         <button
                             key={term.id}
@@ -124,9 +126,21 @@ export const DualTerminalView: React.FC = () => {
                             }`}
                         >
                             <span>{term.name}</span>
+                             {teamTerminals.length > 1 && (
+                                <span 
+                                    onClick={(e) => { e.stopPropagation(); removeTerminal(term.id); }} 
+                                    className="ml-1 p-1 rounded-full hover:bg-red-900/50"
+                                    title="Cerrar terminal"
+                                >
+                                    <Icon name="trash" className="h-3 w-3 text-red-400"/>
+                                </span>
+                            )}
                         </button>
                     )
                 })}
+                 <button onClick={addNewTerminal} className="p-2 text-gray-400 hover:text-white" title="Añadir nueva terminal">
+                    <Icon name="plus-circle" className="h-5 w-5" />
+                </button>
             </div>
 
             <div className="w-full mx-auto">
