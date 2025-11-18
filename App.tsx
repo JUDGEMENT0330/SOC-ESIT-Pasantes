@@ -2,6 +2,9 @@
 
 
 
+
+
+
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { DualTerminalView } from './components/DualTerminalView';
 import { Auth } from './components/Auth';
@@ -107,34 +110,18 @@ export default function App() {
             return;
         }
 
-        if (team === null) {
-            // Volver al modo espectador. Eliminar el registro de participante específico.
-            const { error } = await supabase
-                .from('session_participants')
-                .delete()
-                .eq('session_id', sessionData.sessionId)
-                .eq('user_id', session.user.id);
+        const { error } = await supabase.rpc('set_admin_participation', {
+            p_session_id: sessionData.sessionId,
+            p_team_role: team
+        });
 
-            if (error) {
-                console.error('Error al eliminar el participante administrador:', error);
-            }
+        if (error) {
+            console.error('Error al actualizar la participación del administrador a través de RPC:', error);
+            // Opcional: mostrar un mensaje de error al usuario.
         } else {
-            // Suplantar la identidad de un equipo. Actualizar o insertar el registro.
-            const { error } = await supabase
-                .from('session_participants')
-                .upsert({
-                    session_id: sessionData.sessionId,
-                    user_id: session.user.id,
-                    team_role: team
-                });
-
-            if (error) {
-                console.error('Error al añadir al administrador como participante:', error);
-            }
+            // Solo actualiza el estado local si la operación de la base de datos fue exitosa.
+            setImpersonatedTeam(team);
         }
-        
-        // Actualizar el estado local para volver a renderizar la UI
-        setImpersonatedTeam(team);
     };
 
     const handleExitSession = () => {
@@ -205,7 +192,7 @@ const MainApp: React.FC<MainAppProps> = ({ session, sessionData, completedScenar
     const impersonatedTeam = sessionData.team === 'spectator' ? null : sessionData.team;
 
     return (
-        <div className="flex flex-col min-h-screen">
+        <div className="flex flex-col min-h-screen font-sans">
             <Header 
                 activeTab={activeTab} 
                 sessionData={sessionData} 
@@ -260,63 +247,64 @@ const Header: React.FC<HeaderProps> = ({ activeTab, sessionData, exitSession, lo
 
 
     return (
-        <header className="glass-morphism shadow-2xl relative bg-[rgba(45,80,22,0.85)] backdrop-blur-xl border border-[rgba(184,134,11,0.3)]">
+        <header className="shadow-2xl relative bg-slate-950/80 backdrop-blur-xl border-b border-slate-800">
             <div className="container mx-auto px-4 py-4 md:px-6 md:py-6">
                 <div className="flex items-center justify-between">
                      <div className="flex items-center space-x-3 md:space-x-4">
-                        <div className="p-2 bg-gray-900/50 rounded-lg shadow-lg flex-shrink-0">
+                        <div className="p-2 bg-slate-900 rounded-lg shadow-lg border border-slate-800 flex-shrink-0">
                              <img 
                                 src="https://cybervaltorix.com/wp-content/uploads/2025/09/Cyber-Valtorix-1.png" 
                                 alt="Logo Cyber Valtorix" 
                                 className="h-10 w-10 md:h-12 md:w-12 object-contain"
-                                onError={(e) => (e.currentTarget.src = 'https://placehold.co/48x48/2d5016/b8860b?text=CV')}
+                                onError={(e) => (e.currentTarget.src = 'https://placehold.co/48x48/1e293b/3b82f6?text=CV')}
                             />
                         </div>
                          <div>
-                            <h1 className="text-xl sm:text-2xl font-bold text-white">CYBER VALTORIX</h1>
-                            <p className="text-yellow-200 text-xs sm:text-sm font-medium">Taller de Inducción SOC</p>
+                            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">CYBER VALTORIX</h1>
+                            <p className="text-slate-400 text-xs sm:text-sm font-medium tracking-wide uppercase">SOC Induction Framework v2.0</p>
                         </div>
                     </div>
-                    <div className="flex items-center space-x-2 md:space-x-4">
-                        <div className="text-right">
-                           <p className="text-white text-sm truncate max-w-[100px] sm:max-w-xs" title={sessionData.sessionName}>Sesión: {sessionData.sessionName}</p>
-                           <p className={`text-xs mt-1 font-bold ${teamDisplay.color}`}>
-                                Equipo: {teamDisplay.text}
+                    <div className="flex items-center space-x-3 md:space-x-6">
+                        <div className="text-right hidden sm:block">
+                           <p className="text-white text-sm font-semibold truncate max-w-[150px]" title={sessionData.sessionName}>{sessionData.sessionName}</p>
+                           <p className={`text-xs mt-0.5 font-bold uppercase tracking-wider ${teamDisplay.color}`}>
+                                {teamDisplay.text}
                            </p>
                         </div>
-                        <button onClick={exitSession} className="bg-yellow-600/50 hover:bg-yellow-600/80 p-2 rounded-full transition-colors" title="Salir de la Sesión">
-                            <Icon name="log-out" className="h-5 w-5 text-white" />
-                        </button>
-                         <button onClick={logout} className="bg-red-600/50 hover:bg-red-600/80 p-2 rounded-full transition-colors" title="Cerrar Sesión">
-                            <Icon name="power" className="h-5 w-5 text-white" />
-                        </button>
+                        <div className="flex space-x-2">
+                            <button onClick={exitSession} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-2 rounded-lg transition-all hover:scale-105" title="Salir de la Sesión">
+                                <Icon name="log-out" className="h-5 w-5 text-slate-300" />
+                            </button>
+                             <button onClick={logout} className="bg-red-900/20 hover:bg-red-900/40 border border-red-900/50 p-2 rounded-lg transition-all hover:scale-105" title="Cerrar Sesión">
+                                <Icon name="power" className="h-5 w-5 text-red-400" />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
             {isAdmin && (
-                 <div className="bg-yellow-900/50 text-center py-2 px-4 border-t border-yellow-500/30">
+                 <div className="bg-slate-900/80 text-center py-2 px-4 border-t border-yellow-500/20">
                     <div className="flex items-center justify-center gap-4">
-                        <span className="text-yellow-200 font-bold text-sm">Panel de Admin:</span>
+                        <span className="text-yellow-500 font-bold text-xs uppercase tracking-widest">Admin Mode:</span>
                         {sessionData.team === 'spectator' ? (
                             <>
-                                <button onClick={() => setImpersonatedTeam('red')} className="px-3 py-1 text-xs font-bold text-white bg-red-600/80 rounded-full hover:bg-red-600">Actuar como Rojo</button>
-                                <button onClick={() => setImpersonatedTeam('blue')} className="px-3 py-1 text-xs font-bold text-white bg-blue-600/80 rounded-full hover:bg-blue-600">Actuar como Azul</button>
+                                <button onClick={() => setImpersonatedTeam('red')} className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white bg-red-600/80 rounded hover:bg-red-600 transition-colors">Join Red</button>
+                                <button onClick={() => setImpersonatedTeam('blue')} className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white bg-blue-600/80 rounded hover:bg-blue-600 transition-colors">Join Blue</button>
                             </>
                         ) : (
                              <div className="flex items-center gap-2">
-                                 <p className="text-white text-sm">
-                                    Actuando como <strong className={impersonatedTeam === 'red' ? 'text-red-400' : 'text-blue-400'}>Equipo {impersonatedTeam === 'red' ? 'Rojo' : 'Azul'}</strong>
+                                 <p className="text-slate-300 text-xs">
+                                    Acting as <strong className={impersonatedTeam === 'red' ? 'text-red-400' : 'text-blue-400'}>{impersonatedTeam === 'red' ? 'RED TEAM' : 'BLUE TEAM'}</strong>
                                 </p>
-                                <button onClick={() => setImpersonatedTeam(null)} className="px-3 py-1 text-xs font-bold text-black bg-yellow-400 rounded-full hover:bg-yellow-300">Volver a Observador</button>
+                                <button onClick={() => setImpersonatedTeam(null)} className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-black bg-yellow-500 rounded hover:bg-yellow-400 transition-colors">Reset to Spectator</button>
                             </div>
                         )}
                     </div>
                 </div>
             )}
             <div 
-                className="h-1 bg-gradient-to-r from-[var(--cv-dark-green)] to-[var(--cv-gold)] rounded-r-full transition-all duration-500 ease-out" 
+                className="h-[2px] bg-gradient-to-r from-blue-600 via-purple-500 to-pink-500 shadow-[0_0_10px_rgba(59,130,246,0.5)] transition-all duration-500 ease-out" 
                 style={{ width: `${progressWidth}%` }}
-                id="progress-bar"
             ></div>
         </header>
     );
@@ -324,9 +312,9 @@ const Header: React.FC<HeaderProps> = ({ activeTab, sessionData, exitSession, lo
 
 const Footer: React.FC = () => (
     <footer className="text-center py-8 px-4">
-        <div className="glass-morphism rounded-xl p-6 max-w-2xl mx-auto bg-[rgba(45,80,22,0.85)] backdrop-blur-xl border border-[rgba(184,134,11,0.3)]">
-            <p className="text-white text-sm font-medium mb-2">CYBER VALTORIX S.A. DE C.V.</p>
-            <p className="text-gray-400 text-xs">Plataforma de Inducción del Centro de Operaciones de Seguridad (SOC)</p>
+        <div className="glass-morphism rounded-xl p-6 max-w-2xl mx-auto bg-slate-900/40 border border-slate-800">
+            <p className="text-slate-300 text-sm font-medium mb-2">CYBER VALTORIX S.A. DE C.V.</p>
+            <p className="text-slate-500 text-xs">Plataforma de Inducción del Centro de Operaciones de Seguridad (SOC)</p>
         </div>
     </footer>
 );
@@ -337,11 +325,11 @@ const Footer: React.FC = () => (
 // ============================================================================
 
 const TABS_CONFIG = [
-    { id: 'terminal', icon: 'terminal', label: 'Terminal (Simulada)' },
-    { id: 'capacitacion', icon: 'graduation-cap', label: 'Capacitación SOC' },
+    { id: 'terminal', icon: 'terminal', label: 'Terminal' },
+    { id: 'capacitacion', icon: 'graduation-cap', label: 'Capacitación' },
     { id: 'recursos', icon: 'library', label: 'Recursos' },
     { id: 'evaluacion', icon: 'star', label: 'Evaluación' },
-    { id: 'inicio', icon: 'book-open', label: 'Inicio (Glosario)' },
+    { id: 'inicio', icon: 'book-open', label: 'Glosario' },
 ];
 
 const Tabs: React.FC<{ activeTab: string; setActiveTab: (tab: string) => void }> = ({ activeTab, setActiveTab }) => {
@@ -359,21 +347,21 @@ const Tabs: React.FC<{ activeTab: string; setActiveTab: (tab: string) => void }>
     }, [activeTab]);
 
     return (
-        <div className="mb-8 sticky top-0 md:top-auto md:relative z-50 -mx-4 px-4 py-3 bg-[var(--cv-dark-green)]/90 backdrop-blur-lg md:bg-transparent md:backdrop-blur-none md:-mx-0 md:px-0 md:py-0">
-            <nav className="flex overflow-x-auto whitespace-nowrap space-x-3 md:flex-wrap md:gap-3 md:space-x-0 nav-tabs scrollbar-hide" aria-label="Tabs">
+        <div className="mb-8 sticky top-0 md:top-auto md:relative z-50 -mx-4 px-4 py-3 bg-slate-950/90 backdrop-blur-lg md:bg-transparent md:backdrop-blur-none md:-mx-0 md:px-0 md:py-0 border-b md:border-none border-slate-800">
+            <nav className="flex overflow-x-auto whitespace-nowrap space-x-2 md:flex-wrap md:gap-2 md:space-x-0 nav-tabs scrollbar-hide" aria-label="Tabs">
                 {TABS_CONFIG.map((tab, index) => (
                     <button
                         key={tab.id}
                         ref={el => { tabRefs.current[index] = el; }}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`nav-tab flex-shrink-0 p-3 md:p-4 md:px-6 rounded-xl font-semibold transition-all duration-300 ease-out flex items-center justify-center md:justify-start
+                        className={`nav-tab flex-shrink-0 px-4 py-3 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center justify-center
                             ${activeTab === tab.id
-                                ? 'bg-gradient-to-r from-[var(--cv-dark-green)] to-[var(--cv-gold)] text-white transform -translate-y-0.5 shadow-lg shadow-[rgba(184,134,11,0.4)]'
-                                : 'bg-[rgba(85,107,47,0.6)] text-slate-300 border border-[rgba(184,134,11,0.2)] hover:bg-[rgba(184,134,11,0.1)] hover:-translate-y-px hover:border-[var(--cv-gold)]'
+                                ? 'bg-slate-800 text-white shadow-lg border border-slate-600'
+                                : 'bg-transparent text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
                             }`}
                     >
-                        <Icon name={tab.icon} className="h-5 w-5 mr-0 md:mr-2" />
-                        <span className="hidden md:inline">{tab.label}</span>
+                        <Icon name={tab.icon} className={`h-4 w-4 mr-2 ${activeTab === tab.id ? 'text-blue-400' : 'text-slate-500'}`} />
+                        <span>{tab.label}</span>
                     </button>
                 ))}
             </nav>
@@ -420,10 +408,10 @@ const TabContent: React.FC<TabContentProps> = ({ activeTab, completedScenarios, 
 // ============================================================================
 
 const SectionWrapper: React.FC<{ children: React.ReactNode, title: string, subtitle: string, className?: string }> = ({ children, title, subtitle, className }) => (
-    <div className={`glass-morphism p-6 md:p-8 rounded-2xl shadow-2xl bg-[rgba(45,80,22,0.85)] backdrop-blur-xl border border-[rgba(184,134,11,0.3)] ${className}`}>
-        <div className="text-center mb-8">
-            <h2 className="text-2xl md:text-3xl font-bold mb-4 text-white">{title}</h2>
-            <p className="text-base md:text-lg text-gray-300 max-w-3xl mx-auto">{subtitle}</p>
+    <div className={`glass-morphism p-6 md:p-8 rounded-2xl bg-slate-900/60 border border-slate-800 ${className}`}>
+        <div className="mb-8 border-b border-slate-800 pb-6">
+            <h2 className="text-2xl md:text-3xl font-bold mb-2 text-white">{title}</h2>
+            <p className="text-sm md:text-base text-slate-400">{subtitle}</p>
         </div>
         {children}
     </div>
@@ -432,11 +420,13 @@ const SectionWrapper: React.FC<{ children: React.ReactNode, title: string, subti
 const GlossarySection: React.FC = () => (
     <SectionWrapper title="Glosario de Inducción del SOC" subtitle='Su vocabulario fundamental. Revise la pestaña "Recursos" para explicaciones detalladas.'>
         <CisoCard icon="book-open-check" title="Términos Fundamentales">
-             <dl className="grid md:grid-cols-2 gap-x-8 gap-y-4">
+             <dl className="grid md:grid-cols-2 gap-x-8 gap-y-6">
                 {GLOSSARY_TERMS.map(term => (
                     <React.Fragment key={term.term}>
-                        <dt className="text-[var(--text-primary)] font-semibold">{term.term}</dt>
-                        <dd className="text-[var(--text-secondary)] text-sm ml-4 mb-2 border-l-2 border-[var(--cv-gold)] pl-3">{term.definition}</dd>
+                        <div>
+                            <dt className="text-white font-semibold mb-1">{term.term}</dt>
+                            <dd className="text-slate-400 text-sm border-l-2 border-blue-500/50 pl-3">{term.definition}</dd>
+                        </div>
                     </React.Fragment>
                 ))}
             </dl>
@@ -453,18 +443,19 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({ completedScenarios, u
 
     return (
         <SectionWrapper title="Talleres de Operaciones de Seguridad (SOC) - Nivel Pasante" subtitle="DE: CISO, CYBER VALTORIX S.A. DE C.V.">
-             <div className="learning-module bg-[rgba(45,80,22,0.4)] backdrop-blur-md border-2 border-[rgba(184,134,11,0.3)] rounded-2xl p-6 mb-8">
-                <h3 className="text-xl font-bold text-green-300 mb-6 flex items-center">
-                    <Icon name="info" className="h-6 w-6 mr-2" />
+             <div className="learning-module bg-slate-900/50 border border-slate-700 rounded-2xl p-6 mb-8">
+                <h3 className="text-lg font-bold text-blue-400 mb-4 flex items-center">
+                    <Icon name="info" className="h-5 w-5 mr-2" />
                     Instrucciones de los Talleres
                 </h3>
-                <CisoCard>
-                    <div className="text-[var(--text-secondary)] text-sm sm:text-base leading-relaxed space-y-4 prose prose-invert prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-pre:my-2 prose-code:text-amber-300 prose-code:bg-black/30 prose-code:p-1 prose-code:rounded-md prose-code:font-mono prose-code:before:content-none prose-code:after:content-none">
-                        <p>Tienen tiempo asignado para completar estos escenarios. Los documentos en la pestaña "Recursos" son su base teórica. Esta es la aplicación práctica.</p>
-                        <p>No busquen "la respuesta correcta". Quiero su análisis, su proceso de pensamiento y las acciones de contención que proponen. Usen el modelo "Maestro/Estudiante": preparen su solución y estén listos para defenderla.</p>
-                         <p className="text-yellow-300 font-bold">¡Nuevo! Ahora puedes iniciar escenarios interactivos desde la terminal con el comando <code>start-scenario [id]</code> (ej. <code>start-scenario escenario7</code>).</p>
-                    </div>
-                </CisoCard>
+                <div className="text-slate-300 text-sm leading-relaxed space-y-3">
+                    <p>Tienen tiempo asignado para completar estos escenarios. Los documentos en la pestaña "Recursos" son su base teórica. Esta es la aplicación práctica.</p>
+                    <p>No busquen "la respuesta correcta". Quiero su análisis, su proceso de pensamiento y las acciones de contención que proponen. Usen el modelo "Maestro/Estudiante": preparen su solución y estén listos para defenderla.</p>
+                     <div className="flex items-center gap-2 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg mt-4">
+                        <Icon name="terminal" className="text-blue-400 h-4 w-4"/>
+                        <p className="text-blue-200 font-bold text-xs">¡Nuevo! Ahora puedes iniciar escenarios interactivos desde la terminal con el comando <code className="bg-black/40 px-1 py-0.5 rounded text-blue-400">start-scenario [id]</code> (ej. <code className="bg-black/40 px-1 py-0.5 rounded text-blue-400">start-scenario escenario7</code>).</p>
+                     </div>
+                </div>
             </div>
             <div className="space-y-4">
               {TRAINING_SCENARIOS.map(scenario => <TrainingModule 
@@ -616,18 +607,18 @@ const EvaluationSection: React.FC = () => {
                         toggle={() => setExpanded(expanded === evalItem.title ? null : evalItem.title)}
                         header={
                             <div className="flex items-center space-x-4 flex-grow min-w-0">
-                                <Icon name="star" className="h-6 w-6 text-yellow-400" />
-                                <h4 className="font-bold text-white truncate">{evalItem.title}</h4>
+                                <Icon name="star" className="h-5 w-5 text-yellow-500" />
+                                <h4 className="font-bold text-white truncate text-sm md:text-base">{evalItem.title}</h4>
                             </div>
                         }
                     >
                         <div className="grid md:grid-cols-2 gap-8">
                             <div>
-                                <h5 className="font-bold text-blue-400 mb-2">Equipo Azul (Total: {evalItem.blueTeam.total})</h5>
+                                <h5 className="font-bold text-blue-400 mb-2 text-sm uppercase tracking-wider">Equipo Azul (Total: {evalItem.blueTeam.total})</h5>
                                 <CisoTable headers={evalItem.blueTeam.headers} rows={evalItem.blueTeam.rows} />
                             </div>
                             <div>
-                                <h5 className="font-bold text-red-400 mb-2">Equipo Rojo (Total: {evalItem.redTeam.total})</h5>
+                                <h5 className="font-bold text-red-400 mb-2 text-sm uppercase tracking-wider">Equipo Rojo (Total: {evalItem.redTeam.total})</h5>
                                 <CisoTable headers={evalItem.redTeam.headers} rows={evalItem.redTeam.rows} />
                             </div>
                         </div>
@@ -654,18 +645,18 @@ const CollapsibleModule: React.FC<{
     const contentRef = React.useRef<HTMLDivElement>(null);
 
     return (
-        <div className={`bg-[rgba(45,80,22,0.4)] backdrop-blur-md border-2 rounded-2xl transition-all duration-300 hover:border-[var(--cv-gold)] hover:shadow-2xl hover:shadow-[rgba(184,134,11,0.2)] hover:-translate-y-1 ${isExpanded ? 'border-[var(--cv-gold)]' : 'border-[rgba(184,134,11,0.3)]'} ${className}`}>
-            <div className="p-4 md:p-6">
+        <div className={`bg-slate-900/40 border border-slate-800 rounded-xl transition-all duration-300 hover:border-slate-600 ${isExpanded ? 'border-slate-500 bg-slate-800/50' : ''} ${className}`}>
+            <div className="p-4">
                 <div className="flex items-center justify-between cursor-pointer" onClick={toggle}>
                     {header}
-                    <Icon name="chevron-down" className={`h-5 w-5 text-gray-400 transition-transform duration-300 flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} />
+                    <Icon name="chevron-down" className={`h-4 w-4 text-slate-500 transition-transform duration-300 flex-shrink-0 ${isExpanded ? 'rotate-180 text-white' : ''}`} />
                 </div>
                  <div
                     ref={contentRef}
-                    className="overflow-hidden transition-[max-height] duration-700 ease-in-out"
+                    className="overflow-hidden transition-[max-height] duration-500 ease-in-out"
                     style={{ maxHeight: isExpanded ? `${contentRef.current?.scrollHeight}px` : '0px' }}
                 >
-                    <div className="mt-4 pt-4 border-t border-[rgba(184,134,11,0.2)]">
+                    <div className="mt-4 pt-4 border-t border-slate-700/50">
                         {children}
                     </div>
                 </div>
@@ -697,8 +688,8 @@ const TrainingModule: React.FC<TrainingModuleProps> = ({ scenario, isCompleted, 
     };
 
     const statusConfig: { [key: string]: { text: string, className: string } } = {
-        'initial': { text: 'Pendiente', className: 'bg-gray-500/20 text-gray-400' },
-        'completed': { text: 'Completado', className: 'bg-green-500/20 text-green-300' }
+        'initial': { text: 'Pendiente', className: 'bg-slate-800 text-slate-400' },
+        'completed': { text: 'Completado', className: 'bg-green-900/30 text-green-400' }
     };
     
     const currentStatus = isCompleted ? statusConfig.completed : statusConfig.initial;
@@ -730,40 +721,40 @@ const TrainingModule: React.FC<TrainingModuleProps> = ({ scenario, isCompleted, 
             header={
                 <>
                     <div className="flex items-center space-x-4 flex-grow min-w-0">
-                        <div className={`w-12 h-12 ${scenario.color}/20 rounded-lg flex items-center justify-center flex-shrink-0`}>
-                            <Icon name={scenario.icon} className={`h-6 w-6 ${scenario.color.replace('bg-', 'text-').replace('-500','-400')}`} />
+                        <div className={`w-10 h-10 ${scenario.color}/10 rounded-lg flex items-center justify-center flex-shrink-0 border border-white/5`}>
+                            <Icon name={scenario.icon} className={`h-5 w-5 ${scenario.color.replace('bg-', 'text-').replace('-500','-400')}`} />
                         </div>
                         <div className="min-w-0">
                              <div className="flex items-center">
-                                <h4 className="font-bold text-white truncate">{scenario.title}</h4>
+                                <h4 className="font-bold text-white truncate text-sm md:text-base">{scenario.title}</h4>
                                 {activeScenarioId === scenario.id && (
-                                    <span className="ml-3 px-2 py-0.5 text-xs font-semibold text-green-800 bg-green-300 rounded-full animate-fade-in-fast flex items-center gap-1">
-                                        <div className="w-2 h-2 rounded-full bg-green-600 animate-pulse"></div>
-                                        Activo
+                                    <span className="ml-3 px-2 py-0.5 text-[10px] font-bold text-green-400 bg-green-900/20 border border-green-500/30 rounded-full animate-pulse flex items-center gap-1">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                                        ACTIVE
                                     </span>
                                 )}
                                 {scenario.isInteractive && activeScenarioId !== scenario.id && (
-                                    <span className="ml-3 px-2 py-0.5 text-xs font-semibold text-indigo-800 bg-indigo-300 rounded-full animate-fade-in-fast flex-shrink-0">
-                                        Interactivo
+                                    <span className="ml-3 px-2 py-0.5 text-[10px] font-bold text-indigo-400 bg-indigo-900/20 border border-indigo-500/30 rounded-full">
+                                        SIMULATION
                                     </span>
                                 )}
                             </div>
-                            <p className="text-sm text-gray-400">{scenario.subtitle}</p>
+                            <p className="text-xs text-slate-500 truncate">{scenario.subtitle}</p>
                         </div>
                     </div>
                     {!scenario.isInteractive && (
                         <div className="flex items-center space-x-2 ml-2 flex-shrink-0">
-                            <span className={`px-3 py-1 rounded-full text-xs sm:text-sm hidden sm:inline ${currentStatus.className}`}>{currentStatus.text}</span>
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider hidden sm:inline ${currentStatus.className}`}>{currentStatus.text}</span>
                             <button 
                                 onClick={handleToggleComplete}
                                 title="Marcar como completado"
                                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 border
                                     ${isCompleted 
-                                        ? 'bg-green-500 border-green-500 text-white' 
-                                        : 'bg-white/10 border-white/30 text-gray-300 hover:bg-white/20 hover:border-[var(--cv-gold)]'
+                                        ? 'bg-green-600 border-green-600 text-white' 
+                                        : 'bg-slate-800 border-slate-700 text-slate-500 hover:bg-slate-700 hover:border-slate-500 hover:text-white'
                                     }`}
                             >
-                                <Icon name="check" className="h-4 w-4" />
+                                <Icon name="check" className="h-3 w-3" />
                             </button>
                         </div>
                     )}
@@ -783,8 +774,8 @@ const LearningModule: React.FC<{ resource: ResourceModule }> = ({ resource }) =>
             toggle={() => setIsExpanded(!isExpanded)}
             header={
                 <div className="flex items-center space-x-4">
-                    <h3 className="text-xl font-bold text-green-300 flex items-center">
-                        <Icon name={resource.icon} className="h-6 w-6 mr-3"/>
+                    <h3 className="text-lg font-bold text-slate-200 flex items-center hover:text-blue-400 transition-colors">
+                        <Icon name={resource.icon} className="h-5 w-5 mr-3 text-blue-500"/>
                         {resource.title}
                     </h3>
                 </div>
@@ -839,32 +830,34 @@ export const ScenarioView: React.FC<ScenarioViewProps> = ({ scenario, environmen
     const progressPercent = totalPoints > 0 ? (earnedPoints / totalPoints) * 100 : 0;
     
     return <div className="space-y-6 mt-4">
-            <div className={`p-6 rounded-xl border transition-all duration-500 ${isActive ? 'bg-gradient-to-r from-indigo-900/50 to-purple-900/50 border-indigo-500/30' : 'bg-gray-900/20 border-gray-700/50'}`}>
+            <div className={`p-6 rounded-xl border transition-all duration-500 ${isActive ? 'bg-slate-900/80 border-indigo-500/30 shadow-[0_0_30px_rgba(99,102,241,0.1)]' : 'bg-slate-900/40 border-slate-800'}`}>
                 <div className="flex items-center justify-between mb-4">
                     <div>
                         <h3 className="text-xl font-bold text-white">{scenario.title}</h3>
-                        <p className="text-gray-300 mt-1 text-sm">{scenario.description}</p>
+                        <p className="text-slate-400 mt-1 text-sm">{scenario.description}</p>
                     </div>
-                    <span className={`px-4 py-2 rounded-full text-sm font-bold ${
-                        scenario.difficulty === 'beginner' ? 'bg-green-500/20 text-green-300' :
-                        scenario.difficulty === 'intermediate' ? 'bg-yellow-500/20 text-yellow-300' :
-                        'bg-red-500/20 text-red-300'
+                    <span className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest border ${
+                        scenario.difficulty === 'beginner' ? 'bg-green-900/20 border-green-500/30 text-green-400' :
+                        scenario.difficulty === 'intermediate' ? 'bg-yellow-900/20 border-yellow-500/30 text-yellow-400' :
+                        'bg-red-900/20 border-red-500/30 text-red-400'
                     }`}>
-                        {scenario.difficulty.toUpperCase()}
+                        {scenario.difficulty}
                     </span>
                 </div>
                 
                 {isActive && (
-                    <div className="mt-4 animate-fade-in-fast">
-                        <div className="flex justify-between text-sm mb-2">
-                            <span className="text-gray-400">Progreso del Equipo</span>
-                            <span className="text-white font-bold">{earnedPoints} / {totalPoints} Puntos</span>
+                    <div className="mt-6 animate-fade-in-fast">
+                        <div className="flex justify-between text-xs font-semibold uppercase tracking-wider mb-2">
+                            <span className="text-slate-500">Mission Progress</span>
+                            <span className="text-white">{earnedPoints} / {totalPoints} Pts</span>
                         </div>
-                        <div className="w-full bg-gray-700 rounded-full h-3">
+                        <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
                             <div 
-                                className="bg-gradient-to-r from-green-500 to-blue-500 h-3 rounded-full transition-all duration-500"
+                                className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all duration-1000 ease-out relative"
                                 style={{ width: `${progressPercent}%` }}
-                            />
+                            >
+                                <div className="absolute inset-0 bg-white/20 animate-[shimmer_2s_infinite]"></div>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -873,9 +866,9 @@ export const ScenarioView: React.FC<ScenarioViewProps> = ({ scenario, environmen
             {isActive && activeHints.length > 0 && (
                 <div className="space-y-2">
                     {activeHints.map((hint, idx) => (
-                        <div key={idx} className="bg-yellow-900/30 border border-yellow-500/50 rounded-lg p-4 animate-fade-in-fast">
+                        <div key={idx} className="bg-yellow-900/20 border-l-4 border-yellow-500 p-4 animate-fade-in-fast">
                             <div className="flex items-start">
-                                <Icon name="alert-triangle" className="h-5 w-5 text-yellow-400 mr-3 flex-shrink-0 mt-0.5" />
+                                <Icon name="alert-triangle" className="h-4 w-4 text-yellow-500 mr-3 flex-shrink-0 mt-0.5" />
                                 <p className="text-yellow-200 text-sm">{hint}</p>
                             </div>
                         </div>
@@ -883,7 +876,7 @@ export const ScenarioView: React.FC<ScenarioViewProps> = ({ scenario, environmen
                 </div>
             )}
             
-            <div className="grid gap-4">
+            <div className="grid gap-3">
                 {teamObjectives.map(objective => {
                     const isCompleted = completedObjectives.has(objective.id);
                     const isRedTeam = objective.id.startsWith('red-');
@@ -891,33 +884,37 @@ export const ScenarioView: React.FC<ScenarioViewProps> = ({ scenario, environmen
                     return (
                         <div 
                             key={objective.id}
-                            className={`p-4 rounded-lg border-2 transition-all duration-300 ${
+                            className={`p-4 rounded-lg border transition-all duration-300 ${
                                 isCompleted 
-                                    ? 'bg-green-900/20 border-green-500 shadow-lg shadow-green-500/20' 
+                                    ? 'bg-green-900/10 border-green-500/30' 
                                     : isRedTeam 
-                                        ? 'bg-red-900/10 border-red-500/30 hover:border-red-500/50'
-                                        : 'bg-blue-900/10 border-blue-500/30 hover:border-blue-500/50'
+                                        ? 'bg-red-900/5 border-red-500/10 hover:border-red-500/30'
+                                        : 'bg-blue-900/5 border-blue-500/10 hover:border-blue-500/30'
                             }`}
                         >
                             <div className="flex items-start justify-between">
                                 <div className="flex-grow">
-                                    <div className="flex items-center mb-2">
-                                        <Icon name={isCompleted ? 'check' : 'target'} className={`h-5 w-5 mr-3 flex-shrink-0 ${isCompleted ? 'text-green-400' : 'text-gray-400'}`} />
-                                        <h4 className={`font-semibold ${isCompleted ? 'text-green-300' : 'text-white'}`}>
+                                    <div className="flex items-center mb-1">
+                                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center mr-3 flex-shrink-0 ${isCompleted ? 'bg-green-500 border-green-500' : 'border-slate-600'}`}>
+                                            {isCompleted && <Icon name="check" className="h-3 w-3 text-white" />}
+                                        </div>
+                                        <h4 className={`text-sm font-medium ${isCompleted ? 'text-green-400 line-through decoration-green-500/50' : 'text-slate-200'}`}>
                                             {objective.description}
                                         </h4>
                                     </div>
                                     {!isCompleted && objective.hint && (
-                                        <details className="mt-2 ml-8">
-                                            <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-300">💡 Ver pista</summary>
-                                            <p className="text-sm text-gray-300 mt-2 italic">{objective.hint}</p>
+                                        <details className="mt-2 ml-7 group">
+                                            <summary className="text-[10px] font-bold uppercase tracking-wider text-slate-500 cursor-pointer hover:text-slate-300 select-none list-none flex items-center">
+                                                <span className="bg-slate-800 px-2 py-0.5 rounded border border-slate-700 group-hover:border-slate-500 transition-colors">Show Hint</span>
+                                            </summary>
+                                            <p className="text-xs text-slate-400 mt-2 ml-1 border-l-2 border-slate-700 pl-3 italic">{objective.hint}</p>
                                         </details>
                                     )}
                                 </div>
-                                <span className={`ml-4 px-3 py-1 rounded-full text-sm font-bold flex-shrink-0 ${
-                                    isCompleted ? 'bg-green-500/20 text-green-300' : 'bg-gray-500/20 text-gray-400'
+                                <span className={`ml-4 text-xs font-mono font-bold ${
+                                    isCompleted ? 'text-green-500' : 'text-slate-600'
                                 }`}>
-                                    {objective.points} pts
+                                    +{objective.points} pts
                                 </span>
                             </div>
                         </div>
