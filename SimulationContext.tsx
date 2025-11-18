@@ -739,7 +739,14 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                     .eq('session_id', sessionId)
                     .order('timestamp', { ascending: true });
                 if (error) console.error("Error fetching logs:", error);
-                else setLogs(data || []);
+                else {
+                    // Map DB `source_team` to app's `source` property
+                    const mappedData = (data || []).map(log => ({
+                        ...log,
+                        source: log.source_team
+                    }));
+                    setLogs(mappedData as LogEntry[]);
+                }
             };
             await fetchLogs();
             
@@ -889,7 +896,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             .from('simulation_logs')
             .insert({
                 session_id: sessionId,
-                source: team === 'red' ? 'Red Team' : 'Blue Team',
+                source_team: team === 'red' ? 'Red Team' : 'Blue Team',
                 message: command,
                 team_visible: 'all'
             });
