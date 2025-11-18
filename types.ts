@@ -136,7 +136,8 @@ export interface CommandContext {
     terminalState: TerminalState;
     environment: VirtualEnvironment;
     setEnvironment: React.Dispatch<React.SetStateAction<VirtualEnvironment | null>>;
-    startScenario: (scenarioId: string) => boolean;
+    // FIX: Changed to Promise<boolean> to match the async implementation.
+    startScenario: (scenarioId: string) => Promise<boolean>;
 }
 
 export interface CommandResult {
@@ -225,7 +226,7 @@ export interface LogEntry {
     teamVisible: 'all' | 'red' | 'blue';
     // For Supabase compatibility
     session_id?: string;
-    source_team?: 'Red' | 'Blue' | 'System' | 'Network';
+    source_team?: 'red' | 'blue' | 'System' | 'Network';
 }
 
 export interface SessionData {
