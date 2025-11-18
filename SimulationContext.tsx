@@ -23,16 +23,17 @@ interface SimulationStateRow {
     db_config_permissions?: string;
     hydra_run_count?: number;
     server_load?: number;
-    // Terminal state columns
-    terminal_output_red?: TerminalState;
-    terminal_output_blue?: TerminalState;
+    // Terminal state columns (now storing arrays for multi-terminal support)
+    terminal_output_red?: TerminalState[];
+    terminal_output_blue?: TerminalState[];
 }
 
 // ============================================================================
 // Data Mapping Functions (Code <-> DB)
 // ============================================================================
 
-const mapEnvironmentToDbRow = (env: VirtualEnvironment): Partial<SimulationStateRow> => {
+const mapEnvironmentToDbRow = (env: VirtualEnvironment | null): Partial<SimulationStateRow> => {
+    if (!env) return {};
     const host = env.networks.dmz?.hosts[0];
     if (!host) return {};
     return {
@@ -69,19 +70,16 @@ const mapDbRowToEnvironment = (row: SimulationStateRow, scenario: InteractiveSce
 };
 
 const mapTerminalsToDbRow = (terminals: TerminalState[]): Partial<SimulationStateRow> => {
-    const redTerminal = terminals.find(t => t.id.startsWith('red'));
-    const blueTerminal = terminals.find(t => t.id.startsWith('blue'));
     return {
-        terminal_output_red: redTerminal,
-        terminal_output_blue: blueTerminal,
+        terminal_output_red: terminals.filter(t => t.id.startsWith('red')),
+        terminal_output_blue: terminals.filter(t => t.id.startsWith('blue')),
     };
 };
 
 const mapDbRowToTerminals = (row: SimulationStateRow): TerminalState[] => {
-    const terminals: TerminalState[] = [];
-    if (row.terminal_output_red) terminals.push(row.terminal_output_red);
-    if (row.terminal_output_blue) terminals.push(row.terminal_output_blue);
-    return terminals;
+    const redTerminals = Array.isArray(row.terminal_output_red) ? row.terminal_output_red : [];
+    const blueTerminals = Array.isArray(row.terminal_output_blue) ? row.terminal_output_blue : [];
+    return [...redTerminals, ...blueTerminals];
 };
 
 
@@ -396,8 +394,8 @@ interface SimulationContextType {
     userTeam: 'red' | 'blue' | 'spectator' | null;
     processCommand: (terminalId: string, command: string) => Promise<void>;
     startScenario: (scenarioId: string) => Promise<boolean>;
-    addNewTerminal: () => void; // Kept for type safety, but will be a no-op
-    removeTerminal: (terminalId: string) => void; // Kept for type safety, but will be a no-op
+    addNewTerminal: () => void;
+    removeTerminal: (terminalId: string) => void;
 }
 
 export const SimulationContext = createContext<SimulationContextType>({} as SimulationContextType);
@@ -467,17 +465,21 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             }
 
             const currentUserTeam = team as 'red' | 'blue' | 'spectator';
-            const userTerminalColumn = currentUserTeam === 'red' ? 'terminal_output_red' : 'terminal_output_blue';
+            const teamTerminalsInDb = currentUserTeam === 'red' ? data?.terminal_output_red : data?.terminal_output_blue;
             
-            if ((currentUserTeam === 'red' || currentUserTeam === 'blue') && (!data || !data[userTerminalColumn])) {
+            if ((currentUserTeam === 'red' || currentUserTeam === 'blue') && (!data || !Array.isArray(teamTerminalsInDb) || teamTerminalsInDb.length === 0)) {
                  const teamName = currentUserTeam === 'red' ? 'Rojo' : 'Azul';
-                 const newUserTerminal = createNewTerminal(`${currentUserTeam}-1`, `Terminal ${teamName}`, currentUserTeam);
+                 const newUserTerminal = createNewTerminal(`${currentUserTeam}-1`, `Terminal ${teamName} 1`, currentUserTeam);
+
+                 const existingRed = (data?.terminal_output_red && Array.isArray(data.terminal_output_red)) ? data.terminal_output_red : [];
+                 const existingBlue = (data?.terminal_output_blue && Array.isArray(data.terminal_output_blue)) ? data.terminal_output_blue : [];
 
                  const updatedData = {
                      ...(data || { session_id: sessionId }),
-                     [userTerminalColumn]: newUserTerminal
+                     terminal_output_red: currentUserTeam === 'red' ? [newUserTerminal] : existingRed,
+                     terminal_output_blue: currentUserTeam === 'blue' ? [newUserTerminal] : existingBlue,
                  };
-
+                
                  updateStateFromPayload(updatedData);
 
                  const { error: upsertError } = await supabase
@@ -517,18 +519,51 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             }
         };
     }, [sessionId, team, createNewTerminal, updateStateFromPayload, updateDbState]);
+    
+    const addNewTerminal = useCallback(() => {
+        if (team === 'spectator') return;
+        const currentUserTeam = team as 'red' | 'blue';
+    
+        setTerminals(prev => {
+            const teamTerminals = prev.filter(t => t.id.startsWith(currentUserTeam));
+            // Find the highest number in existing terminal IDs like 'red-1', 'red-2'
+            const maxId = teamTerminals.reduce((max, t) => {
+                const num = parseInt(t.id.split('-')[1] || '0');
+                return Math.max(max, num);
+            }, 0);
+            
+            const newId = `${currentUserTeam}-${maxId + 1}`;
+            const teamName = currentUserTeam === 'red' ? 'Rojo' : 'Azul';
+            const newTerminal = createNewTerminal(newId, `Terminal ${teamName} ${maxId + 1}`, currentUserTeam, activeScenario?.title);
+            const newState = [...prev, newTerminal];
+            
+            updateDbState(mapTerminalsToDbRow(newState));
+            
+            return newState;
+        });
+    }, [team, createNewTerminal, updateDbState, activeScenario]);
 
-    // These are now no-ops as the DB schema doesn't support multi-terminal persistence.
-    const addNewTerminal = useCallback(() => {}, []);
-    const removeTerminal = useCallback((terminalId: string) => {}, []);
+    const removeTerminal = useCallback((terminalId: string) => {
+        if (team === 'spectator') return;
+        const currentUserTeam = team as 'red' | 'blue';
+
+         setTerminals(prev => {
+            if (prev.filter(t => t.id.startsWith(currentUserTeam)).length <= 1) return prev; // Don't remove the last one
+            const newState = prev.filter(t => t.id !== terminalId);
+            
+            updateDbState(mapTerminalsToDbRow(newState));
+
+            return newState;
+        });
+    }, [team, updateDbState]);
 
     const startScenario = useCallback(async (scenarioId: string): Promise<boolean> => {
         const scenario = TRAINING_SCENARIOS.find(s => s.id === scenarioId && s.isInteractive) as InteractiveScenario | undefined;
         if (!scenario) return false;
 
         const initialEnv = R.clone(scenario.initialEnvironment);
-        const redTerminal = createNewTerminal('red-1', 'Equipo Rojo', 'red', scenario.title);
-        const blueTerminal = createNewTerminal('blue-1', 'Equipo Azul', 'blue', scenario.title);
+        const redTerminal = createNewTerminal('red-1', 'Equipo Rojo 1', 'red', scenario.title);
+        const blueTerminal = createNewTerminal('blue-1', 'Equipo Azul 1', 'blue', scenario.title);
 
         const dbRow = mapEnvironmentToDbRow(initialEnv);
 
@@ -536,8 +571,8 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             session_id: sessionId,
             scenario_id: scenarioId,
             ...dbRow,
-            terminal_output_red: redTerminal,
-            terminal_output_blue: blueTerminal,
+            terminal_output_red: [redTerminal],
+            terminal_output_blue: [blueTerminal],
         };
 
         const { error } = await supabase
@@ -568,6 +603,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             ];
             const updatedTerminals = R.update(terminalIndex, { ...terminal, output: outputWithError }, terminals);
             setTerminals(updatedTerminals);
+            updateDbState(mapTerminalsToDbRow(updatedTerminals));
             return;
         }
 
@@ -614,7 +650,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         }
 
         const dbUpdatePayload: Partial<SimulationStateRow> = {
-            ...mapEnvironmentToDbRow(finalEnvironment!),
+            ...mapEnvironmentToDbRow(finalEnvironment),
             ...mapTerminalsToDbRow(finalTerminals)
         };
         
