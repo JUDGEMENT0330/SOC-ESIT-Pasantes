@@ -63,7 +63,7 @@ class AutocompleteEngine {
         ['hydra', ['-l', '-L', '-p', '-P', '-t', '-w', '-f', '-V']],
         ['ufw', ['status', 'enable', 'disable', 'allow', 'deny', 'delete', 'reset', 'reload', 'from']],
         ['ssh', []], ['ping', []], ['curl', []], ['hping3', ['--flood', '-S']],
-        ['sudo', []], ['nano', []], ['cat', []], ['sha256sum', []]
+        ['sudo', []], ['nano', []], ['cat', []], ['sha256sum', []], ['analyze', []]
     ]);
     private hosts: Set<string> = new Set();
     
@@ -221,31 +221,44 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalStat
         }
     };
 
-    const placeholder = isReadOnly ? "Modo de solo lectura" : isBusy ? "Procesando comando..." : "Escriba un comando y presione Enter...";
+    const placeholder = isReadOnly ? "Terminal en modo observación" : isBusy ? "Procesando..." : "_";
     const currentInput = searchMode ? searchQuery : input;
     const handleInputChange = searchMode ? setSearchQuery : setInput;
 
     // Color logic for frame based on team
     const frameBorderColor = terminalState.id.startsWith('red') 
-        ? 'border-red-900/50 shadow-red-900/20' 
-        : 'border-blue-900/50 shadow-blue-900/20';
+        ? 'border-red-900/30 shadow-red-500/10' 
+        : 'border-blue-900/30 shadow-blue-500/10';
 
     return (
         <div 
-            className={`crt-container border-4 ${frameBorderColor} rounded-xl h-[450px] p-1 relative shadow-2xl`}
+            className={`crt-container border ${frameBorderColor} rounded-lg h-[450px] relative shadow-2xl group`}
             onClick={() => inputRef.current?.focus()}
         >
+            {/* CRT Effects */}
             <div className="crt-overlay"></div>
             <div className="crt-vignette"></div>
             
-            <div className="flex-grow h-full overflow-y-auto text-sm p-4 crt-text font-mono relative z-20 custom-scrollbar">
+            {/* Header Bar */}
+            <div className="absolute top-0 left-0 right-0 h-6 bg-white/5 flex items-center px-3 justify-between z-20 border-b border-white/10">
+                <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-red-500/50"></div>
+                    <div className="w-2 h-2 rounded-full bg-yellow-500/50"></div>
+                    <div className="w-2 h-2 rounded-full bg-green-500/50"></div>
+                </div>
+                <div className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">
+                    {terminalState.name} • SSH
+                </div>
+            </div>
+            
+            <div className="flex-grow h-full overflow-y-auto text-sm p-4 pt-8 crt-text font-mono relative z-10 custom-scrollbar crt-flicker">
                 {output.map((line, index) => (
-                    <div key={index} className="mb-1">
+                    <div key={index} className="mb-1 leading-tight">
                         {line.type === 'prompt' && <Prompt {...prompt} />}
                         {line.type === 'command' && <span className="text-white break-all">{line.text}</span>}
-                        {line.type === 'output' && <pre className="whitespace-pre-wrap text-slate-300 opacity-90">{line.text}</pre>}
-                        {line.type === 'html' && <div className="text-slate-300 opacity-90" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(line.html || '', { ALLOWED_TAGS: ['strong', 'span', 'pre', 'br'], ALLOWED_ATTR: ['class'] }) }} />}
-                        {line.type === 'error' && <pre className="whitespace-pre-wrap text-red-500 font-bold drop-shadow-sm">{line.text}</pre>}
+                        {line.type === 'output' && <pre className="whitespace-pre-wrap text-slate-300 opacity-90 font-medium">{line.text}</pre>}
+                        {line.type === 'html' && <div className="text-slate-300 opacity-90" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(line.html || '', { ALLOWED_TAGS: ['strong', 'span', 'pre', 'br', 'code'], ALLOWED_ATTR: ['class'] }) }} />}
+                        {line.type === 'error' && <pre className="whitespace-pre-wrap text-red-400 font-bold drop-shadow-sm">{line.text}</pre>}
                     </div>
                 ))}
                 <div ref={endOfOutputRef} />
@@ -262,7 +275,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalStat
                             <input
                                 ref={inputRef}
                                 type="text"
-                                className="bg-transparent border-none outline-none text-white font-mono text-sm w-full caret-green-500"
+                                className="bg-transparent border-none outline-none text-white font-mono text-sm w-full caret-transparent"
                                 value={currentInput}
                                 onChange={e => handleInputChange(e.target.value)}
                                 onKeyDown={handleKeyDown}
@@ -273,15 +286,22 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalStat
                                 disabled={(isBusy && !searchMode) || isReadOnly}
                                 placeholder={placeholder}
                             />
+                            {/* Custom Caret */}
+                            {!isBusy && (
+                                <span className="absolute w-2.5 h-5 bg-white/80 animate-pulse" style={{
+                                    left: `${input.length * 8.4 + (input ? 240 : 0)}px`, // Rough approximation for demo
+                                    display: 'none' // Hidden for now as exact positioning is hard without canvas
+                                }}></span>
+                            )}
                         </div>
                     </div>
                 )}
             </div>
 
             {autocomplete && autocomplete.suggestions.length > 1 && (
-                <div className="absolute bottom-12 left-4 bg-gray-900/95 border border-gray-600 rounded p-2 z-30 grid grid-cols-3 gap-x-4 gap-y-1 shadow-xl backdrop-blur-sm">
+                <div className="absolute bottom-4 left-4 right-4 bg-black/90 border border-gray-700 rounded p-3 z-30 grid grid-cols-3 gap-2 shadow-xl backdrop-blur-md">
                     {autocomplete.suggestions.map((suggestion) => (
-                        <div key={suggestion} className="px-2 text-xs text-green-400 font-mono cursor-pointer hover:bg-gray-800 rounded">
+                        <div key={suggestion} className="px-2 py-1 text-xs text-green-400 font-mono cursor-pointer hover:bg-white/10 rounded transition-colors">
                             {suggestion}
                         </div>
                     ))}
@@ -294,13 +314,13 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalStat
 const Prompt: React.FC<PromptState> = ({ user, host, dir }) => {
     const userColor = user.includes('blue') ? 'text-blue-400' : (user === 'root' ? 'text-red-500' : 'text-red-400');
     return (
-        <span className="flex-shrink-0 mr-2 select-none">
-            <span className={`${userColor} font-bold`}>{user}</span>
-            <span className="text-slate-500">@</span>
-            <span className="prompt-host font-bold">{host}</span>
-            <span className="text-slate-500">:</span>
-            <span className="prompt-dir">{dir}</span>
-            <span className="text-slate-400">{user === 'root' || user === 'admin' || user === 'blue-team' ? '# ' : '$ '}</span>
+        <span className="flex-shrink-0 mr-2 select-none font-bold">
+            <span className={`${userColor}`}>{user}</span>
+            <span className="text-gray-500">@</span>
+            <span className="text-indigo-400">{host}</span>
+            <span className="text-gray-500">:</span>
+            <span className="text-yellow-500">{dir}</span>
+            <span className="text-gray-400 ml-1">{user === 'root' || user === 'admin' || user === 'blue-team' ? '# ' : '$ '}</span>
         </span>
     );
 };
