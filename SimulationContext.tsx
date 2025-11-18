@@ -7,16 +7,83 @@ import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, GENERAL_HELP_TEXT, SCENARIO_HE
 import * as R from 'https://aistudiocdn.com/ramda@^0.32.0';
 
 // ============================================================================
-// DB State Type
+// DB State Type (Matches actual Supabase schema)
 // ============================================================================
 
 interface SimulationStateRow {
     session_id: string;
     scenario_id?: string;
-    virtual_environment?: VirtualEnvironment;
-    // NEW: A single jsonb column to hold all terminals, replacing the individual red/blue columns.
-    terminals?: TerminalState[]; 
+    // Environment state columns
+    firewall_enabled?: boolean;
+    ssh_hardened?: boolean;
+    banned_ips?: string[];
+    payload_deployed?: boolean;
+    is_dos_active?: boolean;
+    admin_password_found?: boolean;
+    db_config_permissions?: string;
+    hydra_run_count?: number;
+    server_load?: number;
+    // Terminal state columns
+    terminal_output_red?: TerminalState;
+    terminal_output_blue?: TerminalState;
 }
+
+// ============================================================================
+// Data Mapping Functions (Code <-> DB)
+// ============================================================================
+
+const mapEnvironmentToDbRow = (env: VirtualEnvironment): Partial<SimulationStateRow> => {
+    const host = env.networks.dmz?.hosts[0];
+    if (!host) return {};
+    return {
+        firewall_enabled: env.networks.dmz.firewall.enabled,
+        ssh_hardened: host.files.find(f => f.path === '/etc/ssh/sshd_config')?.content?.includes('PermitRootLogin no'),
+        banned_ips: env.defenseProgress.blockedIPs,
+        payload_deployed: !!env.attackProgress.persistence.length,
+        is_dos_active: (host.systemState?.cpuLoad ?? 0) > 90,
+        admin_password_found: !!env.attackProgress.credentials['root@10.0.10.5'],
+        db_config_permissions: host.files.find(f => f.path === '/var/www/html/db_config.php')?.permissions,
+        server_load: host.systemState?.cpuLoad,
+    };
+};
+
+const mapDbRowToEnvironment = (row: SimulationStateRow, scenario: InteractiveScenario): VirtualEnvironment => {
+    const baseEnv = R.clone(scenario.initialEnvironment);
+    const host = baseEnv.networks.dmz?.hosts[0];
+    if (!host) return baseEnv;
+
+    baseEnv.networks.dmz.firewall.enabled = row.firewall_enabled ?? baseEnv.networks.dmz.firewall.enabled;
+    const sshConfigFile = host.files.find(f => f.path === '/etc/ssh/sshd_config');
+    if (sshConfigFile && row.ssh_hardened) {
+        sshConfigFile.content = 'PermitRootLogin no';
+    }
+    const dbConfigFile = host.files.find(f => f.path === '/var/www/html/db_config.php');
+     if (dbConfigFile && row.db_config_permissions) {
+        dbConfigFile.permissions = row.db_config_permissions;
+    }
+    if(host.systemState) {
+        host.systemState.cpuLoad = row.server_load ?? host.systemState.cpuLoad;
+    }
+
+    return baseEnv;
+};
+
+const mapTerminalsToDbRow = (terminals: TerminalState[]): Partial<SimulationStateRow> => {
+    const redTerminal = terminals.find(t => t.id.startsWith('red'));
+    const blueTerminal = terminals.find(t => t.id.startsWith('blue'));
+    return {
+        terminal_output_red: redTerminal,
+        terminal_output_blue: blueTerminal,
+    };
+};
+
+const mapDbRowToTerminals = (row: SimulationStateRow): TerminalState[] => {
+    const terminals: TerminalState[] = [];
+    if (row.terminal_output_red) terminals.push(row.terminal_output_red);
+    if (row.terminal_output_blue) terminals.push(row.terminal_output_blue);
+    return terminals;
+};
+
 
 // ============================================================================
 // Command Helpers
@@ -329,8 +396,8 @@ interface SimulationContextType {
     userTeam: 'red' | 'blue' | 'spectator' | null;
     processCommand: (terminalId: string, command: string) => Promise<void>;
     startScenario: (scenarioId: string) => Promise<boolean>;
-    addNewTerminal: () => void;
-    removeTerminal: (terminalId: string) => void;
+    addNewTerminal: () => void; // Kept for type safety, but will be a no-op
+    removeTerminal: (terminalId: string) => void; // Kept for type safety, but will be a no-op
 }
 
 export const SimulationContext = createContext<SimulationContextType>({} as SimulationContextType);
@@ -368,13 +435,17 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
     }, []);
 
     const updateStateFromPayload = useCallback((payload: SimulationStateRow) => {
-        const scenario = TRAINING_SCENARIOS.find(s => s.id === payload.scenario_id) as InteractiveScenario | undefined;
+        const scenario = TRAINING_SCENARIOS.find(s => s.id === payload.scenario_id && s.isInteractive) as InteractiveScenario | undefined;
         setActiveScenario(scenario ?? null);
-        setEnvironment(payload.virtual_environment ?? null);
-        setTerminals(payload.terminals ?? []);
+        if (scenario) {
+            setEnvironment(mapDbRowToEnvironment(payload, scenario));
+        } else {
+            setEnvironment(null);
+        }
+        setTerminals(mapDbRowToTerminals(payload));
     }, []);
     
-    const updateDbState = useCallback(async (state: Partial<SimulationStateRow>) => {
+     const updateDbState = useCallback(async (state: Partial<SimulationStateRow>) => {
         const { error } = await supabase
             .from('simulation_state')
             .update(state)
@@ -390,34 +461,32 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                 .eq('session_id', sessionId)
                 .single();
 
-            if (error && error.code !== 'PGRST116') { // PGRST116 is "No rows found", which is not an error here.
+            if (error && error.code !== 'PGRST116') { // PGRST116 is "No rows found"
                 console.error("Error fetching initial state:", error);
                 return;
             }
 
             const currentUserTeam = team as 'red' | 'blue' | 'spectator';
-            const existingTerminals = data?.terminals || [];
-            const userTerminalExists = existingTerminals.some(t => t.id.startsWith(currentUserTeam));
+            const userTerminalColumn = currentUserTeam === 'red' ? 'terminal_output_red' : 'terminal_output_blue';
+            
+            if ((currentUserTeam === 'red' || currentUserTeam === 'blue') && (!data || !data[userTerminalColumn])) {
+                 const teamName = currentUserTeam === 'red' ? 'Rojo' : 'Azul';
+                 const newUserTerminal = createNewTerminal(`${currentUserTeam}-1`, `Terminal ${teamName}`, currentUserTeam);
 
-            if ((currentUserTeam === 'red' || currentUserTeam === 'blue') && !userTerminalExists) {
-                const teamName = currentUserTeam === 'red' ? 'Rojo' : 'Azul';
-                const newUserTerminal = createNewTerminal(`${currentUserTeam}-1`, `Terminal ${teamName}`, currentUserTeam);
-                const updatedTerminals = [...existingTerminals, newUserTerminal];
+                 const updatedData = {
+                     ...(data || { session_id: sessionId }),
+                     [userTerminalColumn]: newUserTerminal
+                 };
 
-                updateStateFromPayload({ ...(data || { session_id: sessionId }), terminals: updatedTerminals });
+                 updateStateFromPayload(updatedData);
 
-                const { error: upsertError } = await supabase
-                    .from('simulation_state')
-                    .upsert({
-                        session_id: sessionId,
-                        scenario_id: data?.scenario_id || null,
-                        virtual_environment: data?.virtual_environment || null,
-                        terminals: updatedTerminals,
-                    });
-
-                if (upsertError) {
+                 const { error: upsertError } = await supabase
+                     .from('simulation_state')
+                     .upsert(updatedData);
+                 if (upsertError) {
                     console.error("Failed to create or update terminal state in DB:", upsertError);
-                }
+                 }
+
             } else if (data) {
                 updateStateFromPayload(data);
             }
@@ -449,42 +518,31 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         };
     }, [sessionId, team, createNewTerminal, updateStateFromPayload, updateDbState]);
 
-    const addNewTerminal = useCallback(() => {
-        if (team === 'spectator' || !team) return;
-        const teamTerminals = terminals.filter(t => t.id.startsWith(team));
-        const newId = `${team}-${crypto.randomUUID()}`;
-        const newName = `Terminal #${teamTerminals.length + 1}`;
-        const newTerminal = createNewTerminal(newId, newName, team, activeScenario?.title);
-        const newTerminals = [...terminals, newTerminal];
-        setTerminals(newTerminals);
-        updateDbState({ terminals: newTerminals });
-    }, [team, terminals, activeScenario, createNewTerminal, updateDbState]);
-
-    const removeTerminal = useCallback((terminalId: string) => {
-        const newTerminals = terminals.filter(t => t.id !== terminalId);
-        setTerminals(newTerminals);
-        updateDbState({ terminals: newTerminals });
-    }, [terminals, updateDbState]);
+    // These are now no-ops as the DB schema doesn't support multi-terminal persistence.
+    const addNewTerminal = useCallback(() => {}, []);
+    const removeTerminal = useCallback((terminalId: string) => {}, []);
 
     const startScenario = useCallback(async (scenarioId: string): Promise<boolean> => {
         const scenario = TRAINING_SCENARIOS.find(s => s.id === scenarioId && s.isInteractive) as InteractiveScenario | undefined;
         if (!scenario) return false;
 
         const initialEnv = R.clone(scenario.initialEnvironment);
-        const initialTerminals = [
-            createNewTerminal('red-1', 'Equipo Rojo', 'red', scenario.title),
-            createNewTerminal('blue-1', 'Equipo Azul', 'blue', scenario.title)
-        ];
+        const redTerminal = createNewTerminal('red-1', 'Equipo Rojo', 'red', scenario.title);
+        const blueTerminal = createNewTerminal('blue-1', 'Equipo Azul', 'blue', scenario.title);
 
-        const initialState: Omit<SimulationStateRow, 'session_id'> = {
+        const dbRow = mapEnvironmentToDbRow(initialEnv);
+
+        const initialState: SimulationStateRow = {
+            session_id: sessionId,
             scenario_id: scenarioId,
-            virtual_environment: initialEnv,
-            terminals: initialTerminals
+            ...dbRow,
+            terminal_output_red: redTerminal,
+            terminal_output_blue: blueTerminal,
         };
 
         const { error } = await supabase
             .from('simulation_state')
-            .upsert({ session_id: sessionId, ...initialState });
+            .upsert(initialState);
 
         if (error) {
             console.error("Error starting scenario:", error);
@@ -530,7 +588,6 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         
         let finalEnvironment = result.newEnvironment || environment;
 
-        // Create the final updated terminal state
         const updatedTerminalState: TerminalState = {
             ...terminal,
             ...result.newTerminalState,
@@ -540,7 +597,6 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         };
         const finalTerminals = R.update(terminalIndex, updatedTerminalState, terminals);
 
-        // If environment exists, log the command to its timeline
         if (finalEnvironment) {
             const timestamp = new Date().toISOString();
             const source: LogEntry['source'] = team === 'red' ? 'Red Team' : 'Blue Team';
@@ -558,22 +614,13 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         }
 
         const dbUpdatePayload: Partial<SimulationStateRow> = {
-            virtual_environment: finalEnvironment,
-            terminals: finalTerminals,
+            ...mapEnvironmentToDbRow(finalEnvironment!),
+            ...mapTerminalsToDbRow(finalTerminals)
         };
+        
+        await updateDbState(dbUpdatePayload);
 
-        const { error } = await supabase
-            .from('simulation_state')
-            .update(dbUpdatePayload)
-            .eq('session_id', sessionId);
-
-        if (error) {
-            console.error('Failed to sync state:', error);
-            const errorOutput = [...updatedTerminalState.output, {text: "Error de sincronización con el servidor.", type: 'error'}];
-            const errorTerminals = R.update(terminalIndex, { ...updatedTerminalState, output: errorOutput }, finalTerminals);
-            setTerminals(errorTerminals);
-        }
-    }, [terminals, team, environment, sessionId, startScenario]);
+    }, [terminals, team, environment, sessionId, startScenario, updateDbState]);
 
     const logs = environment?.timeline || [];
 
