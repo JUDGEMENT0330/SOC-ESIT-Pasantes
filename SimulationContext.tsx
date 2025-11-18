@@ -623,6 +623,16 @@ interface SimulationProviderProps {
     sessionData: SessionData;
 }
 
+const mapDbSourceToUiSource = (dbSource: 'Red' | 'Blue' | 'System' | 'Network' | undefined): LogEntry['source'] => {
+    switch (dbSource) {
+        case 'Red': return 'Red Team';
+        case 'Blue': return 'Blue Team';
+        case 'System': return 'System';
+        case 'Network': return 'Network';
+        default: return 'System';
+    }
+};
+
 export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children, sessionData }) => {
     const [environment, setEnvironment] = useState<VirtualEnvironment | null>(null);
     const [activeScenario, setActiveScenario] = useState<InteractiveScenario | null>(null);
@@ -740,10 +750,11 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                     .order('timestamp', { ascending: true });
                 if (error) console.error("Error fetching logs:", error);
                 else {
-                    // Map DB `source_team` to app's `source` property
+                    // Map DB columns to app's expected properties
                     const mappedData = (data || []).map(log => ({
                         ...log,
-                        source: log.source_team
+                        source: mapDbSourceToUiSource(log.source_team),
+                        teamVisible: log.team_visible,
                     }));
                     setLogs(mappedData as LogEntry[]);
                 }
@@ -896,7 +907,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             .from('simulation_logs')
             .insert({
                 session_id: sessionId,
-                source_team: team === 'red' ? 'Red Team' : 'Blue Team',
+                source_team: team === 'red' ? 'Red' : 'Blue',
                 message: command,
                 team_visible: 'all'
             });
