@@ -63,30 +63,24 @@ export const DualTerminalView: React.FC = () => {
                      <button onClick={() => setSpectatorViewMode('blue')} className={getButtonClass('blue')}>Solo Azul</button>
                 </div>
                 
-                {!activeScenario && (
-                    <div className="text-center py-10 text-gray-400 h-[400px] flex items-center justify-center bg-black/20 rounded-lg">Esperando que los equipos inicien un escenario...</div>
-                )}
-
-                {activeScenario && (
-                    <div className={`grid gap-4 ${spectatorViewMode === 'dual' ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
-                        {(spectatorViewMode === 'dual' || spectatorViewMode === 'red') && (
-                            <div>
-                                <h3 className="font-bold text-red-400 mb-2 text-center">Terminales Equipo Rojo ({redTerminals.length})</h3>
-                                {redTerminals.length > 0 ? (
-                                    redTerminals.map(term => <TerminalInstance key={term.id} terminalState={term} environment={environment} onCommand={() => {}} isReadOnly={true} />)
-                                ) : <div className="h-[400px] bg-black/20 rounded-lg flex items-center justify-center text-gray-500">Terminal inactiva</div>}
-                            </div>
-                        )}
-                        {(spectatorViewMode === 'dual' || spectatorViewMode === 'blue') && (
-                            <div>
-                                <h3 className="font-bold text-blue-400 mb-2 text-center">Terminales Equipo Azul ({blueTerminals.length})</h3>
-                                {blueTerminals.length > 0 ? (
-                                    blueTerminals.map(term => <TerminalInstance key={term.id} terminalState={term} environment={environment} onCommand={() => {}} isReadOnly={true} />)
-                                ) : <div className="h-[400px] bg-black/20 rounded-lg flex items-center justify-center text-gray-500">Terminal inactiva</div>}
-                            </div>
-                        )}
-                    </div>
-                )}
+                <div className={`grid gap-4 ${spectatorViewMode === 'dual' ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
+                    {(spectatorViewMode === 'dual' || spectatorViewMode === 'red') && (
+                        <div>
+                            <h3 className="font-bold text-red-400 mb-2 text-center">Terminales Equipo Rojo ({redTerminals.length})</h3>
+                            {redTerminals.length > 0 ? (
+                                redTerminals.map(term => <TerminalInstance key={term.id} terminalState={term} environment={environment} onCommand={() => {}} isReadOnly={true} />)
+                            ) : <div className="h-[400px] bg-black/20 rounded-lg flex items-center justify-center text-gray-500">Terminal inactiva</div>}
+                        </div>
+                    )}
+                    {(spectatorViewMode === 'dual' || spectatorViewMode === 'blue') && (
+                        <div>
+                            <h3 className="font-bold text-blue-400 mb-2 text-center">Terminales Equipo Azul ({blueTerminals.length})</h3>
+                            {blueTerminals.length > 0 ? (
+                                blueTerminals.map(term => <TerminalInstance key={term.id} terminalState={term} environment={environment} onCommand={() => {}} isReadOnly={true} />)
+                            ) : <div className="h-[400px] bg-black/20 rounded-lg flex items-center justify-center text-gray-500">Terminal inactiva</div>}
+                        </div>
+                    )}
+                </div>
                 <div className="mt-4">
                     <LogViewer />
                 </div>
