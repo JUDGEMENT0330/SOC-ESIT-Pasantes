@@ -225,55 +225,63 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalStat
     const currentInput = searchMode ? searchQuery : input;
     const handleInputChange = searchMode ? setSearchQuery : setInput;
 
+    // Color logic for frame based on team
+    const frameBorderColor = terminalState.id.startsWith('red') 
+        ? 'border-red-900/50 shadow-red-900/20' 
+        : 'border-blue-900/50 shadow-blue-900/20';
+
     return (
         <div 
-            className="bg-[#0a0f1c] border border-gray-700 rounded-lg h-[400px] p-3 flex flex-col font-mono relative"
+            className={`crt-container border-4 ${frameBorderColor} rounded-xl h-[450px] p-1 relative shadow-2xl`}
             onClick={() => inputRef.current?.focus()}
         >
-            <div className="flex-grow overflow-y-auto text-sm pr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+            <div className="crt-overlay"></div>
+            <div className="crt-vignette"></div>
+            
+            <div className="flex-grow h-full overflow-y-auto text-sm p-4 crt-text font-mono relative z-20 custom-scrollbar">
                 {output.map((line, index) => (
                     <div key={index} className="mb-1">
                         {line.type === 'prompt' && <Prompt {...prompt} />}
                         {line.type === 'command' && <span className="text-white break-all">{line.text}</span>}
-                        {line.type === 'output' && <pre className="whitespace-pre-wrap text-slate-300">{line.text}</pre>}
-                        {line.type === 'html' && <div className="text-slate-300" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(line.html || '', { ALLOWED_TAGS: ['strong', 'span', 'pre', 'br'], ALLOWED_ATTR: ['class'] }) }} />}
-                        {line.type === 'error' && <pre className="whitespace-pre-wrap text-red-500">{line.text}</pre>}
+                        {line.type === 'output' && <pre className="whitespace-pre-wrap text-slate-300 opacity-90">{line.text}</pre>}
+                        {line.type === 'html' && <div className="text-slate-300 opacity-90" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(line.html || '', { ALLOWED_TAGS: ['strong', 'span', 'pre', 'br'], ALLOWED_ATTR: ['class'] }) }} />}
+                        {line.type === 'error' && <pre className="whitespace-pre-wrap text-red-500 font-bold drop-shadow-sm">{line.text}</pre>}
                     </div>
                 ))}
                 <div ref={endOfOutputRef} />
-            </div>
-            
-             {!isReadOnly && (
-                <div className="mt-2 flex-shrink-0">
-                    {searchMode && (
-                        <div className="text-yellow-400 text-xs mb-1">
-                            (reverse-i-search)`{searchQuery}': {searchResults[0] || 'ninguna coincidencia'}
+                
+                 {!isReadOnly && (
+                    <div className="mt-2 flex-shrink-0 pb-2">
+                        {searchMode && (
+                            <div className="text-yellow-400 text-xs mb-1 animate-pulse">
+                                (reverse-i-search)`{searchQuery}': {searchResults[0] || 'ninguna coincidencia'}
+                            </div>
+                        )}
+                        <div className="flex items-center">
+                            {!searchMode && <Prompt {...prompt} />}
+                            <input
+                                ref={inputRef}
+                                type="text"
+                                className="bg-transparent border-none outline-none text-white font-mono text-sm w-full caret-green-500"
+                                value={currentInput}
+                                onChange={e => handleInputChange(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                autoFocus
+                                autoComplete="off"
+                                autoCapitalize="off"
+                                spellCheck="false"
+                                disabled={(isBusy && !searchMode) || isReadOnly}
+                                placeholder={placeholder}
+                            />
                         </div>
-                    )}
-                    <div className="flex items-center">
-                        {!searchMode && <Prompt {...prompt} />}
-                        <input
-                            ref={inputRef}
-                            type="text"
-                            className="bg-transparent border-none outline-none text-white font-mono text-sm w-full"
-                            value={currentInput}
-                            onChange={e => handleInputChange(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            autoFocus
-                            autoComplete="off"
-                            autoCapitalize="off"
-                            spellCheck="false"
-                            disabled={(isBusy && !searchMode) || isReadOnly}
-                            placeholder={placeholder}
-                        />
                     </div>
-                </div>
-            )}
+                )}
+            </div>
 
             {autocomplete && autocomplete.suggestions.length > 1 && (
-                <div className="absolute bottom-10 left-3 bg-gray-900 border border-gray-700 rounded p-1 z-10 grid grid-cols-3 gap-x-4 gap-y-1">
+                <div className="absolute bottom-12 left-4 bg-gray-900/95 border border-gray-600 rounded p-2 z-30 grid grid-cols-3 gap-x-4 gap-y-1 shadow-xl backdrop-blur-sm">
                     {autocomplete.suggestions.map((suggestion) => (
-                        <div key={suggestion} className="px-2 text-xs text-slate-300">
+                        <div key={suggestion} className="px-2 text-xs text-green-400 font-mono cursor-pointer hover:bg-gray-800 rounded">
                             {suggestion}
                         </div>
                     ))}
@@ -286,11 +294,11 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalStat
 const Prompt: React.FC<PromptState> = ({ user, host, dir }) => {
     const userColor = user.includes('blue') ? 'text-blue-400' : (user === 'root' ? 'text-red-500' : 'text-red-400');
     return (
-        <span className="flex-shrink-0 mr-2">
-            <span className={userColor}>{user}</span>
-            <span className="text-slate-400">@</span>
-            <span className="prompt-host">{host}</span>
-            <span className="text-slate-400">:</span>
+        <span className="flex-shrink-0 mr-2 select-none">
+            <span className={`${userColor} font-bold`}>{user}</span>
+            <span className="text-slate-500">@</span>
+            <span className="prompt-host font-bold">{host}</span>
+            <span className="text-slate-500">:</span>
             <span className="prompt-dir">{dir}</span>
             <span className="text-slate-400">{user === 'root' || user === 'admin' || user === 'blue-team' ? '# ' : '$ '}</span>
         </span>
