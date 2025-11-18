@@ -6,6 +6,7 @@ import type { VirtualEnvironment, LogEntry, SessionData, TerminalLine, PromptSta
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, GENERAL_HELP_TEXT, SCENARIO_HELP_TEXTS, TRAINING_SCENARIOS } from './constants';
 import * as R from 'https://aistudiocdn.com/ramda@^0.32.0';
+import { GoogleGenAI } from "@google/genai";
 
 // ============================================================================
 // DB State Type (Matches actual Supabase schema)
@@ -160,6 +161,27 @@ const updateHostState = (env: VirtualEnvironment, hostIp: string, updates: Parti
     return newEnv;
 };
 
+// NEW: Robust Argument Parser
+const parseArguments = (command: string): string[] => {
+    const args: string[] = [];
+    let current = '';
+    let inQuote = false;
+    
+    for (let i = 0; i < command.length; i++) {
+        const char = command[i];
+        if (char === '"' || char === "'") {
+            inQuote = !inQuote;
+        } else if (char === ' ' && !inQuote) {
+            if (current) args.push(current);
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    if (current) args.push(current);
+    return args;
+};
+
 // ============================================================================
 // COMMAND LIBRARY
 // ============================================================================
@@ -173,6 +195,36 @@ const commandLibrary: { [key: string]: CommandHandler } = {
             return { output: [{ html: helpTexts.general + teamHelp, type: 'html' }] };
         }
         return { output: [{ html: (userTeam === 'red' ? RED_TEAM_HELP_TEXT : BLUE_TEAM_HELP_TEXT) + GENERAL_HELP_TEXT, type: 'html' }] };
+    },
+    // NEW: AI Analyst Integration
+    analyze: async (args, { environment, userTeam, activeScenario }) => {
+        if (!process.env.API_KEY) {
+            return { output: [{ text: "Error: API_KEY no configurada para el Analista Virtual.", type: 'error' }] };
+        }
+        
+        // Gather context for the AI
+        const logs = environment.timeline.slice(-15).map(l => `[${l.source_team || 'SYS'}] ${l.message}`).join('\n');
+        const scenarioContext = activeScenario ? `Escenario: ${activeScenario.title}. Desc: ${activeScenario.description}` : "Sin escenario activo.";
+        const teamContext = `Eres el analista de seguridad IA para el Equipo ${userTeam === 'red' ? 'Rojo (Atacante)' : 'Azul (Defensor)'}.`;
+        
+        const prompt = `${teamContext}
+Contexto del juego: ${scenarioContext}
+Últimos logs del sistema:
+${logs}
+
+Analiza la situación brevemente (max 3 lineas) y sugiere el siguiente comando técnico más lógico para mi equipo. Sé directo y táctico.`;
+
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+            });
+            
+            return { output: [{ html: `<strong class="text-cyan-400">Analista Virtual (AI):</strong><br/>${response.text}`, type: 'html' }] };
+        } catch (error) {
+            return { output: [{ text: "Error conectando con el Analista Virtual.", type: 'error' }] };
+        }
     },
     'start-scenario': async(args, { startScenario }) => {
         if (!args[0]) return { output: [{ text: "Uso: start-scenario <id_escenario>", type: 'error'}] };
@@ -1005,7 +1057,9 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         if (terminalIndex === -1 || team === 'spectator') return;
 
         const terminal = terminals[terminalIndex];
-        const cmdStr = command.trim().split(' ')[0].toLowerCase();
+        // Use new argument parser
+        const args = parseArguments(command.trim());
+        const cmdStr = args[0]?.toLowerCase();
         const isEnvIndependent = ['help', 'start-scenario', 'clear', 'marca', 'whoami', 'exit'].includes(cmdStr);
 
         if (!environment && !isEnvIndependent) {
@@ -1032,7 +1086,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
 
         let result: CommandResult;
         if (handler) {
-            result = await handler(command.trim().split(' ').slice(1), context);
+            result = await handler(args.slice(1), context);
         } else {
             result = { output: [{ text: `comando no encontrado: ${cmdStr}`, type: 'error' }] };
         }
