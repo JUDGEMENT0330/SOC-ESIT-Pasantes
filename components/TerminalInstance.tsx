@@ -68,7 +68,10 @@ class AutocompleteEngine {
     private hosts: Set<string> = new Set();
     
     constructor(environment: VirtualEnvironment | null) {
-        if (!environment) return;
+        // FIX: Critical null check. The app would crash here if a user typed
+        // in the terminal before starting a scenario, as environment would be null.
+        if (!environment || !environment.networks) return;
+
         for (const network of Object.values(environment.networks)) {
             for (const host of network.hosts) {
                 this.hosts.add(host.ip);
