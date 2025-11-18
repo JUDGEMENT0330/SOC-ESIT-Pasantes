@@ -911,11 +911,12 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         
         const finalEnvironment = result.newEnvironment || environment;
 
+        const sourceTeamForDb = team === 'red' ? 'Red' : 'Blue';
         const { error: logError } = await supabase
             .from('simulation_logs')
             .insert({
                 session_id: sessionId,
-                source_team: team,
+                source_team: sourceTeamForDb,
                 message: command,
                 team_visible: 'all'
             });
