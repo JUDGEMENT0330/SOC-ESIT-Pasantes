@@ -623,12 +623,12 @@ interface SimulationProviderProps {
     sessionData: SessionData;
 }
 
-const mapDbSourceToUiSource = (dbSource: 'Red' | 'Blue' | 'System' | 'Network' | undefined): LogEntry['source'] => {
-    switch (dbSource) {
-        case 'Red': return 'Red Team';
-        case 'Blue': return 'Blue Team';
-        case 'System': return 'System';
-        case 'Network': return 'Network';
+const mapDbSourceToUiSource = (dbSource: string | undefined): LogEntry['source'] => {
+    switch (dbSource?.toLowerCase()) {
+        case 'red': return 'Red Team';
+        case 'blue': return 'Blue Team';
+        case 'system': return 'System';
+        case 'network': return 'Network';
         default: return 'System';
     }
 };
@@ -767,7 +767,15 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                     schema: 'public',
                     table: 'simulation_logs',
                     filter: `session_id=eq.${sessionId}`
-                }, fetchLogs)
+                }, (payload) => {
+                    const newLog = payload.new as any;
+                    const mappedLog = {
+                        ...newLog,
+                        source: mapDbSourceToUiSource(newLog.source_team),
+                        teamVisible: newLog.team_visible,
+                    };
+                    setLogs(prev => [...prev.filter(log => log.id !== mappedLog.id), mappedLog as LogEntry]);
+                })
                 .subscribe();
         };
 
@@ -907,7 +915,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             .from('simulation_logs')
             .insert({
                 session_id: sessionId,
-                source_team: team === 'red' ? 'Red' : 'Blue',
+                source_team: team,
                 message: command,
                 team_visible: 'all'
             });
