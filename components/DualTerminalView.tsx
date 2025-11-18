@@ -5,7 +5,7 @@ import { Icon } from '../constants';
 import { SimulationContext } from '../SimulationContext';
 
 export const DualTerminalView: React.FC = () => {
-    const { terminals, processCommand, userTeam, environment, activeScenario, addNewTerminal, removeTerminal } = useContext(SimulationContext);
+    const { terminals, processCommand, userTeam, environment, activeScenario } = useContext(SimulationContext);
     
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
     
@@ -30,11 +30,6 @@ export const DualTerminalView: React.FC = () => {
         if (activeTerminalId) {
             processCommand(activeTerminalId, command);
         }
-    };
-
-    const handleRemoveTerminal = (e: React.MouseEvent, terminalId: string) => {
-        e.stopPropagation(); // Prevent tab selection when clicking the close button
-        removeTerminal(terminalId);
     };
 
     if (userTeam === 'spectator') {
@@ -118,7 +113,6 @@ export const DualTerminalView: React.FC = () => {
 
             <div className="flex items-center border-b border-gray-700 mb-2">
                 {terminals.map(term => {
-                    const isPrimary = term.id === 'red-1' || term.id === 'blue-1';
                     return (
                         <button
                             key={term.id}
@@ -130,25 +124,9 @@ export const DualTerminalView: React.FC = () => {
                             }`}
                         >
                             <span>{term.name}</span>
-                            {!isPrimary && (
-                                <span 
-                                    onClick={(e) => handleRemoveTerminal(e, term.id)} 
-                                    className="p-1 rounded-full hover:bg-red-500/50" 
-                                    title="Cerrar terminal"
-                                >
-                                    <Icon name="trash" className="h-3 w-3" />
-                                </span>
-                            )}
                         </button>
                     )
                 })}
-                 <button
-                    onClick={addNewTerminal}
-                    className="px-3 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
-                    title="Abrir nueva terminal"
-                >
-                    <Icon name="plus-circle" className="h-5 w-5" />
-                </button>
             </div>
 
             <div className="w-full mx-auto">
