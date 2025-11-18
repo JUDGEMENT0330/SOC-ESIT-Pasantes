@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import type { VirtualEnvironment, LogEntry, SessionData, TerminalLine, PromptState, TerminalState, ActiveProcess, CommandHandler, CommandContext, CommandResult, VirtualHost, FirewallState, InteractiveScenario } from './types';
@@ -208,19 +209,21 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         
         const userAccount = targetHost.users.find(u => u.username === user);
         
-        // Specific logic for scenario 7 root login
-        if (user === 'root' && targetHost.hostname === 'BOVEDA-WEB') {
+        // Specific logic for scenario 7 root login restriction
+        if (user === 'root') {
             const sshConfig = targetHost.files.find(f => f.path === '/etc/ssh/sshd_config');
             if (sshConfig?.content.includes('PermitRootLogin no')) {
                 return { output: [{ text: `root@${host}: Permission denied (publickey).`, type: 'error' }], duration: 1500 };
             }
         }
+        
+        // Check if user exists, or if attacker has found valid credentials
+        const validCreds = (userAccount && (userAccount.password === 'toor' || userAccount.password === 'P@ssw0rd' || userAccount.password === 'Password123'));
+        const hasFoundCreds = environment.attackProgress.credentials[`${user}@${targetHost.ip}`];
 
-        const hasCredentials = environment.attackProgress.credentials[`${user}@${targetHost.ip}`] === userAccount?.password || (userAccount && userAccount.password);
-
-        if (!userAccount || !hasCredentials) {
+        if (!userAccount || (!validCreds && !hasFoundCreds)) {
             const newEnv = updateHostState(environment, targetHost.ip, { failedLogins: (targetHost.systemState?.failedLogins || 0) + 1 });
-            return { output: [{ text: `Permiso denegado, por favor intente de nuevo.`, type: 'error' }], duration: 1500, newEnvironment: newEnv };
+            return { output: [{ text: `Permission denied, please try again.`, type: 'error' }], duration: 1500, newEnvironment: newEnv };
         }
 
         const newEnv = R.clone(environment);
@@ -250,16 +253,18 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         const visiblePorts = Object.entries(targetHost.services).filter(([port]) => {
             if (!fw.enabled) return true;
             const portNum = parseInt(port);
-            const isDenied = fw.rules.some(r => r.destPort === portNum && r.action === 'deny');
+            // Deny rules take precedence
+            const isDenied = fw.rules.some(r => r.action === 'deny' && (r.destPort === portNum || !r.destPort) && (!r.sourceIP || r.sourceIP === 'Anywhere'));
             if (isDenied) return false;
-            return fw.rules.some(r => r.destPort === portNum && r.action === 'allow' && !r.sourceIP);
+
+            // Allow if there's a specific allow rule
+            return fw.rules.some(r => r.action === 'allow' && (r.destPort === portNum || !r.destPort) && (!r.sourceIP || r.sourceIP === 'Anywhere'));
         });
         
-        let outputText = `\nStarting Nmap...\nNmap scan report for ${targetHost.hostname} (${targetHost.ip})\nHost is up.\n`;
-        if (fw.enabled) {
-            const filteredCount = Object.keys(targetHost.services).length - visiblePorts.length;
-            if (filteredCount > 0) outputText += `Not shown: ${filteredCount} filtered ports\n`;
-        }
+        let outputText = `\nStarting Nmap 7.94 ( https://nmap.org )\nNmap scan report for ${targetHost.hostname} (${targetHost.ip})\nHost is up (0.00023s latency).\n`;
+        const filteredCount = Object.keys(targetHost.services).length - visiblePorts.length;
+        if (filteredCount > 0) outputText += `Not shown: ${filteredCount} filtered tcp ports (no-response)\n`;
+        
         outputText += 'PORT\tSTATE\tSERVICE\tVERSION\n';
         visiblePorts.forEach(([port, service]) => {
             outputText += `${port}/tcp\t${service.state}\t${service.name}\t${service.version}\n`;
@@ -281,10 +286,16 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         const targetHost = findHost(environment, host);
         if (!targetHost) return { output: [{ text: `Host desconocido: ${host}`, type: 'error' }] };
 
+        // Check Fail2Ban / Firewall status first
+        const isBlocked = environment.networks.dmz.firewall.rules.some(r => r.action === 'deny' && r.sourceIP === '192.168.1.100');
+        if (isBlocked) {
+            return { output: [{ text: `[ERROR] target ${host} - connection refused`, type: 'error' }], duration: 2000 };
+        }
+
         if (userArg === 'root') {
              const sshConfig = targetHost.files.find(f => f.path === '/etc/ssh/sshd_config');
             if (sshConfig?.content.includes('PermitRootLogin no')) {
-                return { output: [{ text: `[ERROR] target ${targetArg} does not support password authentication for root`, type: 'output' }], duration: 3000 };
+                return { output: [{ text: `[ERROR] target ssh://${targetHost.ip}:22/ does not support password authentication (method reply 4).`, type: 'output' }], duration: 3000 };
             }
         }
         
@@ -295,8 +306,9 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         
         if (passwordFound) {
             newEnv.attackProgress.credentials[`${userArg}@${targetHost.ip}`] = userAccount.password;
+            const output = `Hydra v9.5 (c) 2023 by van Hauser/THC\n[DATA] attacking ssh://${targetHost.ip}:22/\n[STATUS] 8.00 tries/min, 20 tries in 00:01h, 16 active\n[22][ssh] host: ${targetHost.ip}   login: ${userArg}   password: ${userAccount.password}\n1 of 1 target successfully completed, 1 valid password found`;
             return {
-                output: [{ html: `[22][ssh] host: ${host} login: <strong>${userArg}</strong> password: <strong>${userAccount.password}</strong>`, type: 'html' }],
+                output: [{ html: `<pre>${output}</pre>`, type: 'html' }],
                 duration: 5000,
                 newEnvironment: newEnv
             };
@@ -322,19 +334,31 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         let outputText = '';
 
         switch (args[0]) {
-            case 'enable': fw.enabled = true; outputText = 'Firewall is active and enabled on system startup'; break;
-            case 'disable': fw.enabled = false; outputText = 'Firewall stopped and disabled on system startup'; break;
+            case 'enable': 
+                fw.enabled = true; 
+                outputText = 'Firewall is active and enabled on system startup'; 
+                break;
+            case 'disable': 
+                fw.enabled = false; 
+                outputText = 'Firewall stopped and disabled on system startup'; 
+                break;
             case 'status':
-                 if (args[1] === 'numbered') {
-                    outputText = `Status: ${fw.enabled ? 'active' : 'inactive'}\n\n     To                         Action      From\n     --                         ------      ----\n`;
-                    fw.rules.forEach((r, i) => { outputText += `[ ${i+1}] ${r.destPort || 'Any'}/${r.protocol || 'any'}                  ${r.action.toUpperCase()}        ${r.sourceIP || 'Anywhere'}\n`; });
+                 const status = fw.enabled ? 'active' : 'inactive';
+                 if (args[1] === 'numbered' || fw.enabled) {
+                    outputText = `Status: ${status}\nLogging: on (low)\nDefault: deny (incoming), allow (outgoing), disabled (routed)\n\nTo                         Action      From\n--                         ------      ----\n`;
+                    fw.rules.forEach(r => { 
+                        const port = r.destPort ? `${r.destPort}/${r.protocol}` : 'Any';
+                        const from = r.sourceIP || 'Anywhere';
+                        outputText += `${port.padEnd(26)} ${r.action.toUpperCase().padEnd(11)} ${from}\n`; 
+                    });
+                    if (fw.rules.length === 0) outputText += "(No rules)";
                  } else {
-                    outputText = `Status: ${fw.enabled ? 'active' : 'inactive'}\n\nTo                         Action      From\n--                         ------      ----\n`;
-                    fw.rules.forEach(r => { outputText += `${r.destPort || 'Any'}/${r.protocol || 'any'}                  ${r.action.toUpperCase()}        ${r.sourceIP || 'Anywhere'}\n`; });
+                    outputText = `Status: ${status}`;
                  }
                 break;
             case 'allow':
-                const allowPort = parseInt(args[1]);
+                const allowPortStr = args[1]?.split('/')[0];
+                const allowPort = parseInt(allowPortStr);
                 if (isNaN(allowPort)) return { output: [{text: "Regla inválida", type: 'error'}]};
                 fw.rules = fw.rules.filter(r => !(r.destPort === allowPort && !r.sourceIP));
                 fw.rules.push({ id: `allow-${allowPort}`, action: 'allow', destPort: allowPort, protocol: 'tcp'});
@@ -348,11 +372,7 @@ const commandLibrary: { [key: string]: CommandHandler } = {
                     fw.rules.push({ id: `deny-ip-${ip}`, action: 'deny', sourceIP: ip, protocol: 'any'});
                     outputText = `Rule added`;
                 } else {
-                    const denyPort = parseInt(args[1]);
-                    if (isNaN(denyPort)) return { output: [{text: "Regla inválida", type: 'error'}]};
-                    fw.rules = fw.rules.filter(r => r.destPort !== denyPort);
-                    fw.rules.push({ id: `deny-${denyPort}`, action: 'deny', destPort: denyPort, protocol: 'tcp'});
-                    outputText = `Rule added`;
+                    return { output: [{text: "Sintaxis de deny incompleta. Use 'ufw deny from <IP>'", type: 'error'}]};
                 }
                 break;
             default: return { output: [{text: `Comando ufw no reconocido: ${args[0]}`, type: 'error'}] };
@@ -387,36 +407,57 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         const hostPath = ['networks', 'dmz', 'hosts', 0];
         let host = R.path(hostPath, newEnv) as VirtualHost;
         const fileIndex = host.files.findIndex(f => f.path === path);
-        if (fileIndex === -1) return { output: [{text: `El archivo no existe. (Simulado)`, type: 'error'}] };
+        if (fileIndex === -1) return { output: [{text: `[ Error leyendo ${path}: No existe el fichero o el directorio ]`, type: 'error'}] };
 
+        let message = `File ${path} saved. (Simulado)`;
+        
         if (path === '/etc/ssh/sshd_config') {
-            host.files[fileIndex].content = host.files[fileIndex].content?.replace('PermitRootLogin yes', 'PermitRootLogin no');
+            if (host.files[fileIndex].content.includes('PermitRootLogin yes')) {
+                host.files[fileIndex].content = host.files[fileIndex].content.replace('PermitRootLogin yes', 'PermitRootLogin no');
+                message = `[ Wrote 120 lines to ${path} ] (PermitRootLogin updated)`;
+            }
         } else if (path === '/var/www/html/index.php') {
-            host.files[fileIndex].content = '<?php echo "Sitio Comprometido"; ?>';
-            host.files[fileIndex].hash = 'hacked_hash_456';
-             newEnv.attackProgress.persistence.push('index_modified');
+            // Simulate red team webshell injection
+            host.files[fileIndex].content = '<?php if(isset($_GET["x"])){system($_GET["x"]);} ?>' + host.files[fileIndex].content;
+            host.files[fileIndex].hash = 'hacked_hash_modified_index'; // Change hash to indicate modification
+            newEnv.attackProgress.persistence.push('index_modified');
+            message = `[ Wrote 5 lines to ${path} ] (Backdoor injected)`;
         }
-        return { output: [{text: `Archivo guardado. (Simulado)`, type: 'output'}], newEnvironment: R.set(R.lensPath(hostPath), host, newEnv) };
+        return { output: [{text: message, type: 'output'}], duration: 1500, newEnvironment: R.set(R.lensPath(hostPath), host, newEnv) };
     },
     systemctl: async (args, { environment }) => {
-        if (args[0] === 'restart' && args[1] === 'sshd') return { output: [{text: `Servicio sshd reiniciado. (Simulado)`, type: 'output'}], duration: 800 };
-        return { output: [{text: `Comando systemctl no reconocido.`, type: 'error'}] };
+        if (args[0] === 'restart') {
+             return { output: [{text: `Job for ${args[1]}.service canceled.`, type: 'output'}], duration: 800 };
+        }
+        if (args[0] === 'restart' && (args[1] === 'sshd' || args[1] === 'apache2')) {
+            return { output: [{text: ``, type: 'output'}], duration: 1000 }; 
+        }
+        return { output: [{text: `System has not been booted with systemd as init system (PID 1). Can't operate.`, type: 'error'}] };
     },
     top: async (args, { environment, terminalState }) => {
         if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
         const host = findHost(environment, terminalState.currentHostIp);
         if (!host || !host.systemState) return { output: [] };
-        const { cpuLoad, memoryUsage, networkConnections } = host.systemState;
-        const loadAvg1 = cpuLoad > 50 ? cpuLoad / 8 : 0.15;
-        const loadAvg2 = cpuLoad > 50 ? cpuLoad / 10 : 0.20;
-        const loadAvg3 = cpuLoad > 50 ? cpuLoad / 12 : 0.18;
-        const idle = Math.max(1.2, 100 - cpuLoad).toFixed(1);
-        const sys = Math.min(84.7, cpuLoad * 0.8).toFixed(1);
-        const user = Math.min(12.3, cpuLoad * 0.2).toFixed(1);
+        const { cpuLoad, networkConnections } = host.systemState;
         
-        const outputText = `top - ${new Date().toTimeString().split(' ')[0]} up 5 days,  3:21,  2 users,  load average: ${loadAvg1.toFixed(2)}, ${loadAvg2.toFixed(2)}, ${loadAvg3.toFixed(2)}
-Tasks: ${networkConnections * 2} total,   ${Math.floor(networkConnections * 0.8)} running,   ${Math.floor(networkConnections * 1.2)} sleeping,   0 stopped,   0 zombie
-%Cpu(s): ${user} us,  ${sys} sy,  0.0 ni, ${idle} id,  0.9 wa,  0.0 hi,  0.0 si,  0.0 st`;
+        // Realistic calculation based on load
+        const loadVal = cpuLoad > 50 ? (cpuLoad / 10) + 2 : 0.05;
+        const loadStr = `${loadVal.toFixed(2)}, ${(loadVal * 0.9).toFixed(2)}, ${(loadVal * 0.8).toFixed(2)}`;
+        
+        // If under attack
+        const isUnderAttack = cpuLoad > 90;
+        const processList = isUnderAttack 
+            ? ` 1234 root      20   0  123456  45678  12345 R  89.3   5.6   0:45.67 ksoftirqd/0\n 5678 root      20   0  234567  56789  23456 R  87.1   6.8   0:42.34 ksoftirqd/1`
+            : `  952 root      20   0 1234564  23456  12344 S   0.3   0.5   1:23.45 systemd\n 1023 www-data  20   0  654321  45612   3456 S   0.1   1.2   0:12.34 apache2`;
+
+        const outputText = `top - ${new Date().toTimeString().split(' ')[0]} up 5 days,  3:21,  2 users,  load average: ${loadStr}
+Tasks: ${Math.floor(networkConnections/5) + 100} total,   ${isUnderAttack ? '5' : '1'} running,   ${Math.floor(networkConnections/5) + 99} sleeping,   0 stopped,   0 zombie
+%Cpu(s): ${isUnderAttack ? '12.3' : '1.5'} us,  ${isUnderAttack ? '84.7' : '0.5'} sy,  0.0 ni, ${isUnderAttack ? '1.2' : '98.0'} id,  0.9 wa,  0.9 hi,  0.0 si,  0.0 st
+MiB Mem :   7962.7 total,    256.3 free,   ${isUnderAttack ? '6234.1' : '1234.1'} used,   1472.3 buff/cache
+MiB Swap:   2048.0 total,   1876.2 free,    171.8 used.   1234.5 avail Mem
+
+  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+${processList}`;
         return { output: [{ text: outputText, type: 'output' }] };
     },
     hping3: async (args, { environment, setEnvironment }) => {
@@ -426,16 +467,39 @@ Tasks: ${networkConnections * 2} total,   ${Math.floor(networkConnections * 0.8)
         if (!targetHost) return { output: [{ text: `Host desconocido: ${target}`, type: 'error' }] };
 
         const originalCpuLoad = targetHost.systemState?.cpuLoad || 5.0;
+        // Trigger DoS State
         setEnvironment(env => updateHostState(env!, targetHost.ip, { cpuLoad: 99.8, networkConnections: 4589 }));
+        
+        // DoS lasts for 20 seconds
         setTimeout(() => {
              setEnvironment(env => updateHostState(env!, targetHost.ip, { cpuLoad: originalCpuLoad, networkConnections: 50 }));
-        }, 20000); // DoS lasts for 20 seconds
+        }, 20000); 
 
         return {
             output: [{ text: `HPING ${target} (eth0 ${target}): S set, 40 headers + 0 data bytes, flooding`, type: 'output' }],
             process: { command: `hping3 ${args.join(' ')}`, type: 'dos' },
-            duration: 1000 // Command returns immediately but process runs
+            duration: 1000 
         };
+    },
+    tail: async (args, { environment, terminalState }) => {
+        if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
+        const host = findHost(environment, terminalState.currentHostIp);
+        const filename = args[args.length - 1];
+        
+        if (filename === '/var/log/auth.log') {
+            const failedLogins = host?.systemState?.failedLogins || 0;
+            let logOutput = "";
+            if (failedLogins > 0) {
+                for (let i = 0; i < Math.min(failedLogins, 10); i++) {
+                     logOutput += `Nov 18 10:15:${20+i} ${host?.hostname} sshd[${12345+i}]: Failed password for root from 192.168.1.100 port ${54321+i} ssh2\n`;
+                }
+            } else {
+                logOutput = `Nov 18 09:00:00 ${host?.hostname} systemd-logind[800]: New seat seat0.\nNov 18 09:00:05 ${host?.hostname} sshd[950]: Server listening on 0.0.0.0 port 22.`;
+            }
+            return { output: [{ text: logOutput, type: 'output' }] };
+        }
+        
+        return { output: [{ text: `tail: cannot open '${filename}' for reading: No such file or directory`, type: 'error' }] };
     },
     journalctl: async(args, { environment, terminalState }) => {
         if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
@@ -444,7 +508,10 @@ Tasks: ${networkConnections * 2} total,   ${Math.floor(networkConnections * 0.8)
         let output = '-- Logs begin at Mon 2024-01-01 --\n';
         for (let i = 0; i < host.systemState.failedLogins; i++) {
             const time = new Date(Date.now() - i * 1000).toTimeString().split(' ')[0];
-            output += `Jan 01 ${time} ${host.hostname} sshd[123${i}]: Failed password for invalid user admin from 192.168.1.100 port 54321 ssh2\n`;
+            output += `Nov 18 ${time} ${host.hostname} sshd[123${i}]: Failed password for invalid user admin from 192.168.1.100 port 54321 ssh2\n`;
+        }
+        if (host.systemState.failedLogins === 0) {
+            output += `Nov 18 10:00:00 ${host.hostname} systemd[1]: Started OpenBSD Secure Shell server.`;
         }
         return { output: [{ text: output, type: 'output' }] };
     },
@@ -458,12 +525,27 @@ Tasks: ${networkConnections * 2} total,   ${Math.floor(networkConnections * 0.8)
         return { output: [{ text: `${file.hash}  ${path}`, type: 'output' }] };
     },
     'fail2ban-client': async (args, context) => {
-        return commandLibrary.ufw(['deny', 'from', args[args.indexOf('banip') + 1]], context);
+        if (args.includes('banip')) {
+            const ip = args[args.indexOf('banip') + 1];
+            return commandLibrary.ufw(['deny', 'from', ip], context);
+        }
+         return { output: [{text: `Fail2Ban v0.11.2 running`, type: 'output'}] };
     },
     ss: async (args, { environment, terminalState }) => {
         if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
         const host = findHost(environment, terminalState.currentHostIp);
         if (!host) return { output: [] };
+        
+        const isUnderAttack = (host.systemState?.networkConnections || 0) > 1000;
+
+        if (isUnderAttack) {
+             let outputText = 'State      Recv-Q Send-Q     Local Address:Port         Peer Address:Port\n';
+             outputText += `ESTAB      0      0          10.0.20.10:80              192.168.1.100:54321\n`;
+             outputText += `ESTAB      0      0          10.0.20.10:80              192.168.1.100:54322\n`;
+             outputText += `... (3419 more lines) ...\n`;
+             return { output: [{ text: outputText, type: 'output' }] };
+        }
+
         let outputText = 'Netid  State      Recv-Q Send-Q     Local Address:Port         Peer Address:Port\n';
         const fw = environment.networks.dmz.firewall;
         Object.entries(host.services).forEach(([port, service]) => {
@@ -478,11 +560,12 @@ Tasks: ${networkConnections * 2} total,   ${Math.floor(networkConnections * 0.8)
         });
         return { output: [{ text: outputText, type: 'output' }] };
     },
+    netstat: async (args, context) => commandLibrary.ss(args, context), // Alias for ss
     ls: async (args, { environment, terminalState }) => {
         if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
         const host = findHost(environment, terminalState.currentHostIp);
         if (!host) return { output: [] };
-        const path = args.find(a => !a.startsWith('-')) || '/var/www/html'; // Default to webroot for scenarios
+        const path = args.find(a => !a.startsWith('-')) || '/var/www/html'; 
         const showDetails = args.includes('-l') || args.includes('-la');
         const relevantFiles = host.files.filter(f => f.path.startsWith(path));
         
@@ -491,7 +574,8 @@ Tasks: ${networkConnections * 2} total,   ${Math.floor(networkConnections * 0.8)
         if (showDetails) {
             let outputText = `total ${relevantFiles.length * 4}\n`;
             relevantFiles.forEach(file => {
-                const perms = file.permissions === '640' ? '-rw-r-----' : '-rw-r--r--';
+                // Simplified permission logic
+                const perms = file.permissions === '640' ? '-rw-r-----' : (file.permissions === '600' ? '-rw-------' : '-rw-r--r--');
                  outputText += `${perms} 1 www-data www-data 145 Nov 18 10:00 ${file.path.split('/').pop()}\n`;
             });
             return { output: [{ text: outputText, type: 'output' }] };
@@ -502,14 +586,28 @@ Tasks: ${networkConnections * 2} total,   ${Math.floor(networkConnections * 0.8)
     cat: async (args, { environment, terminalState }) => {
         if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
         if (args.length < 1) return { output: [{text: "cat: falta un operando", type: 'error'}] };
-        const path = args[0].includes('/') ? args[0] : `/var/www/html/${args[0]}`;
+        
+        // Handle absolute paths or assume webroot
+        let path = args[0];
+        if (!path.startsWith('/')) {
+             if (args[0].includes('index.php') || args[0].includes('db_config')) {
+                 path = `/var/www/html/${args[0]}`;
+             } else {
+                 // Fallback to check relative
+                 const host = findHost(environment, terminalState.currentHostIp);
+                 const found = host?.files.find(f => f.path.endsWith(args[0]));
+                 if (found) path = found.path;
+             }
+        }
+
         const host = findHost(environment, terminalState.currentHostIp);
         const file = host?.files.find(f => f.path === path);
 
         if (!file) return { output: [{text: `cat: ${path}: No existe el fichero o el directorio`, type: 'error'}]};
         
-        const perms = parseInt(file.permissions, 8);
-        if ((perms & 0o004) === 0 && terminalState.prompt.user !== 'root' && terminalState.prompt.user !== 'www-data') {
+        const perms = parseInt(file.permissions, 10);
+        // Very basic permission check: if permissions are strict and user isn't root, deny
+        if (isNaN(perms) || ((perms & 0o004) === 0 && terminalState.prompt.user !== 'root')) {
              return { output: [{text: `cat: ${path}: Permission denied`, type: 'error'}]};
         }
 
@@ -519,14 +617,16 @@ Tasks: ${networkConnections * 2} total,   ${Math.floor(networkConnections * 0.8)
         if (args.length < 2) return { output: [{text: "Uso: grep <patrón> <archivo>", type: 'error'}] };
         const pattern = args[0];
         const file = args[1];
-        if (file === '/var/log/auth.log') {
+        
+        if (file.includes('auth.log')) {
             const host = findHost(environment, terminalState.currentHostIp!);
             if (!host || !host.systemState) return { output: [] };
              let output = '';
-             for (let i = 0; i < host.systemState.failedLogins; i++) {
+             const failed = host.systemState.failedLogins || 0;
+             for (let i = 0; i < Math.min(failed, 20); i++) { // Limit to 20 lines
                  const line = `Failed password for invalid user admin from 192.168.1.100 port 54321 ssh2`;
-                 if (line.toLowerCase().includes(pattern.toLowerCase())) {
-                     output += `Jan 01 12:0${i}:00 ${host.hostname} sshd[123${i}]: ${line}\n`;
+                 if (line.toLowerCase().includes(pattern.toLowerCase().replace(/['"]/g, ''))) {
+                     output += `Nov 18 10:15:${20+i} ${host.hostname} sshd[123${i}]: ${line}\n`;
                  }
              }
              return { output: [{ text: output, type: 'output' }] };
@@ -573,17 +673,29 @@ Tasks: ${networkConnections * 2} total,   ${Math.floor(networkConnections * 0.8)
         return { output: [{text: 'Comando OpenSSL no implementado', type: 'error'}]};
     },
     htop: async(args, context) => commandLibrary.top(args, context), // Alias
-    dirb: async(args) => ({ output: [{ text: `---- Scanning URL: ${args[0]} ----\n+ /index.php (CODE:200|SIZE:123)\n+ /images (CODE:301|SIZE:0) --> http://${args[0]}/images/\n+ /uploads (CODE:403|SIZE:43)\n+ /db_config.php (CODE:200|SIZE:87)`, type: 'output' }], duration: 2000 }),
+    dirb: async(args, { activeScenario }) => {
+        const target = args[0] || '';
+        if (activeScenario?.id === 'escenario7' && target.includes('BOVEDA-WEB')) {
+            return { output: [{ text: `---- Scanning URL: ${target} ----\n+ /index.php (CODE:200|SIZE:1234)\n+ /backup (CODE:301|SIZE:314) --> ${target}/backup/\n+ /admin (CODE:403|SIZE:293)`, type: 'output' }], duration: 2000 };
+        }
+        return { output: [{ text: `---- Scanning URL: ${target} ----\n+ /index.php (CODE:200|SIZE:123)\n+ /images (CODE:301|SIZE:0) --> ${target}/images/\n+ /uploads (CODE:403|SIZE:43)`, type: 'output' }], duration: 2000 };
+    },
     curl: async (args, context) => {
-        const url = args[0];
-        if (url.includes('db_config.php')) {
-            const { environment } = context;
+        const { environment, activeScenario } = context;
+        const url = args[0] || '';
+
+        if (activeScenario?.id === 'escenario7' && url.includes('BOVEDA-WEB')) {
             const host = findHost(environment, 'BOVEDA-WEB');
-            const file = host?.files.find(f => f.path === '/var/www/html/db_config.php');
-            if(file && parseInt(file.permissions, 8) > parseInt('640', 8)) {
-                return commandLibrary.cat(['/var/www/html/db_config.php'], context);
+            if (url.endsWith('/backup/')) {
+                return { output: [{ html: `<html><body><h1>Index of /backup</h1><ul><li><a href="db_config.php.bak">db_config.php.bak</a></li></ul></body></html>`, type: 'html' }] };
             }
-            return { output: [{ text: '', type: 'output' }] };
+            if (url.endsWith('db_config.php.bak')) {
+                const file = host?.files.find(f => f.path.includes('db_config.php.bak'));
+                 if (file) { // In scenario 7, this file is explicitly 644 (readable) initially
+                    return { output: [{ text: file.content || '', type: 'output' }], duration: 400 };
+                }
+                return { output: [{ text: '403 Forbidden', type: 'error' }], duration: 400 };
+            }
         }
         return { output: [{ text: 'Contenido de la página de inicio...', type: 'output' }], duration: 400 };
     },
@@ -597,6 +709,39 @@ Tasks: ${networkConnections * 2} total,   ${Math.floor(networkConnections * 0.8)
             newEnvironment: newEnv,
             duration: 1200
         };
+    },
+    useradd: async (args, { environment, terminalState }) => {
+        if (!terminalState.currentHostIp || terminalState.prompt.user !== 'root') return { output: [{text: "Permiso denegado.", type: 'error'}] };
+        const hostPath = ['networks', 'dmz', 'hosts', 0];
+        const newEnv = R.clone(environment);
+        const host = R.path(hostPath, newEnv) as VirtualHost;
+        
+        // Simple user simulation
+        const newUser = args.find(a => !a.startsWith('-'));
+        if (newUser) {
+            host.users.push({ username: newUser, password: 'hidden_pass_123', privileges: 'user' });
+        }
+        
+        return { output: [{text: '', type: 'output'}], newEnvironment: R.set(R.lensPath(hostPath), host, newEnv) };
+    },
+    crontab: async (args, { environment, terminalState }) => {
+        if (!terminalState.currentHostIp || terminalState.prompt.user !== 'root') return { output: [{text: "Permiso denegado.", type: 'error'}] };
+        if (args.includes('-l') || args.includes('-e') || args.includes('-')) {
+            const newEnv = R.clone(environment);
+            if (!newEnv.attackProgress.persistence.includes('cron_job_set')) {
+                 newEnv.attackProgress.persistence.push('cron_job_set');
+            }
+            return { output: [{ text: 'crontab: installing new crontab', type: 'output' }], newEnvironment: newEnv };
+        }
+        return { output: [{text: 'Uso: crontab [-e|-l]', type: 'error'}]};
+    },
+    sed: async (args, context) => {
+        const { terminalState } = context;
+        if (!terminalState.currentHostIp || terminalState.prompt.user !== 'root') return { output: [{text: "Permiso denegado.", type: 'error'}] };
+        if (args.some(arg => arg.includes('index.php'))) {
+            return commandLibrary.nano(['/var/www/html/index.php'], context);
+        }
+        return { output: [{text: '', type: 'output'}]};
     },
 };
 
@@ -827,30 +972,20 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         const scenario = TRAINING_SCENARIOS.find(s => s.id === scenarioId && s.isInteractive) as InteractiveScenario | undefined;
         if (!scenario) return false;
 
-        const initialEnv = R.clone(scenario.initialEnvironment);
-        const redTerminal = createNewTerminal('red-1', 'Equipo Rojo 1', 'red', scenario.title);
-        const blueTerminal = createNewTerminal('blue-1', 'Equipo Azul 1', 'blue', scenario.title);
-
-        const dbRow = mapEnvironmentToDbRow(initialEnv);
-
-        const initialState: SimulationStateRow = {
-            session_id: sessionId,
-            active_scenario: scenarioId,
-            ...dbRow,
-            terminal_output_red: [redTerminal],
-            terminal_output_blue: [blueTerminal],
-        };
-
-        const { error } = await supabase
-            .from('simulation_state')
-            .upsert(initialState);
-
+        const { error } = await supabase.rpc('start_simulation_scenario', {
+            p_session_id: sessionId,
+            p_scenario_id: scenarioId
+        });
+        
         if (error) {
-            console.error("Error starting scenario:", error);
+            console.error("Error starting scenario via RPC:", error);
             return false;
         }
+        
+        // La actualización de estado ocurrirá a través del canal de realtime,
+        // por lo que no es necesario establecer el estado localmente aquí.
         return true;
-    }, [sessionId, createNewTerminal]);
+    }, [sessionId]);
     
     const processCommand = useCallback(async (terminalId: string, command: string) => {
         const terminalIndex = terminals.findIndex(t => t.id === terminalId);
@@ -879,7 +1014,8 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         setTerminals(busyTerminals);
 
         const handler = commandLibrary[cmdStr];
-        const context: CommandContext = { userTeam: team as 'red' | 'blue', terminalState: terminal, environment: environment!, setEnvironment, startScenario };
+        // FIX: Pass the activeScenario into the command context.
+        const context: CommandContext = { userTeam: team as 'red' | 'blue', terminalState: terminal, environment: environment!, setEnvironment, startScenario, activeScenario };
 
         let result: CommandResult;
         if (handler) {
@@ -890,17 +1026,15 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         
         const finalEnvironment = result.newEnvironment || environment;
 
-        const { error: logError } = await supabase
-            .from('simulation_logs')
-            .insert({
-                session_id: sessionId,
-                source_team: team,
-                message: command,
-                team_visible: 'all'
-            });
+        const { error: logError } = await supabase.rpc('log_simulation_event', {
+            p_session_id: sessionId,
+            p_source_team: team,
+            p_message: command,
+            p_team_visible: 'all'
+        });
 
         if (logError) {
-            console.error("Failed to insert log:", logError);
+            console.error("Failed to insert log via RPC:", logError);
         }
         
         const updatedTerminalState: TerminalState = {
@@ -919,7 +1053,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         
         await updateDbState(dbUpdatePayload);
 
-    }, [terminals, team, environment, sessionId, startScenario, updateDbState]);
+    }, [terminals, team, environment, sessionId, startScenario, updateDbState, activeScenario]);
 
     return (
         <SimulationContext.Provider value={{ environment, activeScenario, logs, terminals, userTeam: team, processCommand, startScenario, addNewTerminal, removeTerminal }}>
