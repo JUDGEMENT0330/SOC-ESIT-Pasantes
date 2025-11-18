@@ -12,7 +12,7 @@ import * as R from 'https://aistudiocdn.com/ramda@^0.32.0';
 
 interface SimulationStateRow {
     session_id: string;
-    scenario_id?: string;
+    active_scenario?: string;
     // Environment state columns
     firewall_enabled?: boolean;
     ssh_hardened?: boolean;
@@ -433,7 +433,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
     }, []);
 
     const updateStateFromPayload = useCallback((payload: SimulationStateRow) => {
-        const scenario = TRAINING_SCENARIOS.find(s => s.id === payload.scenario_id && s.isInteractive) as InteractiveScenario | undefined;
+        const scenario = TRAINING_SCENARIOS.find(s => s.id === payload.active_scenario && s.isInteractive) as InteractiveScenario | undefined;
         setActiveScenario(scenario ?? null);
         if (scenario) {
             setEnvironment(mapDbRowToEnvironment(payload, scenario));
@@ -569,7 +569,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
 
         const initialState: SimulationStateRow = {
             session_id: sessionId,
-            scenario_id: scenarioId,
+            active_scenario: scenarioId,
             ...dbRow,
             terminal_output_red: [redTerminal],
             terminal_output_blue: [blueTerminal],
