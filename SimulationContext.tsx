@@ -207,7 +207,16 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         if (!targetHost) return { output: [{ text: `Host desconocido: ${host}`, type: 'error' }] };
         
         const userAccount = targetHost.users.find(u => u.username === user);
-        const hasCredentials = environment.attackProgress.credentials[`${user}@${targetHost.ip}`] === userAccount?.password || user === 'blue-team';
+        
+        // Specific logic for scenario 7 root login
+        if (user === 'root' && targetHost.hostname === 'BOVEDA-WEB') {
+            const sshConfig = targetHost.files.find(f => f.path === '/etc/ssh/sshd_config');
+            if (sshConfig?.content.includes('PermitRootLogin no')) {
+                return { output: [{ text: `root@${host}: Permission denied (publickey).`, type: 'error' }], duration: 1500 };
+            }
+        }
+
+        const hasCredentials = environment.attackProgress.credentials[`${user}@${targetHost.ip}`] === userAccount?.password || (userAccount && userAccount.password);
 
         if (!userAccount || !hasCredentials) {
             const newEnv = updateHostState(environment, targetHost.ip, { failedLogins: (targetHost.systemState?.failedLogins || 0) + 1 });
@@ -241,14 +250,19 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         const visiblePorts = Object.entries(targetHost.services).filter(([port]) => {
             if (!fw.enabled) return true;
             const portNum = parseInt(port);
+            const isDenied = fw.rules.some(r => r.destPort === portNum && r.action === 'deny');
+            if (isDenied) return false;
             return fw.rules.some(r => r.destPort === portNum && r.action === 'allow' && !r.sourceIP);
         });
         
         let outputText = `\nStarting Nmap...\nNmap scan report for ${targetHost.hostname} (${targetHost.ip})\nHost is up.\n`;
-        if (fw.enabled) outputText += `Not shown: ${Object.keys(targetHost.services).length - visiblePorts.length} filtered ports\n`;
-        outputText += 'PORT\tSTATE\tSERVICE\n';
+        if (fw.enabled) {
+            const filteredCount = Object.keys(targetHost.services).length - visiblePorts.length;
+            if (filteredCount > 0) outputText += `Not shown: ${filteredCount} filtered ports\n`;
+        }
+        outputText += 'PORT\tSTATE\tSERVICE\tVERSION\n';
         visiblePorts.forEach(([port, service]) => {
-            outputText += `${port}/tcp\t${service.state}\t${service.name}\n`;
+            outputText += `${port}/tcp\t${service.state}\t${service.name}\t${service.version}\n`;
         });
         
         const newEnv = R.clone(environment);
@@ -267,6 +281,13 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         const targetHost = findHost(environment, host);
         if (!targetHost) return { output: [{ text: `Host desconocido: ${host}`, type: 'error' }] };
 
+        if (userArg === 'root') {
+             const sshConfig = targetHost.files.find(f => f.path === '/etc/ssh/sshd_config');
+            if (sshConfig?.content.includes('PermitRootLogin no')) {
+                return { output: [{ text: `[ERROR] target ${targetArg} does not support password authentication for root`, type: 'output' }], duration: 3000 };
+            }
+        }
+        
         const userAccount = targetHost.users.find(u => u.username === userArg);
         const passwordFound = userAccount && (userAccount.password === 'toor' || userAccount.password === 'P@ssw0rd');
 
@@ -275,7 +296,7 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         if (passwordFound) {
             newEnv.attackProgress.credentials[`${userArg}@${targetHost.ip}`] = userAccount.password;
             return {
-                output: [{ text: `[22][ssh] host: ${host} login: ${userArg} password: ${userAccount.password}`, type: 'output' }],
+                output: [{ html: `[22][ssh] host: ${host} login: <strong>${userArg}</strong> password: <strong>${userAccount.password}</strong>`, type: 'html' }],
                 duration: 5000,
                 newEnvironment: newEnv
             };
@@ -304,27 +325,33 @@ const commandLibrary: { [key: string]: CommandHandler } = {
             case 'enable': fw.enabled = true; outputText = 'Firewall is active and enabled on system startup'; break;
             case 'disable': fw.enabled = false; outputText = 'Firewall stopped and disabled on system startup'; break;
             case 'status':
-                outputText = `Status: ${fw.enabled ? 'active' : 'inactive'}\n\nTo                         Action      From\n--                         ------      ----\n`;
-                fw.rules.forEach(r => { outputText += `${r.destPort || 'Any'}/${r.protocol || 'any'}                  ${r.action.toUpperCase()}        ${r.sourceIP || 'Anywhere'}\n`; });
+                 if (args[1] === 'numbered') {
+                    outputText = `Status: ${fw.enabled ? 'active' : 'inactive'}\n\n     To                         Action      From\n     --                         ------      ----\n`;
+                    fw.rules.forEach((r, i) => { outputText += `[ ${i+1}] ${r.destPort || 'Any'}/${r.protocol || 'any'}                  ${r.action.toUpperCase()}        ${r.sourceIP || 'Anywhere'}\n`; });
+                 } else {
+                    outputText = `Status: ${fw.enabled ? 'active' : 'inactive'}\n\nTo                         Action      From\n--                         ------      ----\n`;
+                    fw.rules.forEach(r => { outputText += `${r.destPort || 'Any'}/${r.protocol || 'any'}                  ${r.action.toUpperCase()}        ${r.sourceIP || 'Anywhere'}\n`; });
+                 }
                 break;
             case 'allow':
                 const allowPort = parseInt(args[1]);
                 if (isNaN(allowPort)) return { output: [{text: "Regla inválida", type: 'error'}]};
                 fw.rules = fw.rules.filter(r => !(r.destPort === allowPort && !r.sourceIP));
-                fw.rules.push({ id: `allow-${allowPort}`, action: 'allow', destPort: allowPort, protocol: 'any'});
+                fw.rules.push({ id: `allow-${allowPort}`, action: 'allow', destPort: allowPort, protocol: 'tcp'});
                 outputText = `Rule added`;
                 break;
             case 'deny':
                 if (args[1] === 'from') {
                     const ip = args[2];
                     if (!ip) return { output: [{text: "Se requiere una IP.", type: 'error'}]};
+                    newEnv.defenseProgress.blockedIPs.push(ip);
                     fw.rules.push({ id: `deny-ip-${ip}`, action: 'deny', sourceIP: ip, protocol: 'any'});
                     outputText = `Rule added`;
                 } else {
                     const denyPort = parseInt(args[1]);
                     if (isNaN(denyPort)) return { output: [{text: "Regla inválida", type: 'error'}]};
                     fw.rules = fw.rules.filter(r => r.destPort !== denyPort);
-                    fw.rules.push({ id: `deny-${denyPort}`, action: 'deny', destPort: denyPort, protocol: 'any'});
+                    fw.rules.push({ id: `deny-${denyPort}`, action: 'deny', destPort: denyPort, protocol: 'tcp'});
                     outputText = `Rule added`;
                 }
                 break;
@@ -367,6 +394,7 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         } else if (path === '/var/www/html/index.php') {
             host.files[fileIndex].content = '<?php echo "Sitio Comprometido"; ?>';
             host.files[fileIndex].hash = 'hacked_hash_456';
+             newEnv.attackProgress.persistence.push('index_modified');
         }
         return { output: [{text: `Archivo guardado. (Simulado)`, type: 'output'}], newEnvironment: R.set(R.lensPath(hostPath), host, newEnv) };
     },
@@ -379,11 +407,16 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         const host = findHost(environment, terminalState.currentHostIp);
         if (!host || !host.systemState) return { output: [] };
         const { cpuLoad, memoryUsage, networkConnections } = host.systemState;
-        const outputText = `top - ${new Date().toTimeString().split(' ')[0]} up 1 day, 2:30,  1 user,  load average: ${cpuLoad.toFixed(2)}, 0.8, 0.5
-Tasks: 1 total,   1 running,   0 sleeping,   0 stopped,   0 zombie
-%Cpu(s): ${cpuLoad.toFixed(1)} us,  ${(cpuLoad / 3).toFixed(1)} sy,  0.0 ni, ${(100 - cpuLoad - (cpuLoad/3)).toFixed(1)} id
-MiB Mem :  ${(memoryUsage * 1024).toFixed(1)} total,  ${(memoryUsage * 512).toFixed(1)} free,  ${(memoryUsage * 512).toFixed(1)} used
-MiB Swap:    0.0 total,    0.0 free,    0.0 used.`;
+        const loadAvg1 = cpuLoad > 50 ? cpuLoad / 8 : 0.15;
+        const loadAvg2 = cpuLoad > 50 ? cpuLoad / 10 : 0.20;
+        const loadAvg3 = cpuLoad > 50 ? cpuLoad / 12 : 0.18;
+        const idle = Math.max(1.2, 100 - cpuLoad).toFixed(1);
+        const sys = Math.min(84.7, cpuLoad * 0.8).toFixed(1);
+        const user = Math.min(12.3, cpuLoad * 0.2).toFixed(1);
+        
+        const outputText = `top - ${new Date().toTimeString().split(' ')[0]} up 5 days,  3:21,  2 users,  load average: ${loadAvg1.toFixed(2)}, ${loadAvg2.toFixed(2)}, ${loadAvg3.toFixed(2)}
+Tasks: ${networkConnections * 2} total,   ${Math.floor(networkConnections * 0.8)} running,   ${Math.floor(networkConnections * 1.2)} sleeping,   0 stopped,   0 zombie
+%Cpu(s): ${user} us,  ${sys} sy,  0.0 ni, ${idle} id,  0.9 wa,  0.0 hi,  0.0 si,  0.0 st`;
         return { output: [{ text: outputText, type: 'output' }] };
     },
     hping3: async (args, { environment, setEnvironment }) => {
@@ -393,9 +426,9 @@ MiB Swap:    0.0 total,    0.0 free,    0.0 used.`;
         if (!targetHost) return { output: [{ text: `Host desconocido: ${target}`, type: 'error' }] };
 
         const originalCpuLoad = targetHost.systemState?.cpuLoad || 5.0;
-        setEnvironment(env => updateHostState(env!, targetHost.ip, { cpuLoad: 99.8 }));
+        setEnvironment(env => updateHostState(env!, targetHost.ip, { cpuLoad: 99.8, networkConnections: 4589 }));
         setTimeout(() => {
-             setEnvironment(env => updateHostState(env!, targetHost.ip, { cpuLoad: originalCpuLoad }));
+             setEnvironment(env => updateHostState(env!, targetHost.ip, { cpuLoad: originalCpuLoad, networkConnections: 50 }));
         }, 20000); // DoS lasts for 20 seconds
 
         return {
@@ -436,7 +469,11 @@ MiB Swap:    0.0 total,    0.0 free,    0.0 used.`;
         Object.entries(host.services).forEach(([port, service]) => {
             const isAllowed = !fw.enabled || fw.rules.some(r => r.destPort === parseInt(port) && r.action === 'allow');
             if (service.state === 'open' && isAllowed) {
-                outputText += `tcp    LISTEN     0      128                  *:${port}                    *:*\n`;
+                 let processName = 'unknown';
+                if (port === '22') processName = 'sshd';
+                if (port === '80' || port === '443') processName = 'apache2';
+                if (port === '3306') processName = 'mysqld';
+                outputText += `tcp    LISTEN     0      128                  *:${port.padEnd(22)}*:*\t\tusers:(("${processName}",pid=1234,fd=3))\n`;
             }
         });
         return { output: [{ text: outputText, type: 'output' }] };
@@ -445,12 +482,17 @@ MiB Swap:    0.0 total,    0.0 free,    0.0 used.`;
         if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
         const host = findHost(environment, terminalState.currentHostIp);
         if (!host) return { output: [] };
+        const path = args.find(a => !a.startsWith('-')) || '/var/www/html'; // Default to webroot for scenarios
         const showDetails = args.includes('-l') || args.includes('-la');
-        const relevantFiles = host.files;
+        const relevantFiles = host.files.filter(f => f.path.startsWith(path));
+        
+        if (relevantFiles.length === 0) return { output: [{text: `ls: no se puede acceder a '${path}': No existe el fichero o el directorio`, type: 'error'}]};
+
         if (showDetails) {
-            let outputText = 'total 12\n';
+            let outputText = `total ${relevantFiles.length * 4}\n`;
             relevantFiles.forEach(file => {
-                 outputText += `-rwx-r-${file.permissions} 1 root root 1024 Jan 1 12:00 ${file.path.split('/').pop()}\n`;
+                const perms = file.permissions === '640' ? '-rw-r-----' : '-rw-r--r--';
+                 outputText += `${perms} 1 www-data www-data 145 Nov 18 10:00 ${file.path.split('/').pop()}\n`;
             });
             return { output: [{ text: outputText, type: 'output' }] };
         } else {
@@ -463,7 +505,14 @@ MiB Swap:    0.0 total,    0.0 free,    0.0 used.`;
         const path = args[0].includes('/') ? args[0] : `/var/www/html/${args[0]}`;
         const host = findHost(environment, terminalState.currentHostIp);
         const file = host?.files.find(f => f.path === path);
+
         if (!file) return { output: [{text: `cat: ${path}: No existe el fichero o el directorio`, type: 'error'}]};
+        
+        const perms = parseInt(file.permissions, 8);
+        if ((perms & 0o004) === 0 && terminalState.prompt.user !== 'root' && terminalState.prompt.user !== 'www-data') {
+             return { output: [{text: `cat: ${path}: Permission denied`, type: 'error'}]};
+        }
+
         return { output: [{ text: file.content || '', type: 'output' }] };
     },
     grep: async (args, { environment, terminalState }) => {
@@ -515,9 +564,9 @@ MiB Swap:    0.0 total,    0.0 free,    0.0 used.`;
             const sslVuln = host.services[443]?.vulnerabilities.find(v => v.cve === 'CVE-2021-SSL');
             let output = `CONNECTED(00000003)\n---\nCertificate chain\n 0 s:/C=MX/ST=None/L=None/O=Valtorix/CN=${host.hostname}\n   i:/C=MX/ST=None/L=None/O=Valtorix/CN=ValtorixCA\n---\n`;
             if (sslVuln) {
-                output += `SSL-Session:\n    Protocol  : TLSv1.2\n    Cipher    : DHE-RSA-AES256-SHA\n    <strong class="text-red-500">WARNING: Weak SSL Cipher detected!</strong>\n`;
+                output += `SSL-Session:\n    Protocol  : TLSv1.2\n    Cipher    : AES128-SHA\n    <strong class="text-red-500">WARNING: Weak SSL Cipher detected!</strong>\n`;
             } else {
-                 output += `SSL-Session:\n    Protocol  : TLSv1.3\n    Cipher    : TLS_AES_256_GCM_SHA384\n`;
+                 output += `SSL-Session:\n    Protocol  : TLSv1.3\n    Cipher    : ECDHE-RSA-AES256-GCM-SHA384\n`;
             }
             return { output: [{html: `<pre>${output}</pre>`, type: 'html'}]};
         }
@@ -525,10 +574,30 @@ MiB Swap:    0.0 total,    0.0 free,    0.0 used.`;
     },
     htop: async(args, context) => commandLibrary.top(args, context), // Alias
     dirb: async(args) => ({ output: [{ text: `---- Scanning URL: ${args[0]} ----\n+ /index.php (CODE:200|SIZE:123)\n+ /images (CODE:301|SIZE:0) --> http://${args[0]}/images/\n+ /uploads (CODE:403|SIZE:43)\n+ /db_config.php (CODE:200|SIZE:87)`, type: 'output' }], duration: 2000 }),
-    curl: async(args, context) => commandLibrary.cat([args[0].split('/').pop() || ''], context), // Simplified alias
+    curl: async (args, context) => {
+        const url = args[0];
+        if (url.includes('db_config.php')) {
+            const { environment } = context;
+            const host = findHost(environment, 'BOVEDA-WEB');
+            const file = host?.files.find(f => f.path === '/var/www/html/db_config.php');
+            if(file && parseInt(file.permissions, 8) > parseInt('640', 8)) {
+                return commandLibrary.cat(['/var/www/html/db_config.php'], context);
+            }
+            return { output: [{ text: '', type: 'output' }] };
+        }
+        return { output: [{ text: 'Contenido de la página de inicio...', type: 'output' }], duration: 400 };
+    },
     nikto: async(args) => ({ output: [{ text: `- Nikto v2.1.6\n---------------------------------------------------------------------------\n+ Target IP:          10.0.10.5\n+ Target Hostname:    BOVEDA-WEB\n+ Server: Apache/2.4.6\n+ The anti-clickjacking X-Frame-Options header is not present.\n+ OSVDB-3233: /icons/README: Apache default file found.\n`, type: 'output' }], duration: 3000 }),
     john: async(args) => ({ output: [{ text: `Loaded 1 password hash\nPress 'q' or Ctrl-C to abort, almost any other key for status\n0g 0:00:00:18 0.00% (ETA: 2024-01-02 10:30) 0g/s \npassword123      (root)\n1g 0:00:00:25 DONE (2024-01-01 14:45) 0.04g/s \nSession completed`, type: 'output' }], duration: 2500 }),
-    wget: async(args) => ({ output: [{ text: `Connecting to ${args[0]}... connected.\nHTTP request sent, awaiting response... 200 OK\nLength: 1024 (1K) [application/x-sh]\nSaving to: 'payload.sh'\n\npayload.sh           100%[===================>]   1.00K  --.-KB/s    in 0s`, type: 'output' }], duration: 1200 }),
+    wget: async (args, { environment, terminalState }) => {
+        const newEnv = R.clone(environment);
+        newEnv.attackProgress.persistence.push('payload_downloaded');
+        return {
+            output: [{ text: `Connecting to ${args[0]}... connected.\nHTTP request sent, awaiting response... 200 OK\nLength: 1024 (1K) [application/x-sh]\nSaving to: 'payload.sh'\n\npayload.sh           100%[===================>]   1.00K  --.-KB/s    in 0s`, type: 'output' }],
+            newEnvironment: newEnv,
+            duration: 1200
+        };
+    },
 };
 
 
