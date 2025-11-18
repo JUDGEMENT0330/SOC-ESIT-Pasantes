@@ -623,16 +623,6 @@ interface SimulationProviderProps {
     sessionData: SessionData;
 }
 
-const mapDbSourceToUiSource = (dbSource: string | undefined): LogEntry['source'] => {
-    switch (dbSource?.toLowerCase()) {
-        case 'red': return 'Red Team';
-        case 'blue': return 'Blue Team';
-        case 'system': return 'System';
-        case 'network': return 'Network';
-        default: return 'System';
-    }
-};
-
 export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children, sessionData }) => {
     const [environment, setEnvironment] = useState<VirtualEnvironment | null>(null);
     const [activeScenario, setActiveScenario] = useState<InteractiveScenario | null>(null);
@@ -750,13 +740,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                     .order('timestamp', { ascending: true });
                 if (error) console.error("Error fetching logs:", error);
                 else {
-                    // Map DB columns to app's expected properties
-                    const mappedData = (data || []).map(log => ({
-                        ...log,
-                        source: mapDbSourceToUiSource(log.source_team),
-                        teamVisible: log.team_visible,
-                    }));
-                    setLogs(mappedData as LogEntry[]);
+                    setLogs((data || []) as LogEntry[]);
                 }
             };
             await fetchLogs();
@@ -768,13 +752,8 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                     table: 'simulation_logs',
                     filter: `session_id=eq.${sessionId}`
                 }, (payload) => {
-                    const newLog = payload.new as any;
-                    const mappedLog = {
-                        ...newLog,
-                        source: mapDbSourceToUiSource(newLog.source_team),
-                        teamVisible: newLog.team_visible,
-                    };
-                    setLogs(prev => [...prev.filter(log => log.id !== mappedLog.id), mappedLog as LogEntry]);
+                    const newLog = payload.new as LogEntry;
+                    setLogs(prev => [...prev.filter(log => log.id !== newLog.id), newLog]);
                 })
                 .subscribe();
         };
@@ -911,12 +890,11 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         
         const finalEnvironment = result.newEnvironment || environment;
 
-        const sourceTeamForDb = team === 'red' ? 'Red' : 'Blue';
         const { error: logError } = await supabase
             .from('simulation_logs')
             .insert({
                 session_id: sessionId,
-                source_team: sourceTeamForDb,
+                source_team: team,
                 message: command,
                 team_visible: 'all'
             });
