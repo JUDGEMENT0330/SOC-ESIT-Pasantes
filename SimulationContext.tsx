@@ -26,6 +26,9 @@ interface SimulationStateRow {
     // Terminal state columns (now storing arrays for multi-terminal support)
     terminal_output_red?: TerminalState[];
     terminal_output_blue?: TerminalState[];
+    // For backward compatibility with old data schemas
+    prompt_red?: PromptState;
+    prompt_blue?: PromptState;
 }
 
 // ============================================================================
@@ -77,8 +80,53 @@ const mapTerminalsToDbRow = (terminals: TerminalState[]): Partial<SimulationStat
 };
 
 const mapDbRowToTerminals = (row: SimulationStateRow): TerminalState[] => {
-    const redTerminals = Array.isArray(row.terminal_output_red) ? row.terminal_output_red : [];
-    const blueTerminals = Array.isArray(row.terminal_output_blue) ? row.terminal_output_blue : [];
+    const redTerminals: TerminalState[] = [];
+    const blueTerminals: TerminalState[] = [];
+    const defaultRedPrompt: PromptState = { user: 'pasante-red', host: 'soc-valtorix', dir: '~' };
+    const defaultBluePrompt: PromptState = { user: 'pasante-blue', host: 'soc-valtorix', dir: '~' };
+
+    const redData = row.terminal_output_red as any[] | undefined;
+    if (Array.isArray(redData)) {
+        if (redData.length > 0 && typeof redData[0].id === 'string') {
+            // New format is valid: TerminalState[]
+            redTerminals.push(...(redData as TerminalState[]));
+        } else if (redData.length > 0 && typeof redData[0].type === 'string') {
+            // Old format detected: TerminalLine[]. Migrate it.
+            redTerminals.push({
+                id: 'red-1',
+                name: 'Terminal Rojo 1',
+                output: redData as TerminalLine[],
+                prompt: row.prompt_red || defaultRedPrompt,
+                history: [],
+                historyIndex: -1,
+                input: '',
+                mode: 'normal',
+                isBusy: false,
+            });
+        }
+    }
+
+    const blueData = row.terminal_output_blue as any[] | undefined;
+    if (Array.isArray(blueData)) {
+        if (blueData.length > 0 && typeof blueData[0].id === 'string') {
+            // New format is valid: TerminalState[]
+            blueTerminals.push(...(blueData as TerminalState[]));
+        } else if (blueData.length > 0 && typeof blueData[0].type === 'string') {
+            // Old format detected: TerminalLine[]. Migrate it.
+            blueTerminals.push({
+                id: 'blue-1',
+                name: 'Terminal Azul 1',
+                output: blueData as TerminalLine[],
+                prompt: row.prompt_blue || defaultBluePrompt,
+                history: [],
+                historyIndex: -1,
+                input: '',
+                mode: 'normal',
+                isBusy: false,
+            });
+        }
+    }
+
     return [...redTerminals, ...blueTerminals];
 };
 
@@ -607,7 +655,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                  }
 
             } else if (data) {
-                updateStateFromPayload(data);
+                updateStateFromPayload(data as SimulationStateRow);
             }
         };
 
