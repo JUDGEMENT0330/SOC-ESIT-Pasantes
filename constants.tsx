@@ -351,13 +351,13 @@ export const rageScenario: InteractiveScenario = {
         },
         
         // === EQUIPO AZUL ===
-        { id: 'blue-detect-dos', description: 'Identificar el ataque DoS analizando la carga del sistema', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Blue' && (log.message.includes('top') || log.message.includes('htop'))), hint: 'Usa "top" o "htop" para ver la carga del CPU'
+        { id: 'blue-detect-dos', description: 'Identificar el ataque DoS analizando la carga del sistema', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('top') || log.message.includes('htop'))), hint: 'Usa "top" o "htop" para ver la carga del CPU'
         },
-        { id: 'blue-detect-bruteforce', description: 'Identificar el ataque de fuerza bruta en logs', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Blue' && (log.message.includes('journalctl') || log.message.includes('grep'))), hint: 'Revisa /var/log/auth.log o usa "journalctl -u sshd"'
+        { id: 'blue-detect-bruteforce', description: 'Identificar el ataque de fuerza bruta en logs', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('journalctl') || log.message.includes('grep'))), hint: 'Revisa /var/log/auth.log o usa "journalctl -u sshd"'
         },
         { id: 'blue-block-attacker', description: 'Bloquear la IP del atacante en el firewall', points: 25, required: true, validator: (env) => env.networks.dmz.firewall.rules.some(r => r.action === 'deny' && r.sourceIP === '192.168.1.100'), hint: 'Usa "sudo ufw deny from <IP>" o fail2ban'
         },
-        { id: 'blue-verify-integrity', description: 'Verificar integridad de archivos web (detectar backdoor)', points: 20, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Blue' && (log.message.includes('sha256sum') || log.message.includes('md5sum'))), hint: 'Usa "sha256sum /var/www/html/index.php" y compara con hash original'
+        { id: 'blue-verify-integrity', description: 'Verificar integridad de archivos web (detectar backdoor)', points: 20, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('sha256sum') || log.message.includes('md5sum'))), hint: 'Usa "sha256sum /var/www/html/index.php" y compara con hash original'
         },
     ],
     
@@ -451,14 +451,14 @@ export const killChainScenario: InteractiveScenario = {
         timeline: []
     },
     objectives: [
-        { id: 'red-lfi', description: 'Explotar LFI para leer /etc/passwd en WEB-DMZ-01', points: 15, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Red' && log.message.includes('/etc/passwd')) },
+        { id: 'red-lfi', description: 'Explotar LFI para leer /etc/passwd en WEB-DMZ-01', points: 15, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'red' && log.message.includes('/etc/passwd')) },
         { id: 'red-rce', description: 'Obtener ejecución remota de código en WEB-DMZ-01', points: 25, required: true, validator: (env) => env.attackProgress.compromised.includes('10.0.0.10')},
         { id: 'red-pivot', description: 'Acceder a DB-FINANCE-01 desde el servidor DMZ', points: 30, required: true, validator: (env) => env.attackProgress.compromised.includes('10.10.0.50')},
         { id: 'red-exfiltrate', description: 'Exfiltrar el archivo finance_backup.sql', points: 35, required: true, validator: (env) => env.attackProgress.persistence.includes('data_exfiltrated') },
         
-        { id: 'blue-detect-lfi', description: 'Detectar el intento de LFI en los logs de Nginx', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Blue' && log.message.includes('grep') && log.message.includes('../../')) },
+        { id: 'blue-detect-lfi', description: 'Detectar el intento de LFI en los logs de Nginx', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && log.message.includes('grep') && log.message.includes('../../')) },
         { id: 'blue-contain-dmz', description: 'Contener la amenaza en WEB-DMZ-01 (bloquear IP, matar shell)', points: 25, required: true, validator: (env) => env.defenseProgress.blockedIPs.length > 0 },
-        { id: 'blue-detect-pivot', description: 'Detectar el intento de pivoteo a la red interna', points: 30, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Blue' && log.message.includes('tcpdump -i eth1')) },
+        { id: 'blue-detect-pivot', description: 'Detectar el intento de pivoteo a la red interna', points: 30, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && log.message.includes('tcpdump -i eth1')) },
         { id: 'blue-segment-network', description: 'Bloquear el acceso de la DMZ a la red interna', points: 20, required: true, validator: (env) => env.networks.dmz.firewall.rules.some(r => r.action === 'deny' && r.sourceIP === '10.0.0.10') },
     ],
     hints: [
