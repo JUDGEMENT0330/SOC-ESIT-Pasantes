@@ -1,11 +1,12 @@
 
 
 
+
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { DualTerminalView } from './components/DualTerminalView';
 import { Auth } from './components/Auth';
 import { supabase } from './supabaseClient';
-import { GLOSSARY_TERMS, TRAINING_SCENARIOS, RESOURCE_MODULES, Icon, CisoCard } from './constants';
+import { GLOSSARY_TERMS, TRAINING_SCENARIOS, RESOURCE_MODULES, Icon, CisoCard, CisoTable } from './constants';
 import type { TrainingScenario, ResourceModule, LogEntry, SessionData, InteractiveScenario, VirtualEnvironment } from './types';
 // FIX: The `Session` type might not be exported directly in this version. Aliasing `AuthSession` is a common workaround.
 import type { AuthSession as Session } from '@supabase/supabase-js';
@@ -207,7 +208,7 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ activeTab, sessionData, exitSession, logout, isAdmin, impersonatedTeam, setImpersonatedTeam }) => {
-    const tabs = ['inicio', 'capacitacion', 'recursos', 'terminal'];
+    const tabs = ['inicio', 'capacitacion', 'recursos', 'evaluacion', 'terminal'];
     const tabIndex = tabs.indexOf(activeTab);
     const progressWidth = ((tabIndex + 1) / tabs.length) * 100;
 
@@ -303,6 +304,7 @@ const TABS_CONFIG = [
     { id: 'terminal', icon: 'terminal', label: 'Terminal (Simulada)' },
     { id: 'capacitacion', icon: 'graduation-cap', label: 'Capacitación SOC' },
     { id: 'recursos', icon: 'library', label: 'Recursos' },
+    { id: 'evaluacion', icon: 'star', label: 'Evaluación' },
     { id: 'inicio', icon: 'book-open', label: 'Inicio (Glosario)' },
 ];
 
@@ -369,6 +371,7 @@ const TabContent: React.FC<TabContentProps> = ({ activeTab, completedScenarios, 
             case 'inicio': return <GlossarySection />;
             case 'capacitacion': return <TrainingSection completedScenarios={completedScenarios} updateProgress={updateProgress} />;
             case 'recursos': return <ResourcesSection />;
+            case 'evaluacion': return <EvaluationSection />;
             case 'terminal': return <DualTerminalView />;
             default: return null;
         }
@@ -449,6 +452,156 @@ const ResourcesSection: React.FC = () => (
         </div>
     </SectionWrapper>
 );
+
+// ============================================================================
+// NEW: Evaluation Section
+// ============================================================================
+const scenarioEvaluations = [
+    {
+        title: 'Escenario 7: Fortaleza Digital',
+        blueTeam: {
+            headers: ['Tarea', 'Puntos', 'Verificación'],
+            rows: [
+                ['Firewall activado', '20', 'sudo ufw status | grep active'],
+                ['Solo puertos necesarios', '+5', 'MySQL bloqueado'],
+                ['SSH sin root login', '15', 'grep PermitRootLogin /etc/ssh/sshd_config'],
+                ['Archivos protegidos', '15', 'ls -l /var/www/html/db_config.php'],
+                ['SSL endurecido (Opcional)', '10', 'Cifrados fuertes'],
+                ['Fail2Ban configurado (Bonus)', '+10', ''],
+                ['Monitoreo activo (Bonus)', '+5', ''],
+            ],
+            total: '60 (+15 Bonus)'
+        },
+        redTeam: {
+            headers: ['Tarea', 'Puntos', 'Verificación'],
+            rows: [
+                ['Reconocimiento', '10', 'nmap ejecutado'],
+                ['Credenciales obtenidas', '25', 'Hydra exitoso'],
+                ['Acceso SSH', '20', 'Shell root activa'],
+                ['index.php modificado', '35', 'Hash diferente'],
+                ['Persistencia (Bonus)', '+15', 'Usuario/cron/webshell'],
+            ],
+            total: '85 (+15 Bonus)'
+        }
+    },
+    {
+        title: 'Escenario 8: Furia en la Red',
+        blueTeam: {
+            headers: ['Tarea', 'Puntos'],
+            rows: [
+                ['DoS detectado (top/htop)', '10'],
+                ['Bruteforce detectado (logs)', '10'],
+                ['IP bloqueada', '25'],
+                ['Backdoor detectado', '20'],
+                ['Sistema restaurado', '25'],
+                ['Fail2Ban instalado (Bonus)', '+10'],
+            ],
+            total: '90 (+10 Bonus)'
+        },
+        redTeam: {
+            headers: ['Tarea', 'Puntos'],
+            rows: [
+                ['DoS exitoso', '20'],
+                ['Credenciales obtenidas', '30'],
+                ['Backdoor instalado', '35'],
+                ['Persistencia', '15'],
+                ['No detectado (Bonus)', '+15'],
+            ],
+            total: '100 (+15 Bonus)'
+        }
+    },
+    {
+        title: 'Escenario 9: La Cadena de Infección',
+        blueTeam: {
+            headers: ['Tarea', 'Puntos'],
+            rows: [
+                ['Reconocimiento detectado', '10'],
+                ['Explotación detectada y contenida', '25'],
+                ['Shell terminada', '15'],
+                ['Pivoteo detectado y bloqueado', '30'],
+                ['Sistema limpio', '25'],
+                ['WAF implementado (Bonus)', '+15'],
+            ],
+            total: '105 (+15 Bonus)'
+        },
+        redTeam: {
+            headers: ['Tarea', 'Puntos'],
+            rows: [
+                ['Reconocimiento y LFI encontrado', '25'],
+                ['RCE logrado', '25'],
+                ['Root en DMZ', '20'],
+                ['Pivoteo exitoso', '30'],
+                ['Datos exfiltrados', '35'],
+                ['Persistencia (Bonus)', '+15'],
+            ],
+            total: '135 (+15 Bonus)'
+        }
+    },
+     {
+        title: 'Escenario 10: La Escalada del Dominio',
+        blueTeam: {
+            headers: ['Tarea', 'Puntos'],
+            rows: [
+                ['Monitoreo configurado', '10'],
+                ['Enumeración detectada', '10'],
+                ['Kerberoasting detectado', '20'],
+                ['Cuenta comprometida asegurada', '20'],
+                ['Movimiento lateral bloqueado', '15'],
+                ['AD restaurado', '25'],
+                ['gMSA implementado (Bonus)', '+20'],
+            ],
+            total: '100 (+20 Bonus)'
+        },
+        redTeam: {
+            headers: ['Tarea', 'Puntos'],
+            rows: [
+                ['Enumeración con BloodHound', '15'],
+                ['Kerberoasting exitoso', '30'],
+                ['Contraseña crackeada', '20'],
+                ['DC comprometido', '25'],
+                ['DCSync exitoso', '30'],
+                ['Golden Ticket creado (Bonus)', '+15'],
+            ],
+            total: '120 (+15 Bonus)'
+        }
+    }
+];
+
+const EvaluationSection: React.FC = () => {
+    const [expanded, setExpanded] = useState<string | null>(null);
+
+    return (
+        <SectionWrapper title="Criterios de Evaluación de Escenarios" subtitle="Revisa los objetivos y la puntuación para cada taller práctico.">
+            <div className="space-y-4">
+                {scenarioEvaluations.map(evalItem => (
+                    <CollapsibleModule
+                        key={evalItem.title}
+                        isExpanded={expanded === evalItem.title}
+                        toggle={() => setExpanded(expanded === evalItem.title ? null : evalItem.title)}
+                        header={
+                            <div className="flex items-center space-x-4 flex-grow min-w-0">
+                                <Icon name="star" className="h-6 w-6 text-yellow-400" />
+                                <h4 className="font-bold text-white truncate">{evalItem.title}</h4>
+                            </div>
+                        }
+                    >
+                        <div className="grid md:grid-cols-2 gap-8">
+                            <div>
+                                <h5 className="font-bold text-blue-400 mb-2">Equipo Azul (Total: {evalItem.blueTeam.total})</h5>
+                                <CisoTable headers={evalItem.blueTeam.headers} rows={evalItem.blueTeam.rows} />
+                            </div>
+                            <div>
+                                <h5 className="font-bold text-red-400 mb-2">Equipo Rojo (Total: {evalItem.redTeam.total})</h5>
+                                <CisoTable headers={evalItem.redTeam.headers} rows={evalItem.redTeam.rows} />
+                            </div>
+                        </div>
+                    </CollapsibleModule>
+                ))}
+            </div>
+        </SectionWrapper>
+    );
+};
+
 
 // ============================================================================
 // Reusable UI Components
