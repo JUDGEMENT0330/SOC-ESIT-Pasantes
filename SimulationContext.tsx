@@ -627,8 +627,11 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
     const [environment, setEnvironment] = useState<VirtualEnvironment | null>(null);
     const [activeScenario, setActiveScenario] = useState<InteractiveScenario | null>(null);
     const [terminals, setTerminals] = useState<TerminalState[]>([]);
+    const [logs, setLogs] = useState<LogEntry[]>([]);
     
-    const channelRef = useRef<any | null>(null);
+    const stateChannelRef = useRef<any | null>(null);
+    const logsChannelRef = useRef<any | null>(null);
+
     const { sessionId, team } = sessionData;
 
     const createNewTerminal = useCallback((id: string, name: string, userTeam: 'red' | 'blue', scenarioTitle?: string): TerminalState => {
@@ -728,9 +731,32 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             }
         };
 
+        const fetchAndSubscribeLogs = async () => {
+            const fetchLogs = async () => {
+                const { data, error } = await supabase
+                    .from('simulation_logs')
+                    .select('*')
+                    .eq('session_id', sessionId)
+                    .order('timestamp', { ascending: true });
+                if (error) console.error("Error fetching logs:", error);
+                else setLogs(data || []);
+            };
+            await fetchLogs();
+            
+            logsChannelRef.current = supabase.channel(`logs-${sessionId}`)
+                .on('postgres_changes', {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'simulation_logs',
+                    filter: `session_id=eq.${sessionId}`
+                }, fetchLogs)
+                .subscribe();
+        };
+
         fetchAndSetInitialState();
+        fetchAndSubscribeLogs();
         
-        const channel = supabase.channel(`session-${sessionId}`)
+        stateChannelRef.current = supabase.channel(`session-${sessionId}`)
             .on<SimulationStateRow>('postgres_changes', {
                 event: '*',
                 schema: 'public',
@@ -744,12 +770,14 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                 if (err) console.error('Channel subscription error:', err);
             });
         
-        channelRef.current = channel;
-
         return () => {
-            if (channelRef.current) {
-                supabase.removeChannel(channelRef.current);
-                channelRef.current = null;
+            if (stateChannelRef.current) {
+                supabase.removeChannel(stateChannelRef.current);
+                stateChannelRef.current = null;
+            }
+             if (logsChannelRef.current) {
+                supabase.removeChannel(logsChannelRef.current);
+                logsChannelRef.current = null;
             }
         };
     }, [sessionId, team, createNewTerminal, updateStateFromPayload, updateDbState]);
@@ -844,7 +872,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         const newOutput: TerminalLine[] = [...terminal.output, { type: 'prompt', ...terminal.prompt }, { text: command, type: 'command' }];
         const busyTerminals = R.update(terminalIndex, { ...terminal, output: newOutput, isBusy: true, history: optimisticHistory }, terminals);
         setTerminals(busyTerminals);
-        
+
         const handler = commandLibrary[cmdStr];
         const context: CommandContext = { userTeam: team as 'red' | 'blue', terminalState: terminal, environment: environment!, setEnvironment, startScenario };
 
@@ -855,8 +883,21 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             result = { output: [{ text: `comando no encontrado: ${cmdStr}`, type: 'error' }] };
         }
         
-        let finalEnvironment = result.newEnvironment || environment;
+        const finalEnvironment = result.newEnvironment || environment;
 
+        const { error: logError } = await supabase
+            .from('simulation_logs')
+            .insert({
+                session_id: sessionId,
+                source: team === 'red' ? 'Red Team' : 'Blue Team',
+                message: command,
+                team_visible: 'all'
+            });
+
+        if (logError) {
+            console.error("Failed to insert log:", logError);
+        }
+        
         const updatedTerminalState: TerminalState = {
             ...terminal,
             ...result.newTerminalState,
@@ -865,23 +906,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             isBusy: false,
         };
         const finalTerminals = R.update(terminalIndex, updatedTerminalState, terminals);
-
-        if (finalEnvironment) {
-            const timestamp = new Date().toISOString();
-            const source: LogEntry['source'] = team === 'red' ? 'Red Team' : 'Blue Team';
-            const newLogEntry: LogEntry = {
-                id: (finalEnvironment.timeline?.length || 0) + 1,
-                timestamp,
-                source,
-                message: command,
-                teamVisible: 'all',
-            };
-            finalEnvironment = {
-                ...finalEnvironment,
-                timeline: [...(finalEnvironment.timeline || []), newLogEntry]
-            };
-        }
-
+        
         const dbUpdatePayload: Partial<SimulationStateRow> = {
             ...mapEnvironmentToDbRow(finalEnvironment),
             ...mapTerminalsToDbRow(finalTerminals)
@@ -890,8 +915,6 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         await updateDbState(dbUpdatePayload);
 
     }, [terminals, team, environment, sessionId, startScenario, updateDbState]);
-
-    const logs = environment?.timeline || [];
 
     return (
         <SimulationContext.Provider value={{ environment, activeScenario, logs, terminals, userTeam: team, processCommand, startScenario, addNewTerminal, removeTerminal }}>
