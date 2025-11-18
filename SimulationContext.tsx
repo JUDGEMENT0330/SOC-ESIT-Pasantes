@@ -280,7 +280,7 @@ const commandLibrary: { [key: string]: CommandHandler } = {
                     outputText = `Rule added`;
                 }
                 break;
-            default: return { output: [{text: "Comando no reconocido", type: 'error'}] };
+            default: return { output: [{text: `Comando ufw no reconocido: ${args[0]}`, type: 'error'}] };
         }
         
         return { output: [{ text: outputText, type: 'output' }], newEnvironment: R.set(R.lensPath(fwPath), fw, newEnv) };
@@ -377,9 +377,110 @@ MiB Swap:    0.0 total,    0.0 free,    0.0 used.`;
         return { output: [{ text: `${file.hash}  ${path}`, type: 'output' }] };
     },
     'fail2ban-client': async (args, context) => {
-        // This is an alias for ufw deny from
         return commandLibrary.ufw(['deny', 'from', args[args.indexOf('banip') + 1]], context);
     },
+    ss: async (args, { environment, terminalState }) => {
+        if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
+        const host = findHost(environment, terminalState.currentHostIp);
+        if (!host) return { output: [] };
+        let outputText = 'Netid  State      Recv-Q Send-Q     Local Address:Port         Peer Address:Port\n';
+        const fw = environment.networks.dmz.firewall;
+        Object.entries(host.services).forEach(([port, service]) => {
+            const isAllowed = !fw.enabled || fw.rules.some(r => r.destPort === parseInt(port) && r.action === 'allow');
+            if (service.state === 'open' && isAllowed) {
+                outputText += `tcp    LISTEN     0      128                  *:${port}                    *:*\n`;
+            }
+        });
+        return { output: [{ text: outputText, type: 'output' }] };
+    },
+    ls: async (args, { environment, terminalState }) => {
+        if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
+        const host = findHost(environment, terminalState.currentHostIp);
+        if (!host) return { output: [] };
+        const showDetails = args.includes('-l') || args.includes('-la');
+        const relevantFiles = host.files;
+        if (showDetails) {
+            let outputText = 'total 12\n';
+            relevantFiles.forEach(file => {
+                 outputText += `-rwx-r-${file.permissions} 1 root root 1024 Jan 1 12:00 ${file.path.split('/').pop()}\n`;
+            });
+            return { output: [{ text: outputText, type: 'output' }] };
+        } else {
+            return { output: [{ text: relevantFiles.map(f => f.path.split('/').pop()).join('  '), type: 'output' }] };
+        }
+    },
+    cat: async (args, { environment, terminalState }) => {
+        if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
+        if (args.length < 1) return { output: [{text: "cat: falta un operando", type: 'error'}] };
+        const path = args[0].includes('/') ? args[0] : `/var/www/html/${args[0]}`;
+        const host = findHost(environment, terminalState.currentHostIp);
+        const file = host?.files.find(f => f.path === path);
+        if (!file) return { output: [{text: `cat: ${path}: No existe el fichero o el directorio`, type: 'error'}]};
+        return { output: [{ text: file.content || '', type: 'output' }] };
+    },
+    grep: async (args, { environment, terminalState }) => {
+        if (args.length < 2) return { output: [{text: "Uso: grep <patrón> <archivo>", type: 'error'}] };
+        const pattern = args[0];
+        const file = args[1];
+        if (file === '/var/log/auth.log') {
+            const host = findHost(environment, terminalState.currentHostIp!);
+            if (!host || !host.systemState) return { output: [] };
+             let output = '';
+             for (let i = 0; i < host.systemState.failedLogins; i++) {
+                 const line = `Failed password for invalid user admin from 192.168.1.100 port 54321 ssh2`;
+                 if (line.toLowerCase().includes(pattern.toLowerCase())) {
+                     output += `Jan 01 12:0${i}:00 ${host.hostname} sshd[123${i}]: ${line}\n`;
+                 }
+             }
+             return { output: [{ text: output, type: 'output' }] };
+        }
+        return { output: [{ text: '', type: 'output' }] };
+    },
+    ping: async (args, { environment }) => {
+        if (args.length < 1) return { output: [{text: "Uso: ping <host>", type: 'error'}] };
+        const target = args[0];
+        const targetHost = findHost(environment, target);
+        if (!targetHost) return { output: [{ text: `ping: unknown host ${target}`, type: 'error' }], duration: 1000 };
+        let output = `PING ${targetHost.hostname} (${targetHost.ip}) 56(84) bytes of data.\n`;
+        for (let i=0; i<4; i++) {
+            await new Promise(res => setTimeout(res, 300));
+            output += `64 bytes from ${targetHost.hostname} (${targetHost.ip}): icmp_seq=${i+1} ttl=64 time=${(Math.random()*10+5).toFixed(1)} ms\n`;
+        }
+        return { output: [{ text: output, type: 'output' }], duration: 500 };
+    },
+    ps: async (args, { terminalState }) => {
+        if (!terminalState.currentHostIp) return { output: [{text: "Este comando debe ejecutarse en un host.", type: 'error'}] };
+        let output = `USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND\n`;
+        output += `root           1  0.0  0.1  12345  6789 ?        Ss   00:00   0:01 /sbin/init\n`;
+        output += `root         250  0.0  0.2  23456  7890 ?        S    00:00   0:05 /usr/sbin/sshd -D\n`;
+        output += `blue-team    300  0.1  0.5  34567  8901 ?        Rs   00:01   0:10 -bash\n`;
+        if (terminalState.prompt.user.includes('red')) {
+             output += `www-data     450  0.5  0.3  45678  9012 ?        S    00:02   0:20 /usr/sbin/apache2 -k start\n`;
+        }
+        return { output: [{ text: output, type: 'output' }] };
+    },
+    openssl: async(args, { environment }) => {
+        if (args[0] === 's_client' && args[1] === '-connect') {
+            const target = args[2].split(':')[0];
+            const host = findHost(environment, target);
+            if (!host) return { output: [{text: `connect:errno=111`, type: 'error'}]};
+            const sslVuln = host.services[443]?.vulnerabilities.find(v => v.cve === 'CVE-2021-SSL');
+            let output = `CONNECTED(00000003)\n---\nCertificate chain\n 0 s:/C=MX/ST=None/L=None/O=Valtorix/CN=${host.hostname}\n   i:/C=MX/ST=None/L=None/O=Valtorix/CN=ValtorixCA\n---\n`;
+            if (sslVuln) {
+                output += `SSL-Session:\n    Protocol  : TLSv1.2\n    Cipher    : DHE-RSA-AES256-SHA\n    <strong class="text-red-500">WARNING: Weak SSL Cipher detected!</strong>\n`;
+            } else {
+                 output += `SSL-Session:\n    Protocol  : TLSv1.3\n    Cipher    : TLS_AES_256_GCM_SHA384\n`;
+            }
+            return { output: [{html: `<pre>${output}</pre>`, type: 'html'}]};
+        }
+        return { output: [{text: 'Comando OpenSSL no implementado', type: 'error'}]};
+    },
+    htop: async(args, context) => commandLibrary.top(args, context), // Alias
+    dirb: async(args) => ({ output: [{ text: `---- Scanning URL: ${args[0]} ----\n+ /index.php (CODE:200|SIZE:123)\n+ /images (CODE:301|SIZE:0) --> http://${args[0]}/images/\n+ /uploads (CODE:403|SIZE:43)\n+ /db_config.php (CODE:200|SIZE:87)`, type: 'output' }], duration: 2000 }),
+    curl: async(args, context) => commandLibrary.cat([args[0].split('/').pop() || ''], context), // Simplified alias
+    nikto: async(args) => ({ output: [{ text: `- Nikto v2.1.6\n---------------------------------------------------------------------------\n+ Target IP:          10.0.10.5\n+ Target Hostname:    BOVEDA-WEB\n+ Server: Apache/2.4.6\n+ The anti-clickjacking X-Frame-Options header is not present.\n+ OSVDB-3233: /icons/README: Apache default file found.\n`, type: 'output' }], duration: 3000 }),
+    john: async(args) => ({ output: [{ text: `Loaded 1 password hash\nPress 'q' or Ctrl-C to abort, almost any other key for status\n0g 0:00:00:18 0.00% (ETA: 2024-01-02 10:30) 0g/s \npassword123      (root)\n1g 0:00:00:25 DONE (2024-01-01 14:45) 0.04g/s \nSession completed`, type: 'output' }], duration: 2500 }),
+    wget: async(args) => ({ output: [{ text: `Connecting to ${args[0]}... connected.\nHTTP request sent, awaiting response... 200 OK\nLength: 1024 (1K) [application/x-sh]\nSaving to: 'payload.sh'\n\npayload.sh           100%[===================>]   1.00K  --.-KB/s    in 0s`, type: 'output' }], duration: 1200 }),
 };
 
 
@@ -444,11 +545,27 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
     }, []);
     
      const updateDbState = useCallback(async (state: Partial<SimulationStateRow>) => {
+        // Filter out any keys with undefined values, as Supabase might reject them.
+        const cleanState = Object.entries(state).reduce((acc, [key, value]) => {
+            if (value !== undefined) {
+                // FIX: Use a type assertion to bypass TypeScript's inability to match
+                // the dynamic key with the correct value type within the reducer. The
+                // logic is sound; this is a common workaround for this TS limitation.
+                (acc as any)[key] = value;
+            }
+            return acc;
+        }, {} as Partial<SimulationStateRow>);
+        
+        if (Object.keys(cleanState).length === 0) return;
+
         const { error } = await supabase
             .from('simulation_state')
-            .update(state)
+            .update(cleanState)
             .eq('session_id', sessionId);
-        if (error) console.error('Failed to sync state:', error);
+        if (error) {
+             console.error('Failed to sync state:', error.message);
+             // Optionally, add user-facing feedback about sync issues.
+        }
     }, [sessionId]);
 
     useEffect(() => {
@@ -526,7 +643,6 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
     
         setTerminals(prev => {
             const teamTerminals = prev.filter(t => t.id.startsWith(currentUserTeam));
-            // Find the highest number in existing terminal IDs like 'red-1', 'red-2'
             const maxId = teamTerminals.reduce((max, t) => {
                 const num = parseInt(t.id.split('-')[1] || '0');
                 return Math.max(max, num);
