@@ -226,7 +226,7 @@ export interface LogEntry {
     teamVisible: 'all' | 'red' | 'blue';
     // For Supabase compatibility
     session_id?: string;
-    source_team?: 'red' | 'blue' | 'System' | 'Network';
+    source_team?: 'Red' | 'Blue' | 'System' | 'Network';
 }
 
 export interface SessionData {
