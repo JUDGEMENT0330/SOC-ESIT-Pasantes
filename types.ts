@@ -221,12 +221,11 @@ export interface GlossaryTerm {
 export interface LogEntry {
     id: number;
     timestamp: string;
-    source: 'Red Team' | 'Blue Team' | 'System' | 'Network';
     message: string;
-    teamVisible: 'all' | 'red' | 'blue';
+    team_visible: 'all' | 'red' | 'blue';
     // For Supabase compatibility
     session_id?: string;
-    source_team?: 'Red' | 'Blue' | 'System' | 'Network';
+    source_team?: 'red' | 'blue' | 'System' | 'Network';
 }
 
 export interface SessionData {
