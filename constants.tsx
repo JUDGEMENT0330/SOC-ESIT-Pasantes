@@ -1,5 +1,6 @@
 
 
+
 import React from 'react';
 import type { TrainingScenario, ResourceModule, GlossaryTerm, TerminalLine, PromptState, InteractiveScenario, VirtualEnvironment } from './types';
 
@@ -127,15 +128,19 @@ export const CisoTable: React.FC<{ headers: string[]; rows: (string | React.Reac
 // Simulation Defaults
 // ============================================================================
 
-const getInitialPrompt = (team: 'Red' | 'Blue'): PromptState => {
-    if (team === 'Blue') {
+// FIX: Changed team type to lowercase 'red' | 'blue' to match application-wide types.
+const getInitialPrompt = (team: 'red' | 'blue'): PromptState => {
+    // FIX: Changed comparison to lowercase 'blue'.
+    if (team === 'blue') {
         return { user: 'pasante-blue', host: 'soc-valtorix', dir: '~' };
     }
     return { user: 'pasante-red', host: 'soc-valtorix', dir: '~' };
 };
 
-const getWelcomeMessage = (team: 'Red' | 'Blue'): TerminalLine[] => [
-    { text: `Bienvenido a la terminal del Equipo ${team}.`, type: 'output' },
+// FIX: Changed team type to lowercase 'red' | 'blue' to match application-wide types.
+const getWelcomeMessage = (team: 'red' | 'blue'): TerminalLine[] => [
+    // FIX: Updated string to correctly display team name from lowercase type.
+    { text: `Bienvenido a la terminal del Equipo ${team === 'red' ? 'Rojo' : 'Azul'}.`, type: 'output' },
     { html: "Escriba <strong class='text-amber-300'>help</strong> para ver sus objetivos y comandos.", type: 'html' },
 ];
 
@@ -149,10 +154,11 @@ export const DEFAULT_SIMULATION_STATE = {
     db_config_permissions: '644',
     hydra_run_count: 0,
     server_load: 5.0,
-    terminal_output_red: getWelcomeMessage('Red'),
-    terminal_output_blue: getWelcomeMessage('Blue'),
-    prompt_red: getInitialPrompt('Red'),
-    prompt_blue: getInitialPrompt('Blue'),
+    // FIX: Changed arguments to lowercase to match new function signatures.
+    terminal_output_red: getWelcomeMessage('red'),
+    terminal_output_blue: getWelcomeMessage('blue'),
+    prompt_red: getInitialPrompt('red'),
+    prompt_blue: getInitialPrompt('blue'),
 };
 
 
@@ -348,13 +354,16 @@ export const rageScenario: InteractiveScenario = {
         },
         
         // === EQUIPO AZUL ===
-        { id: 'blue-detect-dos', description: 'Identificar el ataque DoS analizando la carga del sistema', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Blue' && (log.message.includes('top') || log.message.includes('htop'))), hint: 'Usa "top" o "htop" para ver la carga del CPU'
+// FIX: Changed comparison from 'Blue' to 'blue' to match the type 'red' | 'blue' | 'System' | 'Network' in LogEntry.source_team.
+        { id: 'blue-detect-dos', description: 'Identificar el ataque DoS analizando la carga del sistema', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('top') || log.message.includes('htop'))), hint: 'Usa "top" o "htop" para ver la carga del CPU'
         },
-        { id: 'blue-detect-bruteforce', description: 'Identificar el ataque de fuerza bruta en logs', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Blue' && (log.message.includes('journalctl') || log.message.includes('grep'))), hint: 'Revisa /var/log/auth.log o usa "journalctl -u sshd"'
+// FIX: Changed comparison from 'Blue' to 'blue' to match the type 'red' | 'blue' | 'System' | 'Network' in LogEntry.source_team.
+        { id: 'blue-detect-bruteforce', description: 'Identificar el ataque de fuerza bruta en logs', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('journalctl') || log.message.includes('grep'))), hint: 'Revisa /var/log/auth.log o usa "journalctl -u sshd"'
         },
         { id: 'blue-block-attacker', description: 'Bloquear la IP del atacante en el firewall', points: 25, required: true, validator: (env) => env.networks.dmz.firewall.rules.some(r => r.action === 'deny' && r.sourceIP === '192.168.1.100'), hint: 'Usa "sudo ufw deny from <IP>" o fail2ban'
         },
-        { id: 'blue-verify-integrity', description: 'Verificar integridad de archivos web (detectar backdoor)', points: 20, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Blue' && (log.message.includes('sha256sum') || log.message.includes('md5sum'))), hint: 'Usa "sha256sum /var/www/html/index.php" y compara con hash original'
+// FIX: Changed comparison from 'Blue' to 'blue' to match the type 'red' | 'blue' | 'System' | 'Network' in LogEntry.source_team.
+        { id: 'blue-verify-integrity', description: 'Verificar integridad de archivos web (detectar backdoor)', points: 20, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('sha256sum') || log.message.includes('md5sum'))), hint: 'Usa "sha256sum /var/www/html/index.php" y compara con hash original'
         },
     ],
     
@@ -448,14 +457,17 @@ export const killChainScenario: InteractiveScenario = {
         timeline: []
     },
     objectives: [
-        { id: 'red-lfi', description: 'Explotar LFI para leer /etc/passwd en WEB-DMZ-01', points: 15, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Red' && log.message.includes('/etc/passwd')) },
+// FIX: Changed comparison from 'Red' to 'red' to match the type 'red' | 'blue' | 'System' | 'Network' in LogEntry.source_team.
+        { id: 'red-lfi', description: 'Explotar LFI para leer /etc/passwd en WEB-DMZ-01', points: 15, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'red' && log.message.includes('/etc/passwd')) },
         { id: 'red-rce', description: 'Obtener ejecución remota de código en WEB-DMZ-01', points: 25, required: true, validator: (env) => env.attackProgress.compromised.includes('10.0.0.10')},
         { id: 'red-pivot', description: 'Acceder a DB-FINANCE-01 desde el servidor DMZ', points: 30, required: true, validator: (env) => env.attackProgress.compromised.includes('10.10.0.50')},
         { id: 'red-exfiltrate', description: 'Exfiltrar el archivo finance_backup.sql', points: 35, required: true, validator: (env) => env.attackProgress.persistence.includes('data_exfiltrated') },
         
-        { id: 'blue-detect-lfi', description: 'Detectar el intento de LFI en los logs de Nginx', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Blue' && log.message.includes('grep') && log.message.includes('../../')) },
+// FIX: Changed comparison from 'Blue' to 'blue' to match the type 'red' | 'blue' | 'System' | 'Network' in LogEntry.source_team.
+        { id: 'blue-detect-lfi', description: 'Detectar el intento de LFI en los logs de Nginx', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && log.message.includes('grep') && log.message.includes('../../')) },
         { id: 'blue-contain-dmz', description: 'Contener la amenaza en WEB-DMZ-01 (bloquear IP, matar shell)', points: 25, required: true, validator: (env) => env.defenseProgress.blockedIPs.length > 0 },
-        { id: 'blue-detect-pivot', description: 'Detectar el intento de pivoteo a la red interna', points: 30, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Blue' && log.message.includes('tcpdump -i eth1')) },
+// FIX: Changed comparison from 'Blue' to 'blue' to match the type 'red' | 'blue' | 'System' | 'Network' in LogEntry.source_team.
+        { id: 'blue-detect-pivot', description: 'Detectar el intento de pivoteo a la red interna', points: 30, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && log.message.includes('tcpdump -i eth1')) },
         { id: 'blue-segment-network', description: 'Bloquear el acceso de la DMZ a la red interna', points: 20, required: true, validator: (env) => env.networks.dmz.firewall.rules.some(r => r.action === 'deny' && r.sourceIP === '10.0.0.10') },
     ],
     hints: [
