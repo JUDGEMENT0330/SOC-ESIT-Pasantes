@@ -3,14 +3,16 @@ import type { LogEntry } from '../types';
 import { Icon } from '../constants';
 import { SimulationContext } from '../SimulationContext';
 
-const LogSourceIndicator: React.FC<{ source: LogEntry['source'] }> = ({ source }) => {
+const LogSourceIndicator: React.FC<{ source_team: LogEntry['source_team'] }> = ({ source_team }) => {
     const config = {
-        'Red Team': { color: 'text-red-400', text: 'SRC:RED' },
-        'Blue Team': { color: 'text-blue-400', text: 'SRC:BLUE' },
+        'red': { color: 'text-red-400', text: 'SRC:RED' },
+        'blue': { color: 'text-blue-400', text: 'SRC:BLUE' },
         'System': { color: 'text-yellow-400', text: 'SRC:SYS' },
         'Network': { color: 'text-purple-400', text: 'SRC:NET' },
     };
-    const { color, text } = config[source] || config['System'];
+    const key = source_team || 'System';
+    const effectiveKey = (key.toLowerCase() === 'red' ? 'red' : key.toLowerCase() === 'blue' ? 'blue' : key) as keyof typeof config;
+    const { color, text } = config[effectiveKey] || config['System'];
     return <span className={`font-bold mr-2 ${color}`}>{text}</span>;
 };
 
@@ -19,7 +21,7 @@ const LogViewerComponent: React.FC = () => {
     const { logs, userTeam } = useContext(SimulationContext);
 
     // Filter logs based on user's role and log visibility
-    const filteredLogs = logs.filter(log => log.teamVisible === 'all' || log.teamVisible === userTeam);
+    const filteredLogs = logs.filter(log => log.team_visible === 'all' || log.team_visible === userTeam);
 
     useEffect(() => {
         endOfLogsRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -37,7 +39,7 @@ const LogViewerComponent: React.FC = () => {
                         <div key={log.id} className="flex items-start">
                             <span className="text-gray-500 mr-2 flex-shrink-0">{new Date(log.timestamp).toLocaleTimeString()}</span>
                             <div className="break-words">
-                                <LogSourceIndicator source={log.source} />
+                                <LogSourceIndicator source_team={log.source_team} />
                                 <span className="text-slate-300">{log.message}</span>
                             </div>
                         </div>
