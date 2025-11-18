@@ -101,6 +101,42 @@ export default function App() {
         }
     };
 
+    const handleSetImpersonatedTeam = async (team: 'red' | 'blue' | null) => {
+        if (!isAdmin || !sessionData || !session?.user) {
+            console.error("No se puede suplantar la identidad: falta el estado de administrador, los datos de la sesión o la sesión del usuario.");
+            return;
+        }
+
+        if (team === null) {
+            // Volver al modo espectador. Eliminar el registro de participante específico.
+            const { error } = await supabase
+                .from('session_participants')
+                .delete()
+                .eq('session_id', sessionData.sessionId)
+                .eq('user_id', session.user.id);
+
+            if (error) {
+                console.error('Error al eliminar el participante administrador:', error);
+            }
+        } else {
+            // Suplantar la identidad de un equipo. Actualizar o insertar el registro.
+            const { error } = await supabase
+                .from('session_participants')
+                .upsert({
+                    session_id: sessionData.sessionId,
+                    user_id: session.user.id,
+                    team_role: team
+                });
+
+            if (error) {
+                console.error('Error al añadir al administrador como participante:', error);
+            }
+        }
+        
+        // Actualizar el estado local para volver a renderizar la UI
+        setImpersonatedTeam(team);
+    };
+
     const handleExitSession = () => {
         setSessionData(null);
         setImpersonatedTeam(null);
@@ -143,7 +179,7 @@ export default function App() {
                 exitSession={handleExitSession}
                 logout={handleLogout}
                 isAdmin={isAdmin}
-                setImpersonatedTeam={setImpersonatedTeam}
+                setImpersonatedTeam={handleSetImpersonatedTeam}
             />
         </SimulationProvider>
     );
@@ -161,7 +197,7 @@ interface MainAppProps {
     exitSession: () => void;
     logout: () => void;
     isAdmin: boolean;
-    setImpersonatedTeam: (team: 'red' | 'blue' | null) => void;
+    setImpersonatedTeam: (team: 'red' | 'blue' | null) => Promise<void>;
 }
 
 const MainApp: React.FC<MainAppProps> = ({ session, sessionData, completedScenarios, updateProgress, exitSession, logout, isAdmin, setImpersonatedTeam }) => {
@@ -204,7 +240,7 @@ interface HeaderProps {
     logout: () => void;
     isAdmin: boolean;
     impersonatedTeam: 'red' | 'blue' | null;
-    setImpersonatedTeam: (team: 'red' | 'blue' | null) => void;
+    setImpersonatedTeam: (team: 'red' | 'blue' | null) => Promise<void>;
 }
 
 const Header: React.FC<HeaderProps> = ({ activeTab, sessionData, exitSession, logout, isAdmin, impersonatedTeam, setImpersonatedTeam }) => {
