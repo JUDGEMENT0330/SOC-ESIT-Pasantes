@@ -972,18 +972,31 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         const scenario = TRAINING_SCENARIOS.find(s => s.id === scenarioId && s.isInteractive) as InteractiveScenario | undefined;
         if (!scenario) return false;
 
-        const { error } = await supabase.rpc('start_simulation_scenario', {
-            p_session_id: sessionId,
-            p_scenario_id: scenarioId
-        });
+        // Direct update instead of RPC to fix 404 errors
+        const initialEnv = scenario.initialEnvironment;
+        const dbUpdatePayload = {
+             active_scenario: scenarioId,
+             ...mapEnvironmentToDbRow(initialEnv)
+        };
+
+        const { error: stateError } = await supabase
+            .from('simulation_state')
+            .update(dbUpdatePayload)
+            .eq('session_id', sessionId);
         
-        if (error) {
-            console.error("Error starting scenario via RPC:", error);
+        if (stateError) {
+            console.error("Error starting scenario via direct update:", stateError);
             return false;
         }
+
+        // Log the event directly
+        await supabase.from('simulation_logs').insert({
+            session_id: sessionId,
+            source_team: 'System',
+            message: `Escenario iniciado: ${scenario.title}`,
+            team_visible: 'all'
+        });
         
-        // La actualización de estado ocurrirá a través del canal de realtime,
-        // por lo que no es necesario establecer el estado localmente aquí.
         return true;
     }, [sessionId]);
     
@@ -1026,15 +1039,16 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         
         const finalEnvironment = result.newEnvironment || environment;
 
-        const { error: logError } = await supabase.rpc('log_simulation_event', {
-            p_session_id: sessionId,
-            p_source_team: team,
-            p_message: command,
-            p_team_visible: 'all'
+        // Direct insert instead of RPC
+        const { error: logError } = await supabase.from('simulation_logs').insert({
+            session_id: sessionId,
+            source_team: team,
+            message: command,
+            team_visible: 'all'
         });
 
         if (logError) {
-            console.error("Failed to insert log via RPC:", logError);
+            console.error("Failed to insert log via direct insert:", logError);
         }
         
         const updatedTerminalState: TerminalState = {
