@@ -8,6 +8,7 @@ export const DualTerminalView: React.FC = () => {
     const { terminals, processCommand, userTeam, environment, activeScenario, addNewTerminal, removeTerminal } = useContext(SimulationContext);
     
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
+    const [spectatorViewMode, setSpectatorViewMode] = useState<'dual' | 'red' | 'blue'>('dual');
     
     // Filter to only show terminals for the current user's team
     const teamTerminals = userTeam !== 'spectator' ? terminals.filter(t => t.id.startsWith(userTeam as string)) : [];
@@ -35,7 +36,6 @@ export const DualTerminalView: React.FC = () => {
     };
 
     if (userTeam === 'spectator') {
-        const [spectatorViewMode, setSpectatorViewMode] = useState<'dual' | 'red' | 'blue'>('dual');
         const redTerminals = terminals.filter(t => t.id.startsWith('red'));
         const blueTerminals = terminals.filter(t => t.id.startsWith('blue'));
 
