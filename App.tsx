@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { DualTerminalView } from './components/DualTerminalView';
 import { Auth } from './components/Auth';
@@ -216,6 +217,7 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ activeTab, sessionData, exitSession, logout, isAdmin, impersonatedTeam, setImpersonatedTeam }) => {
+    const { isAiActive, toggleAiOpponent } = useContext(SimulationContext);
     const tabs = ['inicio', 'capacitacion', 'recursos', 'evaluacion', 'terminal'];
     const tabIndex = tabs.indexOf(activeTab);
     const progressWidth = ((tabIndex + 1) / tabs.length) * 100;
@@ -259,6 +261,18 @@ const Header: React.FC<HeaderProps> = ({ activeTab, sessionData, exitSession, lo
                                 {teamDisplay.text}
                            </p>
                         </div>
+                        
+                        {!isAdmin && sessionData.team !== 'spectator' && (
+                            <button 
+                                onClick={toggleAiOpponent}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border transition-all shadow-lg ${isAiActive ? 'bg-purple-900/50 border-purple-500 text-purple-300 animate-pulse' : 'bg-slate-800 border-slate-600 text-slate-400 hover:bg-slate-700'}`}
+                                title={isAiActive ? "Desactivar IA" : "Activar Oponente IA"}
+                            >
+                                <Icon name="bot" className="h-4 w-4" />
+                                <span className="hidden sm:inline">{isAiActive ? 'IA Activa' : 'Activar IA'}</span>
+                            </button>
+                        )}
+
                         <div className="flex space-x-2">
                             <button onClick={exitSession} className="bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-slate-500 p-2 rounded-lg transition-all hover:scale-105 hover:shadow-[0_0_10px_rgba(148,163,184,0.2)]" title="Salir de la Sesión">
                                 <Icon name="log-out" className="h-5 w-5 text-slate-300" />
