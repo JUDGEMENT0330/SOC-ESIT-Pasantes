@@ -135,6 +135,8 @@ export interface CommandContext {
     userTeam: 'red' | 'blue';
     terminalState: TerminalState;
     environment: VirtualEnvironment;
+    // FIX: Add activeScenario to the context to be available for commands
+    activeScenario: InteractiveScenario | null;
     setEnvironment: React.Dispatch<React.SetStateAction<VirtualEnvironment | null>>;
     // FIX: Changed to Promise<boolean> to match the async implementation.
     startScenario: (scenarioId: string) => Promise<boolean>;
@@ -236,7 +238,7 @@ export interface SessionData {
 
 export interface SessionParticipant {
     user_id: string;
-    team_role: 'red' | 'blue';
+    team_role: 'red' | 'blue' | 'spectator';
 }
 
 export interface SimulationSession {
