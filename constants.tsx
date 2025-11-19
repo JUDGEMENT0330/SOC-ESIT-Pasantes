@@ -86,7 +86,7 @@ export const Icon: React.FC<IconProps> = ({ name, className, ...props }) => {
 
 
 export const CisoCard: React.FC<{ icon?: string; title?: string; children: React.ReactNode }> = ({ icon, title, children }) => (
-    <div className="bg-[rgba(85,107,47,0.25)] backdrop-blur-md border border-[rgba(184,134,11,0.3)] rounded-xl p-4 sm:p-6 mb-6 last:mb-0 transition-all duration-300 hover:bg-[rgba(85,107,47,0.4)] hover:border-[rgba(184,134,11,0.5)]">
+    <div className="bg-slate-950/60 backdrop-blur-md border border-white/10 rounded-xl p-4 sm:p-6 mb-6 last:mb-0 transition-all duration-300 hover:bg-slate-900/70 hover:border-cyan-500/30 hover:shadow-[0_0_20px_rgba(6,182,212,0.1)]">
         {title && (
             <h4 className="text-[var(--cv-gold)] font-bold text-lg mb-3 flex items-center">
                 {icon && <Icon name={icon} className="h-5 w-5 mr-2 flex-shrink-0" />}
@@ -100,20 +100,20 @@ export const CisoCard: React.FC<{ icon?: string; title?: string; children: React
 );
 
 export const CisoTable: React.FC<{ headers: string[]; rows: (string | React.ReactNode)[][] }> = ({ headers, rows }) => (
-    <div className="overflow-x-auto border border-[rgba(184,134,11,0.2)] rounded-lg my-4 shadow-lg">
+    <div className="overflow-x-auto border border-slate-800 rounded-lg my-4 shadow-lg bg-slate-950/80">
         <table className="w-full min-w-[600px] border-collapse">
             <thead>
                 <tr>
                     {headers.map((header, i) => (
-                        <th key={i} className="p-3 text-left text-sm font-semibold bg-[rgba(184,134,11,0.1)] text-[var(--cv-gold)] whitespace-nowrap border-b border-[rgba(184,134,11,0.2)]">{header}</th>
+                        <th key={i} className="p-3 text-left text-sm font-semibold bg-slate-900/90 text-[var(--cv-gold)] whitespace-nowrap border-b border-slate-700">{header}</th>
                     ))}
                 </tr>
             </thead>
             <tbody>
                 {rows.map((row, i) => (
-                    <tr key={i} className="bg-black/10 even:bg-black/20">
+                    <tr key={i} className="hover:bg-white/5 transition-colors border-b border-slate-800/50 last:border-b-0">
                         {row.map((cell, j) => (
-                            <td key={j} className="p-3 text-sm text-[var(--text-secondary)] border-b border-[rgba(184,134,11,0.1)] last:border-b-0">{cell}</td>
+                            <td key={j} className="p-3 text-sm text-[var(--text-secondary)]">{cell}</td>
                         ))}
                     </tr>
                 ))}
