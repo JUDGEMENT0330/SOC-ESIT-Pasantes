@@ -230,8 +230,8 @@ const Header: React.FC<HeaderProps> = ({ activeTab, sessionData, exitSession, lo
 
     const getTeamDisplay = () => {
         switch (sessionData.team) {
-            case 'red': return { text: 'Rojo (Ataque)', color: 'text-red-400' };
-            case 'blue': return { text: 'Azul (Defensa)', color: 'text-blue-400' };
+            case 'red': return { text: 'Rojo (Ataque)', color: 'text-red-400 drop-shadow-[0_0_5px_rgba(248,113,113,0.5)]' };
+            case 'blue': return { text: 'Azul (Defensa)', color: 'text-blue-400 drop-shadow-[0_0_5px_rgba(96,165,250,0.5)]' };
             case 'spectator': return { text: 'Espectador (Admin)', color: 'text-yellow-400' };
             default: return { text: 'N/A', color: 'text-gray-400' };
         }
@@ -240,11 +240,11 @@ const Header: React.FC<HeaderProps> = ({ activeTab, sessionData, exitSession, lo
 
 
     return (
-        <header className="shadow-2xl relative bg-slate-950/80 backdrop-blur-xl border-b border-slate-800">
+        <header className="shadow-[0_0_20px_rgba(0,0,0,0.5)] relative bg-slate-950/80 backdrop-blur-xl border-b border-slate-800/50 z-50">
             <div className="container mx-auto px-4 py-4 md:px-6 md:py-6">
                 <div className="flex items-center justify-between">
                      <div className="flex items-center space-x-3 md:space-x-4">
-                        <div className="p-2 bg-slate-900 rounded-lg shadow-lg border border-slate-800 flex-shrink-0">
+                        <div className="p-2 bg-slate-900/80 rounded-lg shadow-[0_0_10px_rgba(59,130,246,0.2)] border border-slate-700/50 flex-shrink-0">
                              <img 
                                 src="https://cybervaltorix.com/wp-content/uploads/2025/09/Cyber-Valtorix-1.png" 
                                 alt="Logo Cyber Valtorix" 
@@ -253,22 +253,25 @@ const Header: React.FC<HeaderProps> = ({ activeTab, sessionData, exitSession, lo
                             />
                         </div>
                          <div>
-                            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">CYBER VALTORIX</h1>
-                            <p className="text-slate-400 text-xs sm:text-sm font-medium tracking-wide uppercase">SOC Induction Framework v2.0</p>
+                            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight font-mono">CYBER VALTORIX</h1>
+                            <p className="text-slate-400 text-xs sm:text-sm font-medium tracking-wide uppercase flex items-center">
+                                <span className="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse shadow-[0_0_5px_#22c55e]"></span>
+                                SOC Induction Framework v2.0
+                            </p>
                         </div>
                     </div>
                     <div className="flex items-center space-x-3 md:space-x-6">
-                        <div className="text-right hidden sm:block">
-                           <p className="text-white text-sm font-semibold truncate max-w-[150px]" title={sessionData.sessionName}>{sessionData.sessionName}</p>
+                        <div className="text-right hidden sm:block bg-black/30 px-4 py-2 rounded border border-slate-800">
+                           <p className="text-white text-sm font-semibold truncate max-w-[150px] font-mono" title={sessionData.sessionName}>{sessionData.sessionName}</p>
                            <p className={`text-xs mt-0.5 font-bold uppercase tracking-wider ${teamDisplay.color}`}>
                                 {teamDisplay.text}
                            </p>
                         </div>
                         <div className="flex space-x-2">
-                            <button onClick={exitSession} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 p-2 rounded-lg transition-all hover:scale-105" title="Salir de la Sesión">
+                            <button onClick={exitSession} className="bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-slate-500 p-2 rounded-lg transition-all hover:scale-105 hover:shadow-[0_0_10px_rgba(148,163,184,0.2)]" title="Salir de la Sesión">
                                 <Icon name="log-out" className="h-5 w-5 text-slate-300" />
                             </button>
-                             <button onClick={logout} className="bg-red-900/20 hover:bg-red-900/40 border border-red-900/50 p-2 rounded-lg transition-all hover:scale-105" title="Cerrar Sesión">
+                             <button onClick={logout} className="bg-red-950/30 hover:bg-red-900/50 border border-red-900/50 hover:border-red-500/50 p-2 rounded-lg transition-all hover:scale-105 hover:shadow-[0_0_10px_rgba(239,68,68,0.3)]" title="Cerrar Sesión">
                                 <Icon name="power" className="h-5 w-5 text-red-400" />
                             </button>
                         </div>
@@ -276,27 +279,29 @@ const Header: React.FC<HeaderProps> = ({ activeTab, sessionData, exitSession, lo
                 </div>
             </div>
             {isAdmin && (
-                 <div className="bg-slate-900/80 text-center py-2 px-4 border-t border-yellow-500/20">
+                 <div className="bg-slate-900/90 text-center py-2 px-4 border-t border-yellow-500/20 backdrop-blur-sm">
                     <div className="flex items-center justify-center gap-4">
-                        <span className="text-yellow-500 font-bold text-xs uppercase tracking-widest">Admin Mode:</span>
+                        <span className="text-yellow-500 font-bold text-xs uppercase tracking-widest flex items-center gap-2">
+                            <Icon name="shield" className="w-3 h-3" /> Admin Mode:
+                        </span>
                         {sessionData.team === 'spectator' ? (
                             <>
-                                <button onClick={() => setImpersonatedTeam('red')} className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white bg-red-600/80 rounded hover:bg-red-600 transition-colors">Join Red</button>
-                                <button onClick={() => setImpersonatedTeam('blue')} className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white bg-blue-600/80 rounded hover:bg-blue-600 transition-colors">Join Blue</button>
+                                <button onClick={() => setImpersonatedTeam('red')} className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white bg-red-600/20 border border-red-500/50 rounded hover:bg-red-600 hover:text-white transition-all">Join Red</button>
+                                <button onClick={() => setImpersonatedTeam('blue')} className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white bg-blue-600/20 border border-blue-500/50 rounded hover:bg-blue-600 hover:text-white transition-all">Join Blue</button>
                             </>
                         ) : (
                              <div className="flex items-center gap-2">
                                  <p className="text-slate-300 text-xs">
                                     Acting as <strong className={impersonatedTeam === 'red' ? 'text-red-400' : 'text-blue-400'}>{impersonatedTeam === 'red' ? 'RED TEAM' : 'BLUE TEAM'}</strong>
                                 </p>
-                                <button onClick={() => setImpersonatedTeam(null)} className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-black bg-yellow-500 rounded hover:bg-yellow-400 transition-colors">Reset to Spectator</button>
+                                <button onClick={() => setImpersonatedTeam(null)} className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-black bg-yellow-500 rounded hover:bg-yellow-400 transition-colors shadow-[0_0_10px_rgba(234,179,8,0.5)]">Reset to Spectator</button>
                             </div>
                         )}
                     </div>
                 </div>
             )}
             <div 
-                className="h-[2px] bg-gradient-to-r from-blue-600 via-purple-500 to-pink-500 shadow-[0_0_10px_rgba(59,130,246,0.5)] transition-all duration-500 ease-out" 
+                className="h-[2px] bg-gradient-to-r from-blue-500 via-cyan-400 to-purple-500 shadow-[0_0_15px_rgba(6,182,212,0.8)] transition-all duration-500 ease-out relative z-20" 
                 style={{ width: `${progressWidth}%` }}
             ></div>
         </header>
@@ -305,8 +310,8 @@ const Header: React.FC<HeaderProps> = ({ activeTab, sessionData, exitSession, lo
 
 const Footer: React.FC = () => (
     <footer className="text-center py-8 px-4">
-        <div className="glass-morphism rounded-xl p-6 max-w-2xl mx-auto bg-slate-900/40 border border-slate-800">
-            <p className="text-slate-300 text-sm font-medium mb-2">CYBER VALTORIX S.A. DE C.V.</p>
+        <div className="glass-morphism rounded-xl p-6 max-w-2xl mx-auto bg-slate-900/40 border border-slate-800/60">
+            <p className="text-slate-300 text-sm font-medium mb-2 font-mono">CYBER VALTORIX S.A. DE C.V.</p>
             <p className="text-slate-500 text-xs">Plataforma de Inducción del Centro de Operaciones de Seguridad (SOC)</p>
         </div>
     </footer>
@@ -340,20 +345,20 @@ const Tabs: React.FC<{ activeTab: string; setActiveTab: (tab: string) => void }>
     }, [activeTab]);
 
     return (
-        <div className="mb-8 sticky top-0 md:top-auto md:relative z-50 -mx-4 px-4 py-3 bg-slate-950/90 backdrop-blur-lg md:bg-transparent md:backdrop-blur-none md:-mx-0 md:px-0 md:py-0 border-b md:border-none border-slate-800">
+        <div className="mb-8 sticky top-0 md:top-auto md:relative z-40 -mx-4 px-4 py-3 bg-slate-950/90 backdrop-blur-lg md:bg-transparent md:backdrop-blur-none md:-mx-0 md:px-0 md:py-0 border-b md:border-none border-slate-800/50">
             <nav className="flex overflow-x-auto whitespace-nowrap space-x-2 md:flex-wrap md:gap-2 md:space-x-0 nav-tabs scrollbar-hide" aria-label="Tabs">
                 {TABS_CONFIG.map((tab, index) => (
                     <button
                         key={tab.id}
                         ref={el => { tabRefs.current[index] = el; }}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`nav-tab flex-shrink-0 px-4 py-3 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center justify-center
+                        className={`nav-tab flex-shrink-0 px-4 py-3 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center justify-center border
                             ${activeTab === tab.id
-                                ? 'bg-slate-800 text-white shadow-lg border border-slate-600'
-                                : 'bg-transparent text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                                ? 'bg-slate-800/80 text-white shadow-[0_0_15px_rgba(59,130,246,0.15)] border-slate-500'
+                                : 'bg-transparent text-slate-400 border-transparent hover:bg-slate-800/50 hover:text-slate-200 hover:border-slate-700'
                             }`}
                     >
-                        <Icon name={tab.icon} className={`h-4 w-4 mr-2 ${activeTab === tab.id ? 'text-blue-400' : 'text-slate-500'}`} />
+                        <Icon name={tab.icon} className={`h-4 w-4 mr-2 ${activeTab === tab.id ? 'text-cyan-400' : 'text-slate-500'}`} />
                         <span>{tab.label}</span>
                     </button>
                 ))}
@@ -401,10 +406,13 @@ const TabContent: React.FC<TabContentProps> = ({ activeTab, completedScenarios, 
 // ============================================================================
 
 const SectionWrapper: React.FC<{ children: React.ReactNode, title: string, subtitle: string, className?: string }> = ({ children, title, subtitle, className }) => (
-    <div className={`glass-morphism p-6 md:p-8 rounded-2xl bg-slate-900/60 border border-slate-800 ${className}`}>
-        <div className="mb-8 border-b border-slate-800 pb-6">
-            <h2 className="text-2xl md:text-3xl font-bold mb-2 text-white">{title}</h2>
-            <p className="text-sm md:text-base text-slate-400">{subtitle}</p>
+    <div className={`glass-morphism p-6 md:p-8 rounded-2xl bg-slate-900/60 border border-slate-700/50 ${className}`}>
+        <div className="mb-8 border-b border-slate-700/50 pb-6 relative">
+            <h2 className="text-2xl md:text-3xl font-bold mb-2 text-white flex items-center gap-3">
+                <span className="w-1 h-8 bg-gradient-to-b from-cyan-400 to-blue-600 rounded-full"></span>
+                {title}
+            </h2>
+            <p className="text-sm md:text-base text-slate-400 pl-4">{subtitle}</p>
         </div>
         {children}
     </div>
@@ -417,8 +425,8 @@ const GlossarySection: React.FC = () => (
                 {GLOSSARY_TERMS.map(term => (
                     <React.Fragment key={term.term}>
                         <div>
-                            <dt className="text-white font-semibold mb-1">{term.term}</dt>
-                            <dd className="text-slate-400 text-sm border-l-2 border-blue-500/50 pl-3">{term.definition}</dd>
+                            <dt className="text-white font-semibold mb-1 font-mono text-sm text-cyan-300">{term.term}</dt>
+                            <dd className="text-slate-400 text-sm border-l-2 border-slate-700 pl-3 hover:border-cyan-500 transition-colors">{term.definition}</dd>
                         </div>
                     </React.Fragment>
                 ))}
@@ -436,17 +444,18 @@ const TrainingSection: React.FC<TrainingSectionProps> = ({ completedScenarios, u
 
     return (
         <SectionWrapper title="Talleres de Operaciones de Seguridad (SOC) - Nivel Pasante" subtitle="DE: CISO, CYBER VALTORIX S.A. DE C.V.">
-             <div className="learning-module bg-slate-900/50 border border-slate-700 rounded-2xl p-6 mb-8">
-                <h3 className="text-lg font-bold text-blue-400 mb-4 flex items-center">
+             <div className="learning-module bg-slate-900/50 border border-slate-700 rounded-2xl p-6 mb-8 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/10 rounded-full blur-xl pointer-events-none"></div>
+                <h3 className="text-lg font-bold text-cyan-400 mb-4 flex items-center">
                     <Icon name="info" className="h-5 w-5 mr-2" />
                     Instrucciones de los Talleres
                 </h3>
-                <div className="text-slate-300 text-sm leading-relaxed space-y-3">
+                <div className="text-slate-300 text-sm leading-relaxed space-y-3 relative z-10">
                     <p>Tienen tiempo asignado para completar estos escenarios. Los documentos en la pestaña "Recursos" son su base teórica. Esta es la aplicación práctica.</p>
                     <p>No busquen "la respuesta correcta". Quiero su análisis, su proceso de pensamiento y las acciones de contención que proponen. Usen el modelo "Maestro/Estudiante": preparen su solución y estén listos para defenderla.</p>
-                     <div className="flex items-center gap-2 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg mt-4">
+                     <div className="flex items-center gap-2 p-3 bg-blue-950/30 border border-blue-500/30 rounded-lg mt-4">
                         <Icon name="terminal" className="text-blue-400 h-4 w-4"/>
-                        <p className="text-blue-200 font-bold text-xs">¡Nuevo! Ahora puedes iniciar escenarios interactivos desde la terminal con el comando <code className="bg-black/40 px-1 py-0.5 rounded text-blue-400">start-scenario [id]</code> (ej. <code className="bg-black/40 px-1 py-0.5 rounded text-blue-400">start-scenario escenario7</code>).</p>
+                        <p className="text-blue-200 font-bold text-xs font-mono">¡Nuevo! Inicia escenarios con <code className="bg-black/60 px-1.5 py-0.5 rounded text-cyan-400 border border-cyan-900">start-scenario [id]</code> (ej. <code className="bg-black/60 px-1.5 py-0.5 rounded text-cyan-400 border border-cyan-900">start-scenario escenario7</code>).</p>
                      </div>
                 </div>
             </div>
@@ -600,18 +609,18 @@ const EvaluationSection: React.FC = () => {
                         toggle={() => setExpanded(expanded === evalItem.title ? null : evalItem.title)}
                         header={
                             <div className="flex items-center space-x-4 flex-grow min-w-0">
-                                <Icon name="star" className="h-5 w-5 text-yellow-500" />
+                                <Icon name="star" className="h-5 w-5 text-yellow-500 drop-shadow-[0_0_5px_rgba(234,179,8,0.5)]" />
                                 <h4 className="font-bold text-white truncate text-sm md:text-base">{evalItem.title}</h4>
                             </div>
                         }
                     >
                         <div className="grid md:grid-cols-2 gap-8">
                             <div>
-                                <h5 className="font-bold text-blue-400 mb-2 text-sm uppercase tracking-wider">Equipo Azul (Total: {evalItem.blueTeam.total})</h5>
+                                <h5 className="font-bold text-blue-400 mb-2 text-sm uppercase tracking-wider border-b border-blue-900 pb-1">Equipo Azul (Total: {evalItem.blueTeam.total})</h5>
                                 <CisoTable headers={evalItem.blueTeam.headers} rows={evalItem.blueTeam.rows} />
                             </div>
                             <div>
-                                <h5 className="font-bold text-red-400 mb-2 text-sm uppercase tracking-wider">Equipo Rojo (Total: {evalItem.redTeam.total})</h5>
+                                <h5 className="font-bold text-red-400 mb-2 text-sm uppercase tracking-wider border-b border-red-900 pb-1">Equipo Rojo (Total: {evalItem.redTeam.total})</h5>
                                 <CisoTable headers={evalItem.redTeam.headers} rows={evalItem.redTeam.rows} />
                             </div>
                         </div>
@@ -638,7 +647,7 @@ const CollapsibleModule: React.FC<{
     const contentRef = React.useRef<HTMLDivElement>(null);
 
     return (
-        <div className={`bg-slate-900/40 border border-slate-800 rounded-xl transition-all duration-300 hover:border-slate-600 ${isExpanded ? 'border-slate-500 bg-slate-800/50' : ''} ${className}`}>
+        <div className={`bg-slate-900/40 border border-slate-700/50 rounded-xl transition-all duration-300 hover:border-slate-500 hover:bg-slate-800/30 ${isExpanded ? 'border-slate-500 bg-slate-800/50 shadow-[0_0_15px_rgba(15,23,42,0.5)]' : ''} ${className}`}>
             <div className="p-4">
                 <div className="flex items-center justify-between cursor-pointer" onClick={toggle}>
                     {header}
@@ -681,8 +690,8 @@ const TrainingModule: React.FC<TrainingModuleProps> = ({ scenario, isCompleted, 
     };
 
     const statusConfig: { [key: string]: { text: string, className: string } } = {
-        'initial': { text: 'Pendiente', className: 'bg-slate-800 text-slate-400' },
-        'completed': { text: 'Completado', className: 'bg-green-900/30 text-green-400' }
+        'initial': { text: 'Pendiente', className: 'bg-slate-800 text-slate-400 border border-slate-700' },
+        'completed': { text: 'Completado', className: 'bg-green-900/30 text-green-400 border border-green-500/30 shadow-[0_0_5px_rgba(34,197,94,0.2)]' }
     };
     
     const currentStatus = isCompleted ? statusConfig.completed : statusConfig.initial;
@@ -714,15 +723,15 @@ const TrainingModule: React.FC<TrainingModuleProps> = ({ scenario, isCompleted, 
             header={
                 <>
                     <div className="flex items-center space-x-4 flex-grow min-w-0">
-                        <div className={`w-10 h-10 ${scenario.color}/10 rounded-lg flex items-center justify-center flex-shrink-0 border border-white/5`}>
+                        <div className={`w-10 h-10 ${scenario.color}/10 rounded-lg flex items-center justify-center flex-shrink-0 border border-white/10 shadow-inner`}>
                             <Icon name={scenario.icon} className={`h-5 w-5 ${scenario.color.replace('bg-', 'text-').replace('-500','-400')}`} />
                         </div>
                         <div className="min-w-0">
                              <div className="flex items-center">
-                                <h4 className="font-bold text-white truncate text-sm md:text-base">{scenario.title}</h4>
+                                <h4 className="font-bold text-white truncate text-sm md:text-base group-hover:text-cyan-300 transition-colors">{scenario.title}</h4>
                                 {activeScenarioId === scenario.id && (
-                                    <span className="ml-3 px-2 py-0.5 text-[10px] font-bold text-green-400 bg-green-900/20 border border-green-500/30 rounded-full animate-pulse flex items-center gap-1">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                                    <span className="ml-3 px-2 py-0.5 text-[10px] font-bold text-green-400 bg-green-900/20 border border-green-500/30 rounded-full animate-pulse flex items-center gap-1 shadow-[0_0_5px_rgba(74,222,128,0.3)]">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_3px_#22c55e]"></div>
                                         ACTIVE
                                     </span>
                                 )}
@@ -743,7 +752,7 @@ const TrainingModule: React.FC<TrainingModuleProps> = ({ scenario, isCompleted, 
                                 title="Marcar como completado"
                                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 border
                                     ${isCompleted 
-                                        ? 'bg-green-600 border-green-600 text-white' 
+                                        ? 'bg-green-600 border-green-600 text-white shadow-[0_0_10px_rgba(22,163,74,0.5)]' 
                                         : 'bg-slate-800 border-slate-700 text-slate-500 hover:bg-slate-700 hover:border-slate-500 hover:text-white'
                                     }`}
                             >
@@ -767,8 +776,8 @@ const LearningModule: React.FC<{ resource: ResourceModule }> = ({ resource }) =>
             toggle={() => setIsExpanded(!isExpanded)}
             header={
                 <div className="flex items-center space-x-4">
-                    <h3 className="text-lg font-bold text-slate-200 flex items-center hover:text-blue-400 transition-colors">
-                        <Icon name={resource.icon} className="h-5 w-5 mr-3 text-blue-500"/>
+                    <h3 className="text-lg font-bold text-slate-200 flex items-center hover:text-cyan-400 transition-colors">
+                        <Icon name={resource.icon} className="h-5 w-5 mr-3 text-cyan-500 drop-shadow-[0_0_3px_rgba(6,182,212,0.5)]"/>
                         {resource.title}
                     </h3>
                 </div>
@@ -823,10 +832,10 @@ export const ScenarioView: React.FC<ScenarioViewProps> = ({ scenario, environmen
     const progressPercent = totalPoints > 0 ? (earnedPoints / totalPoints) * 100 : 0;
     
     return <div className="space-y-6 mt-4">
-            <div className={`p-6 rounded-xl border transition-all duration-500 ${isActive ? 'bg-slate-900/80 border-indigo-500/30 shadow-[0_0_30px_rgba(99,102,241,0.1)]' : 'bg-slate-900/40 border-slate-800'}`}>
+            <div className={`p-6 rounded-xl border transition-all duration-500 ${isActive ? 'bg-slate-900/80 border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.1)]' : 'bg-slate-900/40 border-slate-800'}`}>
                 <div className="flex items-center justify-between mb-4">
                     <div>
-                        <h3 className="text-xl font-bold text-white">{scenario.title}</h3>
+                        <h3 className="text-xl font-bold text-white font-mono tracking-tight">{scenario.title}</h3>
                         <p className="text-slate-400 mt-1 text-sm">{scenario.description}</p>
                     </div>
                     <span className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest border ${
@@ -842,11 +851,11 @@ export const ScenarioView: React.FC<ScenarioViewProps> = ({ scenario, environmen
                     <div className="mt-6 animate-fade-in-fast">
                         <div className="flex justify-between text-xs font-semibold uppercase tracking-wider mb-2">
                             <span className="text-slate-500">Mission Progress</span>
-                            <span className="text-white">{earnedPoints} / {totalPoints} Pts</span>
+                            <span className="text-white font-mono">{earnedPoints} / {totalPoints} Pts</span>
                         </div>
-                        <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                        <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-700/50">
                             <div 
-                                className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all duration-1000 ease-out relative"
+                                className="bg-gradient-to-r from-blue-500 to-cyan-400 h-full rounded-full transition-all duration-1000 ease-out relative shadow-[0_0_10px_rgba(6,182,212,0.5)]"
                                 style={{ width: `${progressPercent}%` }}
                             >
                                 <div className="absolute inset-0 bg-white/20 animate-[shimmer_2s_infinite]"></div>
@@ -859,7 +868,7 @@ export const ScenarioView: React.FC<ScenarioViewProps> = ({ scenario, environmen
             {isActive && activeHints.length > 0 && (
                 <div className="space-y-2">
                     {activeHints.map((hint, idx) => (
-                        <div key={idx} className="bg-yellow-900/20 border-l-4 border-yellow-500 p-4 animate-fade-in-fast">
+                        <div key={idx} className="bg-yellow-900/10 border-l-4 border-yellow-500 p-4 animate-fade-in-fast backdrop-blur-sm">
                             <div className="flex items-start">
                                 <Icon name="alert-triangle" className="h-4 w-4 text-yellow-500 mr-3 flex-shrink-0 mt-0.5" />
                                 <p className="text-yellow-200 text-sm">{hint}</p>
@@ -877,19 +886,19 @@ export const ScenarioView: React.FC<ScenarioViewProps> = ({ scenario, environmen
                     return (
                         <div 
                             key={objective.id}
-                            className={`p-4 rounded-lg border transition-all duration-300 ${
+                            className={`p-4 rounded-lg border transition-all duration-300 backdrop-blur-sm ${
                                 isCompleted 
-                                    ? 'bg-green-900/10 border-green-500/30' 
+                                    ? 'bg-green-900/10 border-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.1)]' 
                                     : isRedTeam 
-                                        ? 'bg-red-900/5 border-red-500/10 hover:border-red-500/30'
-                                        : 'bg-blue-900/5 border-blue-500/10 hover:border-blue-500/30'
+                                        ? 'bg-red-950/20 border-red-500/10 hover:border-red-500/30'
+                                        : 'bg-blue-950/20 border-blue-500/10 hover:border-blue-500/30'
                             }`}
                         >
                             <div className="flex items-start justify-between">
                                 <div className="flex-grow">
                                     <div className="flex items-center mb-1">
-                                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center mr-3 flex-shrink-0 ${isCompleted ? 'bg-green-500 border-green-500' : 'border-slate-600'}`}>
-                                            {isCompleted && <Icon name="check" className="h-3 w-3 text-white" />}
+                                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center mr-3 flex-shrink-0 ${isCompleted ? 'bg-green-500 border-green-500 shadow-[0_0_5px_#22c55e]' : 'border-slate-600'}`}>
+                                            {isCompleted && <Icon name="check" className="h-3 w-3 text-black font-bold" />}
                                         </div>
                                         <h4 className={`text-sm font-medium ${isCompleted ? 'text-green-400 line-through decoration-green-500/50' : 'text-slate-200'}`}>
                                             {objective.description}
