@@ -248,3 +248,92 @@ export interface SimulationSession {
     is_active: boolean;
     session_participants: SessionParticipant[];
 }
+
+// ============================================================================
+// Command Library Types
+// ============================================================================
+
+export interface CommandExample {
+    command: string;
+    description: string;
+}
+
+export interface CommonFlag {
+    flag: string;
+    description: string;
+}
+
+export interface CommonCommand {
+    command: string;
+    description: string;
+}
+
+export interface CommandDefinition {
+    name: string;
+    fullName: string;
+    description: string;
+    syntax: string;
+    category: string;
+    team: string;
+    examples: CommandExample[];
+    commonFlags?: CommonFlag[];
+    commonCommands?: CommonCommand[]; // For systemctl/ufw style subcommands
+    useCases?: string[];
+    warnings?: string[];
+    defenseCounters?: string[];
+    keyIndicators?: { metric: string; description: string; interpretation: string }[];
+    interactiveCommands?: { key: string; action: string }[];
+    supportedHashes?: string[];
+    commonJails?: string[];
+    configuration?: { location: string; keyParameters: string[] };
+    permissionSystem?: { 
+        numeric: { description: string; values: string[] }; 
+        symbolic: { description: string; operators: string[]; permissions: string[] } 
+    };
+    commonPatterns?: { pattern: string; description: string; use: string }[];
+    securityBestPractices?: string[];
+    securityNote?: string;
+    advantages?: string[];
+    securityUseCases?: { scenario: string; command: string; description: string }[];
+    forensicsPatterns?: string[];
+    securityPatterns?: { pattern: string; use: string }[];
+    securityChecks?: string[];
+    keyboardShortcuts?: { keys: string; action: string }[];
+    commonFinds?: string[];
+    protocols?: string[]; // NEW: Added to support protocols list
+    securityIndicators?: string[]; // NEW: Added for security indicators strings
+    workflowExample?: { [key: string]: string }; // NEW: Added for workflow example objects
+}
+
+export interface CommandCategory {
+    id: string;
+    name: string;
+    icon: string;
+    color: string;
+    description: string;
+    commands: CommandDefinition[];
+}
+
+export interface QuickReferenceScenario {
+    scenario: string;
+    steps?: string[];
+    commands?: string[]; // For daily monitoring simple list
+    items?: string[]; // For hardening checklist
+}
+
+export interface QuickReferenceGroup {
+    title: string;
+    commands?: string[] | QuickReferenceScenario[];
+    items?: string[];
+}
+
+export interface CommandLibraryData {
+    commandLibrary: {
+        categories: CommandCategory[];
+        quickReference: {
+            emergencyCommands: QuickReferenceGroup;
+            dailyMonitoring: QuickReferenceGroup;
+            hardeningChecklist: QuickReferenceGroup;
+        };
+    };
+}
