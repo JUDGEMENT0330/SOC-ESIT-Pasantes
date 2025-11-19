@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 
@@ -74,7 +75,7 @@ export const Auth: React.FC = () => {
                                     src="https://cybervaltorix.com/wp-content/uploads/2025/09/Cyber-Valtorix-1.png" 
                                     alt="Logo Cyber Valtorix" 
                                     className="h-10 w-10 md:h-12 md:w-12 object-contain"
-                                    onError={(e) => (e.currentTarget.src = 'https://placehold.co/48x48/2d5016/b8860b?text=CV')}
+                                    onError={(e) => (e.currentTarget.src = 'https://placehold.co/48x48/1e293b/3b82f6?text=CV')}
                                 />
                             </div>
                             <div>
@@ -88,7 +89,7 @@ export const Auth: React.FC = () => {
                     <form onSubmit={handleLogin}>
                         <div className="space-y-4">
                             <input
-                                className="w-full px-4 py-3 bg-slate-950/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
+                                className="w-full px-4 py-3 bg-black/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
                                 type="email"
                                 placeholder="Correo electrónico"
                                 value={email}
@@ -96,7 +97,7 @@ export const Auth: React.FC = () => {
                                 required
                             />
                             <input
-                                className="w-full px-4 py-3 bg-slate-950/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
+                                className="w-full px-4 py-3 bg-black/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
                                 type="password"
                                 placeholder="Contraseña"
                                 value={password}
