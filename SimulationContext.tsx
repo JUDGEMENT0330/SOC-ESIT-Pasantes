@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient';
 import type { VirtualEnvironment, LogEntry, SessionData, TerminalLine, PromptState, TerminalState, ActiveProcess, CommandHandler, CommandContext, CommandResult, VirtualHost, FirewallState, InteractiveScenario } from './types';
 // FIX: The `RealtimeChannel` type might not be exported in this version. Using `any` to avoid breaking the build.
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, GENERAL_HELP_TEXT, SCENARIO_HELP_TEXTS, TRAINING_SCENARIOS } from './constants';
+import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, GENERAL_HELP_TEXT, SCENARIO_HELP_TEXTS, TRAINING_SCENARIOS, SCENARIO_7_GUIDE } from './constants';
 import * as R from 'https://aistudiocdn.com/ramda@^0.32.0';
 import { GoogleGenAI } from "https://esm.sh/@google/genai";
 
@@ -205,14 +205,22 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         // Gather context for the AI
         const logs = environment.timeline.slice(-15).map(l => `[${l.source_team || 'SYS'}] ${l.message}`).join('\n');
         const scenarioContext = activeScenario ? `Escenario: ${activeScenario.title}. Desc: ${activeScenario.description}` : "Sin escenario activo.";
+        
+        // Inyectar guía experta si estamos en el escenario 7
+        let expertContext = "";
+        if (activeScenario?.id === 'escenario7') {
+            expertContext = `\nIMPORTANTE: Usa la siguiente GUÍA EXPERTA PARA ESCENARIO 7 para asistir al usuario. No des la respuesta directa inmediatamente, guía paso a paso:\n${SCENARIO_7_GUIDE}\n`;
+        }
+
         const teamContext = `Eres el analista de seguridad IA para el Equipo ${userTeam === 'red' ? 'Rojo (Atacante)' : 'Azul (Defensor)'}.`;
         
         const prompt = `${teamContext}
 Contexto del juego: ${scenarioContext}
+${expertContext}
 Últimos logs del sistema:
 ${logs}
 
-Analiza la situación brevemente (max 3 lineas) y sugiere el siguiente comando técnico más lógico para mi equipo. Sé directo y táctico.`;
+Analiza la situación brevemente (max 3 lineas) y sugiere el siguiente comando técnico más lógico para mi equipo basándote en la guía experta si aplica. Sé directo y táctico.`;
 
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
