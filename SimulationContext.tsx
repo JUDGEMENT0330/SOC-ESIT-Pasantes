@@ -815,10 +815,12 @@ interface SimulationContextType {
     logs: LogEntry[];
     terminals: TerminalState[];
     userTeam: 'red' | 'blue' | 'spectator' | null;
+    isAiActive: boolean;
     processCommand: (terminalId: string, command: string) => Promise<void>;
     startScenario: (scenarioId: string) => Promise<boolean>;
     addNewTerminal: () => void;
     removeTerminal: (terminalId: string) => void;
+    toggleAiOpponent: () => void;
 }
 
 export const SimulationContext = createContext<SimulationContextType>({} as SimulationContextType);
@@ -833,6 +835,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
     const [activeScenario, setActiveScenario] = useState<InteractiveScenario | null>(null);
     const [terminals, setTerminals] = useState<TerminalState[]>([]);
     const [logs, setLogs] = useState<LogEntry[]>([]);
+    const [isAiActive, setIsAiActive] = useState(false);
     
     const stateChannelRef = useRef<any | null>(null);
     const logsChannelRef = useRef<any | null>(null);
@@ -873,9 +876,6 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         // Filter out any keys with undefined values, as Supabase might reject them.
         const cleanState = Object.entries(state).reduce((acc, [key, value]) => {
             if (value !== undefined) {
-                // FIX: Use a type assertion to bypass TypeScript's inability to match
-                // the dynamic key with the correct value type within the reducer. The
-                // logic is sound; this is a common workaround for this TS limitation.
                 (acc as any)[key] = value;
             }
             return acc;
@@ -889,9 +889,77 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             .eq('session_id', sessionId);
         if (error) {
              console.error('Failed to sync state:', error.message);
-             // Optionally, add user-facing feedback about sync issues.
         }
     }, [sessionId]);
+    
+    // --- AI OPPONENT LOGIC ---
+    const toggleAiOpponent = useCallback(() => setIsAiActive(prev => !prev), []);
+
+    useEffect(() => {
+        if (!isAiActive || !activeScenario || team === 'spectator' || !environment) return;
+        
+        const aiLoop = setInterval(async () => {
+            const aiTeam = team === 'red' ? 'blue' : 'red';
+            let actionMessage = '';
+            let updates: Partial<VirtualEnvironment> = {};
+            
+            // Simple AI Logic State Machine
+            if (aiTeam === 'red') {
+                // AI is Attacker
+                if (!environment.attackProgress.compromised.includes('10.0.20.10')) {
+                    const load = environment.networks.dmz.hosts[0]?.systemState?.cpuLoad || 5;
+                    if (load < 50) {
+                        actionMessage = 'hping3 --flood -S -p 80 PORTAL-WEB';
+                        updates = { networks: R.clone(environment.networks) };
+                        updates.networks!['dmz'].hosts[0].systemState!.cpuLoad = 95;
+                    } else {
+                        actionMessage = 'hydra -l admin -P rockyou.txt ssh://PORTAL-WEB';
+                        updates = { attackProgress: R.clone(environment.attackProgress) };
+                        updates.attackProgress!.credentials['admin@10.0.20.10'] = 'P@ssw0rd';
+                    }
+                } else {
+                     actionMessage = 'echo "<?php system($_GET[\'cmd\']); ?>" > /var/www/html/shell.php';
+                     updates = { attackProgress: R.clone(environment.attackProgress) };
+                     updates.attackProgress!.persistence.push('webshell');
+                }
+            } else {
+                // AI is Defender
+                const load = environment.networks.dmz.hosts[0]?.systemState?.cpuLoad || 5;
+                if (load > 80) {
+                     actionMessage = 'sudo ufw deny from 192.168.1.100';
+                     updates = { defenseProgress: R.clone(environment.defenseProgress), networks: R.clone(environment.networks) };
+                     updates.defenseProgress!.blockedIPs.push('192.168.1.100');
+                     updates.networks!['dmz'].hosts[0].systemState!.cpuLoad = 5; // Mitigate
+                     updates.networks!['dmz'].firewall.rules.push({ id: 'deny-ai', action: 'deny', sourceIP: '192.168.1.100', protocol: 'any'});
+                } else {
+                    const rand = Math.random();
+                    if (rand > 0.5) actionMessage = 'tail -f /var/log/auth.log';
+                    else actionMessage = 'top';
+                }
+            }
+
+            // Execute AI Action
+            if (actionMessage) {
+                // 1. Insert Log
+                await supabase.from('simulation_logs').insert({
+                    session_id: sessionId,
+                    source_team: aiTeam,
+                    message: actionMessage,
+                    team_visible: 'all'
+                });
+                
+                // 2. Update State if needed
+                if (Object.keys(updates).length > 0) {
+                     const mergedEnv = R.mergeDeepRight(environment, updates) as VirtualEnvironment;
+                     setEnvironment(mergedEnv); // Optimistic update
+                     updateDbState(mapEnvironmentToDbRow(mergedEnv));
+                }
+            }
+            
+        }, 12000); // Run every 12 seconds
+
+        return () => clearInterval(aiLoop);
+    }, [isAiActive, activeScenario, team, environment, sessionId, updateDbState]);
 
     useEffect(() => {
         const fetchAndSetInitialState = async () => {
@@ -1132,7 +1200,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
     }, [terminals, team, environment, sessionId, startScenario, updateDbState, activeScenario]);
 
     return (
-        <SimulationContext.Provider value={{ environment, activeScenario, logs, terminals, userTeam: team, processCommand, startScenario, addNewTerminal, removeTerminal }}>
+        <SimulationContext.Provider value={{ environment, activeScenario, logs, terminals, userTeam: team, isAiActive, toggleAiOpponent, processCommand, startScenario, addNewTerminal, removeTerminal }}>
             {children}
         </SimulationContext.Provider>
     );
