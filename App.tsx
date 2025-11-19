@@ -103,18 +103,22 @@ export default function App() {
             return;
         }
 
-        const { error } = await supabase.rpc('set_admin_participation', {
-            p_session_id: sessionData.sessionId,
-            p_team_role: team
-        });
+        try {
+            const { error } = await supabase.rpc('set_admin_participation', {
+                p_session_id: sessionData.sessionId,
+                p_team_role: team
+            });
 
-        if (error) {
-            console.error('Error al actualizar la participación del administrador a través de RPC:', error);
-            // Opcional: mostrar un mensaje de error al usuario.
-        } else {
-            // Solo actualiza el estado local si la operación de la base de datos fue exitosa.
-            setImpersonatedTeam(team);
+            if (error) {
+                console.warn('RPC set_admin_participation falló o no existe (continuando localmente):', error.message);
+            }
+        } catch (e) {
+            console.warn('Error al intentar RPC (continuando localmente):', e);
         }
+
+        // Actualizamos el estado local independientemente del resultado de la RPC
+        // Esto permite al admin tomar control incluso si la función de BD falta o falla.
+        setImpersonatedTeam(team);
     };
 
     const handleExitSession = () => {
@@ -924,4 +928,4 @@ export const ScenarioView: React.FC<ScenarioViewProps> = ({ scenario, environmen
                 })}
             </div>
         </div>;
-};
+}
