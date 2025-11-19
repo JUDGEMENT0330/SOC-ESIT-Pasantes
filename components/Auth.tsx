@@ -1,6 +1,3 @@
-
-
-
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 
@@ -69,10 +66,10 @@ export const Auth: React.FC = () => {
     return (
         <div className="min-h-screen flex items-center justify-center p-4">
             <div className="w-full max-w-md">
-                 <div className="glass-morphism p-8 rounded-2xl shadow-2xl bg-[rgba(45,80,22,0.85)] backdrop-blur-xl border border-[rgba(184,134,11,0.3)]">
+                 <div className="glass-morphism p-8 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
                     <div className="text-center mb-8">
                          <div className="flex justify-center items-center space-x-3 md:space-x-4 mb-4">
-                            <div className="p-2 bg-gray-900/50 rounded-lg shadow-lg flex-shrink-0">
+                            <div className="p-2 bg-slate-900/80 rounded-lg shadow-lg flex-shrink-0 border border-slate-700/50">
                                 <img 
                                     src="https://cybervaltorix.com/wp-content/uploads/2025/09/Cyber-Valtorix-1.png" 
                                     alt="Logo Cyber Valtorix" 
@@ -81,8 +78,8 @@ export const Auth: React.FC = () => {
                                 />
                             </div>
                             <div>
-                                <h1 className="text-xl sm:text-2xl font-bold text-white">CYBER VALTORIX</h1>
-                                <p className="text-yellow-200 text-xs sm:text-sm font-medium">Taller de Inducción SOC</p>
+                                <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">CYBER VALTORIX</h1>
+                                <p className="text-cyan-400 text-xs sm:text-sm font-medium tracking-wide uppercase">Taller de Inducción SOC</p>
                             </div>
                         </div>
                         <h2 className="text-2xl font-bold text-white">Acceso de Pasantes</h2>
@@ -91,7 +88,7 @@ export const Auth: React.FC = () => {
                     <form onSubmit={handleLogin}>
                         <div className="space-y-4">
                             <input
-                                className="w-full px-4 py-3 bg-black/30 border border-[rgba(184,134,11,0.3)] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--cv-gold)]"
+                                className="w-full px-4 py-3 bg-slate-950/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
                                 type="email"
                                 placeholder="Correo electrónico"
                                 value={email}
@@ -99,7 +96,7 @@ export const Auth: React.FC = () => {
                                 required
                             />
                             <input
-                                className="w-full px-4 py-3 bg-black/30 border border-[rgba(184,134,11,0.3)] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--cv-gold)]"
+                                className="w-full px-4 py-3 bg-slate-950/50 border border-slate-700/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
                                 type="password"
                                 placeholder="Contraseña"
                                 value={password}
@@ -110,7 +107,7 @@ export const Auth: React.FC = () => {
                         <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mt-6">
                             <button
                                 type="submit"
-                                className="w-full px-4 py-3 font-bold text-white bg-green-600/80 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50"
+                                className="w-full px-4 py-3 font-bold text-white bg-gradient-to-r from-cyan-600 to-blue-600 rounded-lg hover:from-cyan-500 hover:to-blue-500 transition-all shadow-[0_0_15px_rgba(6,182,212,0.4)] disabled:opacity-50"
                                 disabled={loading}
                             >
                                 {loading ? 'Cargando...' : 'Iniciar Sesión'}
@@ -118,7 +115,7 @@ export const Auth: React.FC = () => {
                              <button
                                 type="button"
                                 onClick={handleSignup}
-                                className="w-full px-4 py-3 font-bold text-white bg-blue-600/80 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
+                                className="w-full px-4 py-3 font-bold text-white bg-slate-800/80 border border-slate-600 rounded-lg hover:bg-slate-700 hover:border-slate-500 transition-all disabled:opacity-50"
                                 disabled={loading}
                             >
                                 {loading ? 'Cargando...' : 'Registrarse'}
