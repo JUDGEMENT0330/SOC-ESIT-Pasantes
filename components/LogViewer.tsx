@@ -20,8 +20,13 @@ const LogViewerComponent: React.FC = () => {
     const endOfLogsRef = useRef<HTMLDivElement>(null);
     const { logs, userTeam } = useContext(SimulationContext);
 
-    // Filter logs based on user's role and log visibility
-    const filteredLogs = logs.filter(log => log.team_visible === 'all' || log.team_visible === userTeam);
+    // Filter logs based on user's role and log visibility.
+    // 'spectator' (admin) should see all logs regardless of team visibility.
+    const filteredLogs = logs.filter(log => 
+        userTeam === 'spectator' || 
+        log.team_visible === 'all' || 
+        log.team_visible === userTeam
+    );
 
     useEffect(() => {
         endOfLogsRef.current?.scrollIntoView({ behavior: 'smooth' });
