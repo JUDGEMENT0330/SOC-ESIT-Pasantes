@@ -144,11 +144,9 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
     };
 
     const handleJoinSession = async (sessionId: string, sessionName: string, team: 'red' | 'blue' | 'spectator') => {
-        if (team === 'spectator' && isAdmin) {
-            setSessionData({ sessionId, sessionName, team: 'spectator' });
-            return;
-        }
-    
+        // For admin/spectators, we must also insert into session_participants to satisfy RLS policies.
+        // Previously, this just set local state, which prevented logs from loading.
+        
         setLoading(true);
         setError('');
     
@@ -161,25 +159,42 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
     
             if (fetchError) throw fetchError;
     
-            // 2. Check if the desired role is occupied by SOMEONE ELSE
-            const roleOccupant = participants.find(p => p.team_role === team);
-            if (roleOccupant && roleOccupant.user_id !== user.id) {
-                throw new Error(`El rol de equipo ${team === 'red' ? 'Rojo' : 'Azul'} ya está ocupado.`);
+            // 2. Check if the desired role is occupied by SOMEONE ELSE (not applicable for spectator mode generally)
+            if (team !== 'spectator') {
+                const roleOccupant = participants.find(p => p.team_role === team);
+                if (roleOccupant && roleOccupant.user_id !== user.id) {
+                    throw new Error(`El rol de equipo ${team === 'red' ? 'Rojo' : 'Azul'} ya está ocupado.`);
+                }
             }
     
             // 3. Upsert the participant record. This handles all cases:
             // - New user joining a session.
-            // - Existing user re-joining (no change needed, but upsert is safe).
-            // - Existing user switching teams.
-            const { error: upsertError } = await supabase
-                .from('session_participants')
-                .upsert({ 
-                    session_id: sessionId, 
-                    user_id: user.id, 
-                    team_role: team 
-                });
+            // - Existing user re-joining.
+            // - Admin joining as spectator (Crucial for RLS log visibility).
+            // NOTE: If 'spectator' is not allowed by DB constraints, this might fail. 
+            // We wrap in a try/catch specifically for the spectator insert in case of strict DB enums.
+            
+            let upsertError = null;
+            try {
+                const { error } = await supabase
+                    .from('session_participants')
+                    .upsert({ 
+                        session_id: sessionId, 
+                        user_id: user.id, 
+                        team_role: team 
+                    });
+                upsertError = error;
+            } catch (e) {
+                // If DB rejects 'spectator', we proceed anyway so Admin can at least see the UI,
+                // though logs might still be blocked by RLS.
+                if (team === 'spectator') {
+                    console.warn("Could not register as spectator in DB (likely enum constraint). Proceeding locally.", e);
+                } else {
+                    throw e;
+                }
+            }
 
-            if (upsertError) throw upsertError;
+            if (upsertError && team !== 'spectator') throw upsertError;
     
             // 4. Success: set session data and enter the simulation
             setSessionData({ sessionId, sessionName, team });
