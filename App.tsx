@@ -3,8 +3,8 @@ import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { DualTerminalView } from './components/DualTerminalView';
 import { Auth } from './components/Auth';
 import { supabase } from './supabaseClient';
-import { GLOSSARY_TERMS, TRAINING_SCENARIOS, RESOURCE_MODULES, Icon, CisoCard, CisoTable } from './constants';
-import type { TrainingScenario, ResourceModule, LogEntry, SessionData, InteractiveScenario, VirtualEnvironment } from './types';
+import { GLOSSARY_TERMS, TRAINING_SCENARIOS, RESOURCE_MODULES, Icon, CisoCard, CisoTable, COMMAND_LIBRARY } from './constants';
+import type { TrainingScenario, ResourceModule, LogEntry, SessionData, InteractiveScenario, VirtualEnvironment, CommandDefinition, CommandCategory, QuickReferenceGroup } from './types';
 // FIX: The `Session` type might not be exported directly in this version. Aliasing `AuthSession` is a common workaround.
 import type { AuthSession as Session } from '@supabase/supabase-js';
 import { SessionManager } from './components/SessionManager';
@@ -218,7 +218,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ activeTab, sessionData, exitSession, logout, isAdmin, impersonatedTeam, setImpersonatedTeam }) => {
     const { isAiActive, toggleAiOpponent } = useContext(SimulationContext);
-    const tabs = ['inicio', 'capacitacion', 'recursos', 'evaluacion', 'terminal'];
+    const tabs = ['inicio', 'capacitacion', 'recursos', 'evaluacion', 'biblioteca', 'terminal'];
     const tabIndex = tabs.indexOf(activeTab);
     const progressWidth = ((tabIndex + 1) / tabs.length) * 100;
 
@@ -333,6 +333,7 @@ const TABS_CONFIG = [
     { id: 'capacitacion', icon: 'graduation-cap', label: 'Capacitación' },
     { id: 'recursos', icon: 'library', label: 'Recursos' },
     { id: 'evaluacion', icon: 'star', label: 'Evaluación' },
+    { id: 'biblioteca', icon: 'book-copy', label: 'Comandos' }, // NEW TAB
     { id: 'inicio', icon: 'book-open', label: 'Glosario' },
 ];
 
@@ -400,6 +401,7 @@ const TabContent: React.FC<TabContentProps> = ({ activeTab, completedScenarios, 
             case 'capacitacion': return <TrainingSection completedScenarios={completedScenarios} updateProgress={updateProgress} />;
             case 'recursos': return <ResourcesSection />;
             case 'evaluacion': return <EvaluationSection />;
+            case 'biblioteca': return <CommandLibrarySection />; // NEW CONTENT
             case 'terminal': return <DualTerminalView />;
             default: return null;
         }
@@ -440,6 +442,193 @@ const GlossarySection: React.FC = () => (
         </CisoCard>
     </SectionWrapper>
 );
+
+// NEW: Command Library Section
+const CommandLibrarySection: React.FC = () => {
+    const { commandLibrary } = COMMAND_LIBRARY;
+
+    const renderQuickReferenceGroup = (group: QuickReferenceGroup) => (
+        <CisoCard title={group.title}>
+             <ul className="space-y-3">
+                {group.commands && group.commands.map((item: any, idx: number) => {
+                    // Handle commands as strings or detailed objects
+                    if (typeof item === 'string') {
+                        const [cmd, desc] = item.split(' - ');
+                        return (
+                            <li key={idx} className="text-sm text-slate-300 flex flex-col sm:flex-row gap-1">
+                                <code className="font-mono text-cyan-400 bg-black/40 px-2 py-0.5 rounded text-xs sm:text-sm w-fit">{cmd}</code>
+                                {desc && <span className="text-slate-500">- {desc}</span>}
+                            </li>
+                        );
+                    } else {
+                         // QuickReferenceScenario
+                        return (
+                            <div key={idx} className="bg-slate-900/40 p-3 rounded border border-slate-800/50">
+                                <p className="text-yellow-400 font-bold text-xs uppercase mb-2">{item.scenario}</p>
+                                <ol className="list-decimal list-inside text-xs text-slate-400 space-y-1 font-mono">
+                                    {item.steps?.map((step: string, sIdx: number) => (
+                                        <li key={sIdx}>{step}</li>
+                                    ))}
+                                </ol>
+                            </div>
+                        );
+                    }
+                })}
+                 {group.items?.map((item, idx) => (
+                    <li key={idx} className="text-sm text-slate-400 flex items-start gap-2">
+                        <span>{item}</span>
+                    </li>
+                ))}
+            </ul>
+        </CisoCard>
+    );
+
+    return (
+        <SectionWrapper title="Librería de Comandos SOC" subtitle="Referencia completa de herramientas y comandos para operaciones de ataque y defensa.">
+             
+             {/* Quick Reference */}
+            <div className="mb-8">
+                <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                    <Icon name="zap" className="h-5 w-5 text-yellow-400 mr-2" />
+                    Referencia Rápida
+                </h3>
+                <div className="grid md:grid-cols-3 gap-6">
+                    {renderQuickReferenceGroup(commandLibrary.quickReference.emergencyCommands)}
+                    {renderQuickReferenceGroup(commandLibrary.quickReference.dailyMonitoring)}
+                    {renderQuickReferenceGroup(commandLibrary.quickReference.hardeningChecklist)}
+                </div>
+            </div>
+
+            <h3 className="text-xl font-bold text-white mb-4 flex items-center border-t border-slate-700 pt-6">
+                <Icon name="book-copy" className="h-5 w-5 text-cyan-400 mr-2" />
+                Catálogo de Herramientas
+            </h3>
+            <div className="space-y-4">
+                {commandLibrary.categories.map((category: CommandCategory) => (
+                     <CommandCategoryModule key={category.id} category={category} />
+                ))}
+            </div>
+        </SectionWrapper>
+    );
+};
+
+const CommandCategoryModule: React.FC<{ category: CommandCategory }> = ({ category }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    return (
+        <CollapsibleModule
+            isExpanded={isExpanded}
+            toggle={() => setIsExpanded(!isExpanded)}
+            header={
+                 <div className="flex items-center space-x-4">
+                    <div className={`w-10 h-10 ${category.color}/10 rounded-lg flex items-center justify-center flex-shrink-0 border border-white/10`}>
+                        <Icon name={category.icon} className={`h-5 w-5 ${category.color.replace('bg-', 'text-').replace('-500','-400').replace('-600','-400')}`} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-white">{category.name}</h3>
+                        <p className="text-xs text-slate-400">{category.description}</p>
+                    </div>
+                </div>
+            }
+        >
+            <div className="space-y-6">
+                {category.commands.map((cmd: CommandDefinition) => (
+                    <CommandDetailView key={cmd.name} command={cmd} />
+                ))}
+            </div>
+        </CollapsibleModule>
+    );
+};
+
+const CommandDetailView: React.FC<{ command: CommandDefinition }> = ({ command }) => {
+    return (
+        <div className="bg-black/30 border border-slate-700 rounded-lg p-4">
+             <div className="flex justify-between items-start mb-2">
+                <div>
+                    <h4 className="text-cyan-400 font-bold text-lg font-mono flex items-center gap-2">
+                        {command.name}
+                        <span className="text-slate-500 text-xs font-sans font-normal uppercase border border-slate-700 px-1.5 py-0.5 rounded">{command.fullName}</span>
+                    </h4>
+                    <p className="text-slate-400 text-sm mt-1">{command.description}</p>
+                </div>
+                <span className={`px-2 py-1 rounded text-[10px] uppercase font-bold border ${command.team === 'red' ? 'text-red-400 border-red-900/50 bg-red-950/30' : command.team === 'blue' ? 'text-blue-400 border-blue-900/50 bg-blue-950/30' : 'text-purple-400 border-purple-900/50 bg-purple-950/30'}`}>
+                    {command.team === 'both' ? 'Red/Blue' : command.team}
+                </span>
+            </div>
+
+            <div className="bg-slate-900/80 p-2 rounded border border-slate-700/50 font-mono text-sm text-slate-300 mb-4">
+                <span className="text-slate-500 select-none">$ </span>
+                {command.syntax}
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6">
+                {/* Left Column: Examples & Flags */}
+                <div className="space-y-4">
+                     {command.examples && (
+                        <div>
+                            <h5 className="text-xs font-bold text-slate-500 uppercase mb-2">Ejemplos Clave</h5>
+                            <ul className="space-y-2">
+                                {command.examples.map((ex, i) => (
+                                    <li key={i} className="text-xs">
+                                        <code className="block bg-black/40 text-green-400 p-1.5 rounded border border-slate-800 mb-0.5 font-mono">{ex.command}</code>
+                                        <span className="text-slate-500 pl-1">{ex.description}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                     {command.commonFlags && (
+                        <div>
+                            <h5 className="text-xs font-bold text-slate-500 uppercase mb-2">Flags Comunes</h5>
+                            <div className="grid grid-cols-1 gap-1">
+                                {command.commonFlags.map((flag, i) => (
+                                    <div key={i} className="text-xs flex">
+                                        <span className="font-mono text-yellow-500 w-16 flex-shrink-0">{flag.flag}</span>
+                                        <span className="text-slate-400">{flag.description}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Right Column: Usage & Warnings */}
+                <div className="space-y-4">
+                     {command.useCases && (
+                        <div>
+                            <h5 className="text-xs font-bold text-slate-500 uppercase mb-2">Casos de Uso</h5>
+                            <ul className="list-disc list-inside text-xs text-slate-300 space-y-1 marker:text-slate-600">
+                                {command.useCases.map((uc, i) => <li key={i}>{uc}</li>)}
+                            </ul>
+                        </div>
+                    )}
+                    
+                    {command.warnings && (
+                        <div className="bg-yellow-950/10 border border-yellow-500/20 rounded p-3">
+                            <h5 className="text-xs font-bold text-yellow-500 uppercase mb-1 flex items-center gap-1">
+                                <Icon name="alert-triangle" className="w-3 h-3"/> Advertencias
+                            </h5>
+                            <ul className="space-y-1">
+                                {command.warnings.map((w, i) => <li key={i} className="text-xs text-yellow-200/70">{w}</li>)}
+                            </ul>
+                        </div>
+                    )}
+
+                    {command.defenseCounters && (
+                         <div className="bg-blue-950/10 border border-blue-500/20 rounded p-3">
+                            <h5 className="text-xs font-bold text-blue-400 uppercase mb-1 flex items-center gap-1">
+                                <Icon name="shield-check" className="w-3 h-3"/> Contramedidas
+                            </h5>
+                            <ul className="space-y-1">
+                                {command.defenseCounters.map((c, i) => <li key={i} className="text-xs text-blue-200/70">• {c}</li>)}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
 
 interface TrainingSectionProps {
     completedScenarios: string[];
