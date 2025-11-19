@@ -40,7 +40,7 @@ const LogViewerComponent: React.FC = () => {
             </div>
             <div className="bg-[#0a0f1c] border border-t-0 border-gray-700 rounded-b-lg h-64 p-3 font-mono text-xs flex flex-col">
                 <div className="flex-grow overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-                    {filteredLogs.map(log => (
+                    {filteredLogs.length > 0 ? filteredLogs.map(log => (
                         <div key={log.id} className="flex items-start">
                             <span className="text-gray-500 mr-2 flex-shrink-0">{new Date(log.timestamp).toLocaleTimeString()}</span>
                             <div className="break-words">
@@ -48,7 +48,9 @@ const LogViewerComponent: React.FC = () => {
                                 <span className="text-slate-300">{log.message}</span>
                             </div>
                         </div>
-                    ))}
+                    )) : (
+                        <div className="text-slate-600 italic text-center mt-4">No hay logs disponibles para esta vista.</div>
+                    )}
                     <div ref={endOfLogsRef} />
                 </div>
             </div>
