@@ -86,7 +86,7 @@ export const Icon: React.FC<IconProps> = ({ name, className, ...props }) => {
 
 
 export const CisoCard: React.FC<{ icon?: string; title?: string; children: React.ReactNode }> = ({ icon, title, children }) => (
-    <div className="bg-slate-950/60 backdrop-blur-md border border-white/10 rounded-xl p-4 sm:p-6 mb-6 last:mb-0 transition-all duration-300 hover:bg-slate-900/70 hover:border-cyan-500/30 hover:shadow-[0_0_20px_rgba(6,182,212,0.1)]">
+    <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-xl p-4 sm:p-6 mb-6 last:mb-0 transition-all duration-300 hover:bg-black/80 hover:border-cyan-500/30 hover:shadow-[0_0_20px_rgba(6,182,212,0.1)]">
         {title && (
             <h4 className="text-[var(--cv-gold)] font-bold text-lg mb-3 flex items-center">
                 {icon && <Icon name={icon} className="h-5 w-5 mr-2 flex-shrink-0" />}
@@ -100,12 +100,12 @@ export const CisoCard: React.FC<{ icon?: string; title?: string; children: React
 );
 
 export const CisoTable: React.FC<{ headers: string[]; rows: (string | React.ReactNode)[][] }> = ({ headers, rows }) => (
-    <div className="overflow-x-auto border border-slate-800 rounded-lg my-4 shadow-lg bg-slate-950/80">
+    <div className="overflow-x-auto border border-slate-800 rounded-lg my-4 shadow-lg bg-black/80">
         <table className="w-full min-w-[600px] border-collapse">
             <thead>
                 <tr>
                     {headers.map((header, i) => (
-                        <th key={i} className="p-3 text-left text-sm font-semibold bg-slate-900/90 text-[var(--cv-gold)] whitespace-nowrap border-b border-slate-700">{header}</th>
+                        <th key={i} className="p-3 text-left text-sm font-semibold bg-black/90 text-[var(--cv-gold)] whitespace-nowrap border-b border-slate-700">{header}</th>
                     ))}
                 </tr>
             </thead>
@@ -603,7 +603,7 @@ export const TRAINING_SCENARIOS: (TrainingScenario | InteractiveScenario)[] = [
                 <p>Responda las siguientes preguntas basándose en el material de recursos.</p>
                 <ol>
                     <li><strong>El Gerente de Marketing:</strong> Un gerente le pregunta: "¿Qué es el DNS y por qué Tl habla tanto de él?" Explíquelo en términos sencillos, enfocándose en por qué es crítico para el negocio.</li>
-                    <li><strong>El Arquitecto de Redes:</strong> Un arquitecto pregunta: "¿Por qué necesito abrir tanto UDP como TCP en el puerto 53? ¿No era DNS solo UDP?" Justifique la necesidad de ambos.</li>
+                    <li><strong>El Arquitecto de Redes:</strong> Un gerente pregunta: "¿Por qué necesito abrir tanto UDP como TCP en el puerto 53? ¿No era DNS solo UDP?" Justifique la necesidad de ambos.</li>
                     <li><strong>Análisis de Proceso:</strong> Describa la diferencia fundamental entre una consulta DNS recursiva y una iterativa. ¿Cuál inicia su laptop y cuál realiza nuestro resolver interno?</li>
                 </ol>
             </CisoCard>
