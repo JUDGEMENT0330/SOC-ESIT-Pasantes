@@ -103,21 +103,9 @@ export default function App() {
             return;
         }
 
-        try {
-            const { error } = await supabase.rpc('set_admin_participation', {
-                p_session_id: sessionData.sessionId,
-                p_team_role: team
-            });
-
-            if (error) {
-                console.warn('RPC set_admin_participation falló o no existe (continuando localmente):', error.message);
-            }
-        } catch (e) {
-            console.warn('Error al intentar RPC (continuando localmente):', e);
-        }
-
-        // Actualizamos el estado local independientemente del resultado de la RPC
-        // Esto permite al admin tomar control incluso si la función de BD falta o falla.
+        // We handle admin participation solely on the client-side to avoid 
+        // calling non-existent RPC functions or complicating DB logic.
+        // The admin view simply impersonates the UI state of the selected team.
         setImpersonatedTeam(team);
     };
 
