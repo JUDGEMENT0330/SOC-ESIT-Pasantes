@@ -25,10 +25,8 @@ export const Auth: React.FC = () => {
         setLoading(true);
 
         try {
-            // 1. Verificar dominio corporativo
-            if (!email.endsWith('@cybervaltorix.com')) {
-                throw new Error('Solo se permiten correos corporativos (@cybervaltorix.com).');
-            }
+            // Se ha eliminado la restricción de dominio corporativo (@cybervaltorix.com)
+            // para permitir el registro con cualquier correo electrónico.
             
             // 2. Verificar contra whitelist en Supabase (simulado, asume que la tabla 'allowed_emails' existe)
             /*
