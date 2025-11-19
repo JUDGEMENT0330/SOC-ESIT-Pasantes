@@ -11,8 +11,8 @@
     <style>
         :root {
             /* Cyberpunk Palette - Liquid Glass Edition */
-            --primary-dark: #020617;     /* Slate 950 */
-            --secondary-dark: #0b0f19;   /* Darker Slate */
+            --primary-dark: #000000;     /* Pure Black */
+            --secondary-dark: #0a0a0a;   /* Almost Black */
             
             /* Neon Accents */
             --accent-primary: #00f3ff;   /* Cyan Neon */
@@ -21,10 +21,10 @@
             --accent-danger: #ff0055;    /* Red Neon */
             --accent-warning: #ffb700;   /* Amber Neon */
 
-            /* Liquid Glass Variables */
-            --glass-bg: rgba(10, 15, 30, 0.65); /* Dark Tint */
-            --glass-border: rgba(255, 255, 255, 0.08); 
-            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+            /* Liquid Glass Variables - Black Tint */
+            --glass-bg: rgba(0, 0, 0, 0.7); /* Pure Black Tint */
+            --glass-border: rgba(255, 255, 255, 0.1); 
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
             
             --text-primary: #e2e8f0;     
             --text-secondary: #94a3b8;   
@@ -48,10 +48,10 @@
 
         body {
             font-family: 'Inter', sans-serif;
-            /* Deeper, more vibrant animated gradient */
-            background: linear-gradient(-45deg, #000000, #0f172a, #1e1b4b, #312e81, #020617);
+            /* Deep Black/Purple/Blue Void Animation */
+            background: linear-gradient(-45deg, #000000, #1a1a1a, #2e1065, #172554, #000000);
             background-size: 400% 400%;
-            animation: bgAnimation 20s ease infinite;
+            animation: bgAnimation 15s ease infinite;
             min-height: 100vh;
             color: var(--text-primary);
             font-weight: 400;
@@ -59,7 +59,7 @@
             position: relative;
         }
 
-        /* Cyber Grid Overlay - Reduced opacity for better text contrast */
+        /* Cyber Grid Overlay */
         body::before {
             content: "";
             position: fixed;
@@ -68,11 +68,13 @@
             width: 100%;
             height: 100%;
             background-image: 
-                linear-gradient(rgba(0, 243, 255, 0.02) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 243, 255, 0.02) 1px, transparent 1px);
-            background-size: 50px 50px;
+                linear-gradient(rgba(0, 243, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
             pointer-events: none;
             z-index: -1;
+            mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+            -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
         }
 
         /* Scrollbar Modernization */
@@ -81,7 +83,7 @@
             height: 8px;
         }
         ::-webkit-scrollbar-track {
-            background: rgba(2, 6, 23, 0.8); 
+            background: rgba(0, 0, 0, 0.8); 
         }
         ::-webkit-scrollbar-thumb {
             background: #334155; 
@@ -94,8 +96,8 @@
 
         .glass-morphism {
             background: var(--glass-bg);
-            backdrop-filter: blur(20px) saturate(120%);
-            -webkit-backdrop-filter: blur(20px) saturate(120%);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
             border: 1px solid var(--glass-border);
             box-shadow: var(--glass-shadow);
         }
