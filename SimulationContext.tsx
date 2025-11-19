@@ -6,7 +6,7 @@ import type { VirtualEnvironment, LogEntry, SessionData, TerminalLine, PromptSta
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, GENERAL_HELP_TEXT, SCENARIO_HELP_TEXTS, TRAINING_SCENARIOS } from './constants';
 import * as R from 'https://aistudiocdn.com/ramda@^0.32.0';
-import { GoogleGenAI } from "https://esm.sh/@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 // ============================================================================
 // DB State Type (Matches actual Supabase schema)
