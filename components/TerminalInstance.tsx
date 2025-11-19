@@ -68,8 +68,6 @@ class AutocompleteEngine {
     private hosts: Set<string> = new Set();
     
     constructor(environment: VirtualEnvironment | null) {
-        // FIX: Critical null check. The app would crash here if a user typed
-        // in the terminal before starting a scenario, as environment would be null.
         if (!environment || !environment.networks) return;
 
         for (const network of Object.values(environment.networks)) {
@@ -119,6 +117,22 @@ class AutocompleteEngine {
         return prefix;
     }
 }
+
+// ============================================================================
+// Prompt Component
+// ============================================================================
+
+const Prompt: React.FC<PromptState> = ({ user, host, dir }) => {
+    const userColor = user === 'root' ? 'text-red-500' : user.includes('red') ? 'text-red-400' : 'text-green-400';
+    return (
+        <span className="mr-2 select-none inline-block whitespace-nowrap font-mono">
+             <span className={`${userColor} font-bold`}>{user}@{host}</span>
+             <span className="text-slate-400">:</span>
+             <span className="text-blue-400 font-bold">{dir}</span>
+             <span className="text-slate-400">$</span>
+        </span>
+    );
+};
 
 // ============================================================================
 // Terminal Component
@@ -221,7 +235,7 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalStat
         }
     };
 
-    const placeholder = isReadOnly ? "Terminal en modo observación" : isBusy ? "Procesando..." : "_";
+    const placeholder = isReadOnly ? "Terminal en modo observación" : isBusy ? "Procesando..." : "";
     const currentInput = searchMode ? searchQuery : input;
     const handleInputChange = searchMode ? setSearchQuery : setInput;
 
@@ -256,71 +270,38 @@ export const TerminalInstance: React.FC<TerminalInstanceProps> = ({ terminalStat
                     <div key={index} className="mb-1 leading-tight">
                         {line.type === 'prompt' && <Prompt {...prompt} />}
                         {line.type === 'command' && <span className="text-white break-all">{line.text}</span>}
-                        {line.type === 'output' && <pre className="whitespace-pre-wrap text-slate-300 opacity-90 font-medium">{line.text}</pre>}
-                        {line.type === 'html' && <div className="text-slate-300 opacity-90" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(line.html || '', { ALLOWED_TAGS: ['strong', 'span', 'pre', 'br', 'code'], ALLOWED_ATTR: ['class'] }) }} />}
-                        {line.type === 'error' && <pre className="whitespace-pre-wrap text-red-400 font-bold drop-shadow-sm">{line.text}</pre>}
+                        {line.type === 'output' && <pre className="whitespace-pre-wrap font-inherit text-slate-300">{line.text}</pre>}
+                        {line.type === 'html' && <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(line.html!) }} />}
+                        {line.type === 'error' && <div className="text-red-400 font-bold whitespace-pre-wrap">{line.text}</div>}
                     </div>
                 ))}
-                <div ref={endOfOutputRef} />
                 
-                 {!isReadOnly && (
-                    <div className="mt-2 flex-shrink-0 pb-2">
-                        {searchMode && (
-                            <div className="text-yellow-400 text-xs mb-1 animate-pulse">
-                                (reverse-i-search)`{searchQuery}': {searchResults[0] || 'ninguna coincidencia'}
-                            </div>
-                        )}
-                        <div className="flex items-center">
-                            {!searchMode && <Prompt {...prompt} />}
-                            <input
-                                ref={inputRef}
-                                type="text"
-                                className="bg-transparent border-none outline-none text-white font-mono text-sm w-full caret-transparent"
-                                value={currentInput}
-                                onChange={e => handleInputChange(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                autoFocus
-                                autoComplete="off"
-                                autoCapitalize="off"
-                                spellCheck="false"
-                                disabled={(isBusy && !searchMode) || isReadOnly}
-                                placeholder={placeholder}
-                            />
-                            {/* Custom Caret */}
-                            {!isBusy && (
-                                <span className="absolute w-2.5 h-5 bg-white/80 animate-pulse" style={{
-                                    left: `${input.length * 8.4 + (input ? 240 : 0)}px`, // Rough approximation for demo
-                                    display: 'none' // Hidden for now as exact positioning is hard without canvas
-                                }}></span>
-                            )}
-                        </div>
+                <div className="flex items-center mt-2">
+                    <Prompt {...prompt} />
+                    <div className="flex-grow relative">
+                         <input
+                            ref={inputRef}
+                            type="text"
+                            value={currentInput}
+                            onChange={(e) => handleInputChange(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            className="w-full bg-transparent border-none outline-none text-white font-inherit caret-white"
+                            spellCheck={false}
+                            autoComplete="off"
+                            placeholder={placeholder}
+                            disabled={isReadOnly}
+                        />
+                    </div>
+                </div>
+
+                {autocomplete && (
+                    <div className="mt-1 text-slate-500 text-xs pl-4">
+                        Suggestions: {autocomplete.suggestions.join(', ')}
                     </div>
                 )}
+                
+                <div ref={endOfOutputRef} />
             </div>
-
-            {autocomplete && autocomplete.suggestions.length > 1 && (
-                <div className="absolute bottom-4 left-4 right-4 bg-black/90 border border-gray-700 rounded p-3 z-30 grid grid-cols-3 gap-2 shadow-xl backdrop-blur-md">
-                    {autocomplete.suggestions.map((suggestion) => (
-                        <div key={suggestion} className="px-2 py-1 text-xs text-green-400 font-mono cursor-pointer hover:bg-white/10 rounded transition-colors">
-                            {suggestion}
-                        </div>
-                    ))}
-                </div>
-            )}
         </div>
-    );
-};
-
-const Prompt: React.FC<PromptState> = ({ user, host, dir }) => {
-    const userColor = user.includes('blue') ? 'text-blue-400' : (user === 'root' ? 'text-red-500' : 'text-red-400');
-    return (
-        <span className="flex-shrink-0 mr-2 select-none font-bold">
-            <span className={`${userColor}`}>{user}</span>
-            <span className="text-gray-500">@</span>
-            <span className="text-indigo-400">{host}</span>
-            <span className="text-gray-500">:</span>
-            <span className="text-yellow-500">{dir}</span>
-            <span className="text-gray-400 ml-1">{user === 'root' || user === 'admin' || user === 'blue-team' ? '# ' : '$ '}</span>
-        </span>
     );
 };
