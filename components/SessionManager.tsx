@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 // FIX: The `User` type might not be exported directly in this version. Aliasing `AuthUser` is a common workaround.
@@ -229,65 +226,67 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
     return (
         <div className="min-h-screen flex items-center justify-center p-4">
             <div className="w-full max-w-3xl">
-                <div className="glass-morphism p-8 rounded-2xl shadow-2xl bg-[rgba(45,80,22,0.85)] backdrop-blur-xl border border-[rgba(184,134,11,0.3)]">
+                <div className="glass-morphism p-8 rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.6)] border border-slate-700/50">
                     <div className="text-center mb-8">
-                        <h2 className="text-2xl font-bold text-white">Lobby de Simulación</h2>
-                        <p className="text-gray-300 mt-2">Elige un entrenamiento por defecto o crea/únete a una sesión personalizada.</p>
+                        <h2 className="text-2xl font-bold text-white tracking-tight">Lobby de Simulación</h2>
+                        <p className="text-slate-400 mt-2">Elige un entrenamiento por defecto o crea/únete a una sesión personalizada.</p>
                     </div>
 
-                    {error && <p className="mb-4 text-center text-red-400 bg-red-900/50 p-3 rounded-lg animate-fade-in-fast">{error}</p>}
+                    {error && <p className="mb-4 text-center text-red-400 bg-red-900/20 border border-red-500/30 p-3 rounded-lg animate-fade-in-fast">{error}</p>}
                     
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                        <button onClick={() => handleJoinDefaultSession('red')} className="p-6 text-left bg-red-900/30 border border-red-500/50 rounded-lg hover:bg-red-900/60 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-4" disabled={loading || isAdmin}>
+                        <button onClick={() => handleJoinDefaultSession('red')} className="p-6 text-left bg-red-950/30 border border-red-500/30 rounded-xl hover:bg-red-900/50 hover:border-red-500/60 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-4 group shadow-lg hover:shadow-red-900/20" disabled={loading || isAdmin}>
                             <img 
                                 src="https://cybervaltorix.com/wp-content/uploads/2025/11/pngwing.com-2.png" 
                                 alt="Logo Equipo Rojo" 
-                                className="h-10 w-10 object-contain flex-shrink-0"
+                                className="h-12 w-12 object-contain flex-shrink-0 drop-shadow-[0_0_5px_rgba(220,38,38,0.5)] group-hover:scale-110 transition-transform"
                             />
                             <div>
-                                <h3 className="font-bold text-red-300 text-lg">Entrenamiento Equipo Rojo</h3>
-                                <p className="text-red-400/80 text-sm">Únete como atacante para auditar sistemas.</p>
+                                <h3 className="font-bold text-red-400 text-lg group-hover:text-red-300">Entrenamiento Equipo Rojo</h3>
+                                <p className="text-slate-400 text-sm group-hover:text-slate-300">Únete como atacante para auditar sistemas.</p>
                             </div>
                         </button>
-                         <button onClick={() => handleJoinDefaultSession('blue')} className="p-6 text-left bg-blue-900/30 border border-blue-500/50 rounded-lg hover:bg-blue-900/60 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-4" disabled={loading || isAdmin}>
+                         <button onClick={() => handleJoinDefaultSession('blue')} className="p-6 text-left bg-blue-950/30 border border-blue-500/30 rounded-xl hover:bg-blue-900/50 hover:border-blue-500/60 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-4 group shadow-lg hover:shadow-blue-900/20" disabled={loading || isAdmin}>
                             <img 
                                 src="https://cybervaltorix.com/wp-content/uploads/2025/09/Cyber-Valtorix-Full.png" 
                                 alt="Logo Equipo Azul" 
-                                className="h-10 w-10 object-contain flex-shrink-0"
+                                className="h-12 w-12 object-contain flex-shrink-0 drop-shadow-[0_0_5px_rgba(37,99,235,0.5)] group-hover:scale-110 transition-transform"
                             />
                             <div>
-                                <h3 className="font-bold text-blue-300 text-lg">Entrenamiento Equipo Azul</h3>
-                                <p className="text-blue-400/80 text-sm">Únete como defensor para asegurar y monitorear.</p>
+                                <h3 className="font-bold text-blue-400 text-lg group-hover:text-blue-300">Entrenamiento Equipo Azul</h3>
+                                <p className="text-slate-400 text-sm group-hover:text-slate-300">Únete como defensor para asegurar y monitorear.</p>
                             </div>
                         </button>
                     </div>
-                    {isAdmin && <p className="text-center text-yellow-300 mb-6 -mt-4 animate-fade-in-fast">Como administrador, puede observar cualquier sesión activa desde la lista de abajo.</p>}
+                    {isAdmin && <p className="text-center text-yellow-400 mb-6 -mt-4 animate-fade-in-fast font-medium bg-yellow-900/20 py-2 rounded border border-yellow-600/30">Como administrador, puede observar cualquier sesión activa desde la lista de abajo.</p>}
 
 
                     {!isAdmin && (
-                        <div className="bg-black/20 p-4 rounded-lg mb-6">
-                            <h3 className="font-semibold text-lg text-yellow-300 mb-3">Crear Sesión Personalizada</h3>
+                        <div className="bg-slate-900/60 p-4 rounded-lg mb-6 border border-slate-700/50">
+                            <h3 className="font-semibold text-lg text-cyan-400 mb-3 flex items-center">
+                                <Icon name="plus-circle" className="h-5 w-5 mr-2"/>
+                                Crear Sesión Personalizada
+                            </h3>
                             <form onSubmit={handleCreateSession} className="flex flex-col sm:flex-row gap-3">
                                 <input
                                     type="text"
                                     placeholder="Nombre de la nueva sesión"
                                     value={newSessionName}
                                     onChange={(e) => setNewSessionName(e.target.value)}
-                                    className="flex-grow px-4 py-2 bg-black/30 border border-[rgba(184,134,11,0.3)] rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--cv-gold)]"
+                                    className="flex-grow px-4 py-2 bg-black/40 border border-slate-600/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
                                     disabled={isCreating || loading}
                                 />
-                                <button type="submit" className="px-4 py-2 font-bold text-white bg-green-600/80 rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 flex items-center justify-center" disabled={isCreating || loading}>
-                                    <Icon name="plus-circle" className="h-5 w-5 mr-2"/>
+                                <button type="submit" className="px-6 py-2 font-bold text-white bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg hover:from-green-500 hover:to-emerald-500 transition-all disabled:opacity-50 flex items-center justify-center shadow-[0_0_10px_rgba(34,197,94,0.3)]" disabled={isCreating || loading}>
                                     {isCreating ? 'Creando...' : 'Crear'}
                                 </button>
                             </form>
                         </div>
                     )}
 
-                    <div className="space-y-3 max-h-[30vh] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-                        <h3 className="font-semibold text-lg text-yellow-300 mb-3 sticky top-0 bg-[rgba(45,80,22,0.95)] backdrop-blur-sm py-2 z-10">{isAdmin ? "Sesiones Activas para Observar" : "Sesiones Personalizadas Activas"}</h3>
-                        {loading && !isCreating && <p className="text-center text-gray-300">Cargando sesiones...</p>}
-                        {!loading && sessionsForUser.length === 0 && <p className="text-center text-gray-400">{isAdmin ? "No hay sesiones activas." : "No hay sesiones personalizadas. ¡Crea una!"}</p>}
+                    <div className="space-y-3 max-h-[30vh] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
+                        <h3 className="font-semibold text-lg text-slate-300 mb-3 sticky top-0 bg-slate-950/90 backdrop-blur-md py-2 z-10 border-b border-slate-700/50">{isAdmin ? "Sesiones Activas para Observar" : "Sesiones Personalizadas Activas"}</h3>
+                        {loading && !isCreating && <p className="text-center text-slate-500">Cargando sesiones...</p>}
+                        {!loading && sessionsForUser.length === 0 && <p className="text-center text-slate-500 py-4">{isAdmin ? "No hay sesiones activas." : "No hay sesiones personalizadas. ¡Crea una!"}</p>}
                         {sessionsForUser.map(session => {
                             const redParticipant = session.session_participants.find(p => p.team_role === 'red');
                             const blueParticipant = session.session_participants.find(p => p.team_role === 'blue');
@@ -298,27 +297,27 @@ export const SessionManager: React.FC<SessionManagerProps> = ({ user, setSession
                             const isBlueOccupiedByOther = blueParticipant && !isUserInBlue;
 
                             return (
-                                <div key={session.id} className="bg-black/20 p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3 animate-fade-in-fast">
+                                <div key={session.id} className="bg-slate-900/40 border border-slate-700/30 hover:border-slate-500/50 p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3 animate-fade-in-fast transition-all hover:bg-slate-800/40">
                                     <div className="flex-grow text-center sm:text-left">
-                                        <p className="font-bold text-white">{session.session_name}</p>
-                                        <p className="text-xs text-gray-400">Creada: {new Date(session.created_at).toLocaleString()}</p>
+                                        <p className="font-bold text-white font-mono">{session.session_name}</p>
+                                        <p className="text-xs text-slate-500">Creada: {new Date(session.created_at).toLocaleString()}</p>
                                     </div>
                                     <div className="flex gap-3 flex-shrink-0">
                                         {isAdmin ? (
                                             <>
-                                                <button onClick={() => handleJoinSession(session.id, session.session_name, 'spectator')} className="px-4 py-2 font-bold text-white bg-yellow-600/80 rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2" disabled={loading}>
+                                                <button onClick={() => handleJoinSession(session.id, session.session_name, 'spectator')} className="px-4 py-2 font-bold text-black bg-yellow-500 rounded-lg hover:bg-yellow-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-[0_0_10px_rgba(234,179,8,0.4)]" disabled={loading}>
                                                     <Icon name="binoculars" className="h-4 w-4"/> Ver Sesión
                                                 </button>
-                                                <button onClick={() => handleDeleteSession(session.id)} className="px-3 py-2 font-bold text-white bg-gray-600/80 rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 flex items-center" disabled={loading}>
+                                                <button onClick={() => handleDeleteSession(session.id)} className="px-3 py-2 font-bold text-white bg-red-900/50 border border-red-500/50 rounded-lg hover:bg-red-800/80 transition-colors disabled:opacity-50 flex items-center" disabled={loading}>
                                                     <Icon name="trash" className="h-4 w-4"/>
                                                 </button>
                                             </>
                                         ) : (
                                             <>
-                                                <button onClick={() => handleJoinSession(session.id, session.session_name, 'red')} className={`px-4 py-2 font-bold text-white rounded-lg transition-colors disabled:opacity-50 ${isUserInRed ? 'bg-yellow-600/80 hover:bg-yellow-600' : 'bg-red-600/80 hover:bg-red-600'}`} disabled={loading || isRedOccupiedByOther}>
+                                                <button onClick={() => handleJoinSession(session.id, session.session_name, 'red')} className={`px-4 py-2 font-bold text-white rounded-lg transition-colors disabled:opacity-50 border ${isUserInRed ? 'bg-red-600 hover:bg-red-500 border-red-500' : 'bg-transparent border-red-500/50 hover:bg-red-900/30 text-red-400'} ${isRedOccupiedByOther ? 'opacity-50 cursor-not-allowed border-red-900 text-red-800' : ''}`} disabled={loading || isRedOccupiedByOther}>
                                                     {isRedOccupiedByOther ? 'Ocupado' : (isUserInRed ? 'Reunirse' : 'Unirse (Rojo)')}
                                                 </button>
-                                                <button onClick={() => handleJoinSession(session.id, session.session_name, 'blue')} className={`px-4 py-2 font-bold text-white rounded-lg transition-colors disabled:opacity-50 ${isUserInBlue ? 'bg-yellow-600/80 hover:bg-yellow-600' : 'bg-blue-600/80 hover:bg-blue-600'}`} disabled={loading || isBlueOccupiedByOther}>
+                                                <button onClick={() => handleJoinSession(session.id, session.session_name, 'blue')} className={`px-4 py-2 font-bold text-white rounded-lg transition-colors disabled:opacity-50 border ${isUserInBlue ? 'bg-blue-600 hover:bg-blue-500 border-blue-500' : 'bg-transparent border-blue-500/50 hover:bg-blue-900/30 text-blue-400'} ${isBlueOccupiedByOther ? 'opacity-50 cursor-not-allowed border-blue-900 text-blue-800' : ''}`} disabled={loading || isBlueOccupiedByOther}>
                                                     {isBlueOccupiedByOther ? 'Ocupado' : (isUserInBlue ? 'Reunirse' : 'Unirse (Azul)')}
                                                 </button>
                                             </>
