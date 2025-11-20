@@ -51,7 +51,7 @@ export const Icon: React.FC<IconProps> = ({ name, className, ...props }) => {
         'file-search': <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><circle cx="10.5" cy="13.5" r="2.5" /><path d="M12.5 15.5 15 18" /></>,
         'power': <><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></>,
         'plus-circle': <><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></>,
-        'trash': <><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></>,
+        'trash': <><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></>,
         'keyboard': <><rect x="2" y="16" width="20" height="6" rx="2"/><path d="M6 10h4"/><path d="M14 10h4"/><path d="M6 6h.01"/><path d="M10 6h.01"/><path d="M14 6h.01"/><path d="M18 6h.01"/></>,
         'arrow-right-left': <><path d="m16 3 5 5-5 5"/><path d="M21 8H3"/><path d="m8 21-5-5 5-5"/><path d="M3 16h18"/></>,
         'user-x': <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m17 8-6 6"/><path d="m11 8 6 6"/></>,
@@ -243,6 +243,58 @@ const INITIAL_ENV_SCENARIO_8: VirtualEnvironment = {
     timeline: []
 };
 
+const INITIAL_ENV_SCENARIO_9: VirtualEnvironment = {
+    networks: {
+        dmz: {
+            hosts: [{
+                ip: '10.0.0.10',
+                hostname: 'WEB-DMZ-01',
+                os: 'linux',
+                services: {
+                    22: { name: 'ssh', version: 'OpenSSH 8.2', state: 'open', vulnerabilities: [] },
+                    80: { name: 'http', version: 'nginx 1.18', state: 'open', vulnerabilities: [{ cve: 'CVE-LFI', description: 'LFI in view.php', severity: 'high' }] }
+                },
+                users: [
+                    { username: 'www-data', password: 'x', privileges: 'user' },
+                    { username: 'root', password: 'x', privileges: 'root' }
+                ],
+                files: [
+                     { path: '/var/www/html/index.php', permissions: '644', hash: 'orig', content: '<h1>Welcome to DMZ</h1>' },
+                     { path: '/var/www/html/view.php', permissions: '644', hash: 'vuln', content: '<?php include($_GET["file"]); ?>' },
+                     { path: '/var/www/html/config.php', permissions: '640', hash: 'cred', content: '$db_host = "10.10.0.50"; $db_user = "webapp"; $db_pass = "WebAppP@ss2024";' },
+                     { path: '/etc/passwd', permissions: '644', hash: 'sys', content: 'root:x:0:0:root:/root:/bin/bash\nwww-data:x:33:33:www-data:/var/www:/usr/sbin/nologin' }
+                ],
+                systemState: { cpuLoad: 10, memoryUsage: 30, networkConnections: 50, failedLogins: 0 }
+            }],
+            firewall: { enabled: true, rules: [] },
+            ids: { enabled: true, signatures: [], alerts: [] }
+        },
+        internal: {
+            hosts: [{
+                ip: '10.10.0.50',
+                hostname: 'DB-FINANCE-01',
+                os: 'linux',
+                services: {
+                    22: { name: 'ssh', version: 'OpenSSH 8.2', state: 'open', vulnerabilities: [] },
+                    3306: { name: 'mysql', version: 'MySQL 8.0', state: 'open', vulnerabilities: [] }
+                },
+                users: [
+                    { username: 'root', password: 'DbP@ss2024!', privileges: 'root' }
+                ],
+                files: [
+                    { path: '/db/finance_backup.sql', permissions: '600', hash: 'secret', content: 'INSERT INTO credit_cards VALUES ...' }
+                ],
+                systemState: { cpuLoad: 5, memoryUsage: 40, networkConnections: 5, failedLogins: 0 }
+            }],
+            firewall: { enabled: true, rules: [] },
+            ids: { enabled: false, signatures: [], alerts: [] }
+        }
+    },
+    attackProgress: { reconnaissance: [], compromised: [], credentials: {}, persistence: [] },
+    defenseProgress: { hardenedHosts: [], blockedIPs: [], patchedVulnerabilities: [] },
+    timeline: []
+};
+
 export const TRAINING_SCENARIOS: (TrainingScenario | InteractiveScenario)[] = [
     {
         id: 'escenario7',
@@ -294,6 +346,30 @@ export const TRAINING_SCENARIOS: (TrainingScenario | InteractiveScenario)[] = [
             { trigger: (env) => env.defenseProgress.blockedIPs.length === 0, message: "Azul: Usa 'ss -ant' o 'netstat' para ver muchas conexiones de una misma IP. Bloquéala con 'sudo ufw deny from [IP]'." }
         ],
         evaluation: () => ({ completed: false, score: 0, feedback: [] })
+    },
+    {
+        id: 'escenario9',
+        isInteractive: true,
+        icon: 'layers',
+        color: 'bg-purple-600',
+        title: 'Escenario 9: La Cadena de Infección',
+        subtitle: 'Kill Chain: LFI & Pivoting',
+        description: 'Ataque multi-fase: Explotar LFI en WEB-DMZ-01, obtener credenciales y pivotar a la red interna para comprometer la base de datos.',
+        difficulty: 'advanced',
+        team: 'both',
+        initialEnvironment: INITIAL_ENV_SCENARIO_9,
+        objectives: [
+            { id: 'red-1', description: 'Descubrir LFI (view.php)', points: 15, required: true, validator: (env) => env.attackProgress.reconnaissance.includes('WEB-DMZ-01') },
+            { id: 'red-2', description: 'Leer credenciales DB (config.php)', points: 25, required: true, validator: (env) => !!env.attackProgress.credentials['root@10.10.0.50'] },
+            { id: 'red-3', description: 'Pivotar a DB-FINANCE-01', points: 30, required: true, validator: (env) => env.attackProgress.compromised.includes('10.10.0.50') },
+            { id: 'blue-1', description: 'Detectar LFI (logs)', points: 15, required: true, validator: (env) => env.defenseProgress.patchedVulnerabilities.includes('LFI') },
+            { id: 'blue-2', description: 'Bloquear pivoteo (Firewall)', points: 30, required: true, validator: (env) => env.networks.dmz.firewall.rules.some(r => r.action === 'deny' && r.destPort === 3306) }
+        ],
+        hints: [
+            { trigger: (env) => !env.attackProgress.reconnaissance.includes('WEB-DMZ-01'), message: "Rojo: Escanea WEB-DMZ-01. Busca archivos PHP sospechosos." },
+            { trigger: (env) => env.attackProgress.reconnaissance.includes('WEB-DMZ-01') && !env.attackProgress.credentials['root@10.10.0.50'], message: "Rojo: Prueba LFI en view.php. Busca archivos de configuración." }
+        ],
+        evaluation: () => ({ completed: false, score: 0, feedback: [] })
     }
 ];
 
@@ -333,6 +409,11 @@ export const SCENARIO_HELP_TEXTS: { [key: string]: { red: string; blue: string; 
         red: "<p class='mt-2 text-red-300'>Objetivo: Saturar el servidor 10.0.20.10. Usa 'hping3' para ejecutar un ataque DoS. Intenta colocar persistencia mientras el equipo azul está distraído.</p>",
         blue: "<p class='mt-2 text-blue-300'>Objetivo: Restaurar el servicio. Identifica la IP que está causando el tráfico masivo con 'ss' o 'netstat' y bloquéala con 'ufw'.</p>",
         general: "<p class='text-yellow-200'>Escenario 8: Denegación de Servicio (DoS) y respuesta a incidentes.</p>"
+    },
+    'escenario9': {
+        red: "<p class='mt-2 text-red-300'>Objetivo: Kill Chain Completa. 1) Escanea WEB-DMZ-01. 2) Encuentra LFI en view.php. 3) Lee config.php para obtener credenciales. 4) Pivota a la red interna 10.10.0.50 usando SSH o MySQL.</p>",
+        blue: "<p class='mt-2 text-blue-300'>Objetivo: Detectar y Bloquear. 1) Revisa logs por patrones LFI (../etc/passwd). 2) Bloquear IP atacante. 3) Parchear view.php. 4) Implementar reglas de firewall para prevenir tráfico de DMZ a Interna.</p>",
+        general: "<p class='text-yellow-200'>Escenario 9: Movimiento Lateral y Defensa en Profundidad.</p>"
     }
 };
 
@@ -379,6 +460,28 @@ FASE 3: ATAQUE (ROJO)
 - Ejecutar DoS: 'hping3 --flood -S 10.0.20.10'.
 - Aprovechar la distracción para instalar persistencia:
   'echo "backdoor" >> /var/www/html/index.php'
+`;
+
+export const SCENARIO_9_GUIDE = `
+GUÍA EXPERTA - ESCENARIO 9: LA CADENA DE INFECCIÓN (KILL CHAIN)
+
+SITUACIÓN: Ataque complejo multi-etapa. DMZ (10.0.0.10) vulnerable a LFI, permitiendo acceso a red Interna (10.10.0.50).
+
+FASE 1: RECONOCIMIENTO Y LFI (ROJO)
+- Escanear DMZ: 'nmap 10.0.0.10'
+- Encontrar vulnerabilidad web: 'dirb http://10.0.0.10' -> view.php
+- Explotar LFI: 'curl "http://10.0.0.10/view.php?file=/etc/passwd"'
+- Leer configuración crítica: 'curl "http://10.0.0.10/view.php?file=config.php"' -> Obtener credenciales DB.
+
+FASE 2: PIVOTEO Y EXTRACCIÓN (ROJO)
+- Conectar a DMZ (si se obtuvo shell) o pivotar directamente.
+- Conectar a DB Interna: 'mysql -h 10.10.0.50 -u root -p' (Usar pass encontrada).
+- Extraer datos: 'SELECT * FROM credit_cards'
+
+FASE 3: DEFENSA Y CONTENCIÓN (AZUL)
+- Detectar LFI en logs: 'grep "../" /var/log/nginx/access.log'
+- Parchear view.php: Editar para validar input.
+- Bloquear pivoteo: 'sudo ufw deny out to 10.10.0.0/24' en la DMZ.
 `;
 
 export const COMMAND_LIBRARY: CommandLibraryData = {
