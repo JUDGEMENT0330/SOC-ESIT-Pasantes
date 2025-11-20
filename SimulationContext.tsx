@@ -1,10 +1,9 @@
-
 import React, { createContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import type { VirtualEnvironment, LogEntry, SessionData, TerminalLine, PromptState, TerminalState, ActiveProcess, CommandHandler, CommandContext, CommandResult, VirtualHost, FirewallState, InteractiveScenario } from './types';
 // FIX: The `RealtimeChannel` type might not be exported in this version. Using `any` to avoid breaking the build.
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, GENERAL_HELP_TEXT, SCENARIO_HELP_TEXTS, TRAINING_SCENARIOS, SCENARIO_7_GUIDE } from './constants';
+import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, GENERAL_HELP_TEXT, SCENARIO_HELP_TEXTS, TRAINING_SCENARIOS, SCENARIO_7_GUIDE, SCENARIO_8_GUIDE, SCENARIO_9_GUIDE } from './constants';
 import * as R from 'https://aistudiocdn.com/ramda@^0.32.0';
 import { GoogleGenAI } from "https://esm.sh/@google/genai";
 
@@ -206,10 +205,14 @@ const commandLibrary: { [key: string]: CommandHandler } = {
         const logs = environment.timeline.slice(-15).map(l => `[${l.source_team || 'SYS'}] ${l.message}`).join('\n');
         const scenarioContext = activeScenario ? `Escenario: ${activeScenario.title}. Desc: ${activeScenario.description}` : "Sin escenario activo.";
         
-        // Inyectar guía experta si estamos en el escenario 7
+        // Inyectar guía experta si estamos en el escenario 7, 8 o 9
         let expertContext = "";
         if (activeScenario?.id === 'escenario7') {
             expertContext = `\nIMPORTANTE: Usa la siguiente GUÍA EXPERTA PARA ESCENARIO 7 para asistir al usuario. No des la respuesta directa inmediatamente, guía paso a paso:\n${SCENARIO_7_GUIDE}\n`;
+        } else if (activeScenario?.id === 'escenario8') {
+            expertContext = `\nIMPORTANTE: Usa la siguiente GUÍA EXPERTA PARA ESCENARIO 8 para asistir al usuario. Enfócate en mitigación de DoS:\n${SCENARIO_8_GUIDE}\n`;
+        } else if (activeScenario?.id === 'escenario9') {
+            expertContext = `\nIMPORTANTE: Usa la siguiente GUÍA EXPERTA PARA ESCENARIO 9 para asistir al usuario. Este escenario es Kill Chain (LFI -> RCE -> Pivot):\n${SCENARIO_9_GUIDE}\n`;
         }
 
         const teamContext = `Eres el analista de seguridad IA para el Equipo ${userTeam === 'red' ? 'Rojo (Atacante)' : 'Azul (Defensor)'}.`;
@@ -266,6 +269,15 @@ Analiza la situación brevemente (max 3 lineas) y sugiere el siguiente comando t
 
         const targetHost = findHost(environment, host);
         if (!targetHost) return { output: [{ text: `Host desconocido: ${host}`, type: 'error' }] };
+
+        // PIVOTING LOGIC for Scenario 9
+        // If we are already in WEB-DMZ-01 (10.0.0.10) and trying to access DB-FINANCE-01 (10.10.0.50)
+        if (terminalState.currentHostIp === '10.0.0.10' && targetHost.ip === '10.10.0.50') {
+            // Allow pivoting
+        } else if (targetHost.ip === '10.10.0.50' && !terminalState.currentHostIp) {
+             // Trying to access internal network from outside (attacker machine) directly
+             return { output: [{ text: `ssh: connect to host ${targetHost.ip} port 22: Connection timed out`, type: 'error' }], duration: 2000 };
+        }
         
         const userAccount = targetHost.users.find(u => u.username === user);
         
@@ -278,7 +290,7 @@ Analiza la situación brevemente (max 3 lineas) y sugiere el siguiente comando t
         }
         
         // Check if user exists, or if attacker has found valid credentials
-        const validCreds = (userAccount && (userAccount.password === 'toor' || userAccount.password === 'P@ssw0rd' || userAccount.password === 'Password123'));
+        const validCreds = (userAccount && (userAccount.password === 'toor' || userAccount.password === 'P@ssw0rd' || userAccount.password === 'Password123' || userAccount.password === 'DbP@ss2024!'));
         const hasFoundCreds = environment.attackProgress.credentials[`${user}@${targetHost.ip}`];
 
         if (!userAccount || (!validCreds && !hasFoundCreds)) {
@@ -302,11 +314,17 @@ Analiza la situación brevemente (max 3 lineas) y sugiere el siguiente comando t
             newEnvironment: newEnv
         };
     },
-    nmap: async (args, { environment }) => {
+    nmap: async (args, { environment, terminalState }) => {
         const target = args.find(arg => !arg.startsWith('-'));
         if (!target) return { output: [{ text: 'Se requiere un objetivo. Uso: nmap [opciones] <host>', type: 'error' }]};
 
         const targetHost = findHost(environment, target);
+        
+        // Pivoting check for Nmap
+        if (targetHost?.ip === '10.10.0.50' && terminalState.currentHostIp !== '10.0.0.10') {
+             return { output: [{ text: `Note: Host ${target} seems down.`, type: 'output' }], duration: 1500 };
+        }
+
         if (!targetHost) return { output: [{ text: `Note: Host ${target} seems down.`, type: 'output' }], duration: 1500 };
 
         const fw = environment.networks.dmz.firewall;
@@ -331,8 +349,8 @@ Analiza la situación brevemente (max 3 lineas) y sugiere el siguiente comando t
         });
         
         const newEnv = R.clone(environment);
-        if (!newEnv.attackProgress.reconnaissance.includes(targetHost.ip)) {
-            newEnv.attackProgress.reconnaissance.push(targetHost.ip);
+        if (!newEnv.attackProgress.reconnaissance.includes(targetHost.hostname)) {
+            newEnv.attackProgress.reconnaissance.push(targetHost.hostname);
         }
         
         return { output: [{ text: outputText, type: 'output' }], duration: 2500, newEnvironment: newEnv };
@@ -431,6 +449,15 @@ Analiza la situación brevemente (max 3 lineas) y sugiere el siguiente comando t
                     newEnv.defenseProgress.blockedIPs.push(ip);
                     fw.rules.push({ id: `deny-ip-${ip}`, action: 'deny', sourceIP: ip, protocol: 'any'});
                     outputText = `Rule added`;
+                    // Scenario 8 Logic: if attacker IP is blocked, reduce CPU load
+                    if(host.ip === '10.0.20.10' && ip === '192.168.1.100') {
+                        host.systemState = { ...host.systemState, cpuLoad: 15, networkConnections: 50 };
+                        // We need to ensure this host update persists in the newEnv structure
+                         const hostIndex = newEnv.networks.dmz.hosts.findIndex(h => h.ip === '10.0.20.10');
+                         if (hostIndex !== -1) {
+                             newEnv.networks.dmz.hosts[hostIndex] = host;
+                         }
+                    }
                 } else {
                     return { output: [{text: "Sintaxis de deny incompleta. Use 'ufw deny from <IP>'", type: 'error'}]};
                 }
@@ -613,7 +640,7 @@ ${processList}`;
             if (service.state === 'open' && isAllowed) {
                  let processName = 'unknown';
                 if (port === '22') processName = 'sshd';
-                if (port === '80' || port === '443') processName = 'apache2';
+                if (port === '80' || port === '443') processName = 'apache2/nginx';
                 if (port === '3306') processName = 'mysqld';
                 outputText += `tcp    LISTEN     0      128                  *:${port.padEnd(22)}*:*\t\tusers:(("${processName}",pid=1234,fd=3))\n`;
             }
@@ -650,7 +677,7 @@ ${processList}`;
         // Handle absolute paths or assume webroot
         let path = args[0];
         if (!path.startsWith('/')) {
-             if (args[0].includes('index.php') || args[0].includes('db_config')) {
+             if (args[0].includes('index.php') || args[0].includes('db_config') || args[0].includes('view.php')) {
                  path = `/var/www/html/${args[0]}`;
              } else {
                  // Fallback to check relative
@@ -738,12 +765,17 @@ ${processList}`;
         if (activeScenario?.id === 'escenario7' && target.includes('BOVEDA-WEB')) {
             return { output: [{ text: `---- Scanning URL: ${target} ----\n+ /index.php (CODE:200|SIZE:1234)\n+ /backup (CODE:301|SIZE:314) --> ${target}/backup/\n+ /admin (CODE:403|SIZE:293)`, type: 'output' }], duration: 2000 };
         }
+        if (activeScenario?.id === 'escenario9' && target.includes('WEB-DMZ-01')) {
+             return { output: [{ text: `---- Scanning URL: ${target} ----\n+ /index.php (CODE:200|SIZE:1234)\n+ /view.php (CODE:200|SIZE:512)\n+ /config.php (CODE:200|SIZE:0) --> [Empty Response]`, type: 'output' }], duration: 2000 };
+        }
         return { output: [{ text: `---- Scanning URL: ${target} ----\n+ /index.php (CODE:200|SIZE:123)\n+ /images (CODE:301|SIZE:0) --> ${target}/images/\n+ /uploads (CODE:403|SIZE:43)`, type: 'output' }], duration: 2000 };
     },
     curl: async (args, context) => {
-        const { environment, activeScenario } = context;
-        const url = args[0] || '';
+        const { environment, activeScenario, setEnvironment } = context;
+        const urlArg = args.find(a => a.startsWith('http'));
+        const url = urlArg || '';
 
+        // Scenario 7 Backup Logic
         if (activeScenario?.id === 'escenario7' && url.includes('BOVEDA-WEB')) {
             const host = findHost(environment, 'BOVEDA-WEB');
             if (url.endsWith('/backup/')) {
@@ -751,10 +783,41 @@ ${processList}`;
             }
             if (url.endsWith('db_config.php.bak')) {
                 const file = host?.files.find(f => f.path.includes('db_config.php.bak'));
-                 if (file) { // In scenario 7, this file is explicitly 644 (readable) initially
+                 if (file) { 
                     return { output: [{ text: file.content || '', type: 'output' }], duration: 400 };
                 }
                 return { output: [{ text: '403 Forbidden', type: 'error' }], duration: 400 };
+            }
+        }
+
+        // Scenario 9 LFI Logic
+        if (activeScenario?.id === 'escenario9' && url.includes('view.php?file=')) {
+            const filePath = url.split('file=')[1].split('&')[0];
+            
+            // Update progress if identifying LFI
+            if (environment.attackProgress.reconnaissance.includes('WEB-DMZ-01')) {
+                 // Logic for updating state handled implicitly by user action? No, better explicitly here.
+                 // But standard commands don't update state usually unless flags/specifics.
+                 // We'll rely on the AI logic or hints to verify. 
+            }
+
+            if (filePath === '/etc/passwd') {
+                const host = findHost(environment, 'WEB-DMZ-01');
+                const passwd = host?.files.find(f => f.path === '/etc/passwd');
+                return { output: [{ text: passwd?.content || '', type: 'output' }], duration: 600 };
+            }
+            if (filePath === 'config.php' || filePath === '/var/www/html/config.php') {
+                 const host = findHost(environment, 'WEB-DMZ-01');
+                 const config = host?.files.find(f => f.path === '/var/www/html/config.php');
+                 
+                 const newEnv = R.clone(environment);
+                 newEnv.attackProgress.credentials['root@10.10.0.50'] = 'DbP@ss2024!'; // Found DB creds
+
+                 return { 
+                     output: [{ text: config?.content || '', type: 'output' }], 
+                     duration: 600,
+                     newEnvironment: newEnv 
+                 };
             }
         }
         return { output: [{ text: 'Contenido de la página de inicio...', type: 'output' }], duration: 400 };
@@ -803,6 +866,30 @@ ${processList}`;
         }
         return { output: [{text: '', type: 'output'}]};
     },
+    // MySQL Client for Scenario 9
+    mysql: async (args, { environment, terminalState }) => {
+        // Expect pivoting context or direct connection
+        if (args.includes('-h') && args.includes('10.10.0.50')) {
+             // Check if we are in DMZ
+             if (terminalState.currentHostIp !== '10.0.0.10') {
+                  return { output: [{ text: `ERROR 2003 (HY000): Can't connect to MySQL server on '10.10.0.50' (110)`, type: 'error' }], duration: 1500 };
+             }
+             
+             // Simulate password check
+             if (args.includes('-p')) {
+                 // Assuming prompt for pass or provided in real implementation, here we assume success if logic flows
+                 const newEnv = R.clone(environment);
+                 if (!newEnv.attackProgress.compromised.includes('10.10.0.50')) {
+                     newEnv.attackProgress.compromised.push('10.10.0.50');
+                 }
+                 return { 
+                     output: [{ text: `Welcome to the MySQL monitor.  Commands end with ; or \\g.\nYour MySQL connection id is 8\nServer version: 8.0.35-0ubuntu0.20.04.1 (Ubuntu)\n\nMySQL [(none)]> `, type: 'output' }],
+                     newEnvironment: newEnv
+                 };
+             }
+        }
+        return { output: [{ text: "Uso: mysql -h <host> -u <user> -p", type: 'error'}] };
+    }
 };
 
 
@@ -892,7 +979,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
         }
     }, [sessionId]);
     
-    // --- AI OPPONENT LOGIC ---
+    // --- AI OPPONENT LOGIC IMPROVED ---
     const toggleAiOpponent = useCallback(() => setIsAiActive(prev => !prev), []);
 
     useEffect(() => {
@@ -903,39 +990,71 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
             let actionMessage = '';
             let updates: Partial<VirtualEnvironment> = {};
             
-            // Simple AI Logic State Machine
-            if (aiTeam === 'red') {
-                // AI is Attacker
-                if (!environment.attackProgress.compromised.includes('10.0.20.10')) {
-                    const load = environment.networks.dmz.hosts[0]?.systemState?.cpuLoad || 5;
-                    if (load < 50) {
+            // Enhanced AI Logic based on Scenario and State
+            if (activeScenario.id === 'escenario8') {
+                if (aiTeam === 'red') {
+                    // Red Team AI for Scenario 8 (DoS)
+                    const host = environment.networks.dmz.hosts[0];
+                    if ((host.systemState?.cpuLoad || 0) < 50) {
                         actionMessage = 'hping3 --flood -S -p 80 PORTAL-WEB';
                         updates = { networks: R.clone(environment.networks) };
                         updates.networks!['dmz'].hosts[0].systemState!.cpuLoad = 95;
+                        updates.networks!['dmz'].hosts[0].systemState!.networkConnections = 5000;
                     } else {
-                        actionMessage = 'hydra -l admin -P rockyou.txt ssh://PORTAL-WEB';
-                        updates = { attackProgress: R.clone(environment.attackProgress) };
-                        updates.attackProgress!.credentials['admin@10.0.20.10'] = 'P@ssw0rd';
+                        // Maintain attack
+                        if(Math.random() > 0.7) actionMessage = 'hydra -l admin -P rockyou.txt ssh://PORTAL-WEB';
                     }
                 } else {
-                     actionMessage = 'echo "<?php system($_GET[\'cmd\']); ?>" > /var/www/html/shell.php';
-                     updates = { attackProgress: R.clone(environment.attackProgress) };
-                     updates.attackProgress!.persistence.push('webshell');
+                     // Blue Team AI for Scenario 8
+                    const host = environment.networks.dmz.hosts[0];
+                    if ((host.systemState?.cpuLoad || 0) > 80 && !environment.defenseProgress.blockedIPs.includes('192.168.1.100')) {
+                        actionMessage = 'sudo ufw deny from 192.168.1.100';
+                        updates = { defenseProgress: R.clone(environment.defenseProgress), networks: R.clone(environment.networks) };
+                        updates.defenseProgress!.blockedIPs.push('192.168.1.100');
+                        updates.networks!['dmz'].hosts[0].systemState!.cpuLoad = 15; // Mitigate
+                        updates.networks!['dmz'].firewall.rules.push({ id: 'deny-ai', action: 'deny', sourceIP: '192.168.1.100', protocol: 'any'});
+                    }
+                }
+            } else if (activeScenario.id === 'escenario9') {
+                if (aiTeam === 'red') {
+                    // Red Team AI for Scenario 9 (Kill Chain)
+                    if (!environment.attackProgress.reconnaissance.includes('WEB-DMZ-01')) {
+                         actionMessage = 'nmap -sV -sC 10.0.0.10';
+                         updates = { attackProgress: R.clone(environment.attackProgress) };
+                         updates.attackProgress!.reconnaissance.push('WEB-DMZ-01');
+                    } else if (!environment.attackProgress.credentials['root@10.10.0.50']) {
+                        actionMessage = 'curl "http://10.0.0.10/view.php?file=config.php"';
+                        updates = { attackProgress: R.clone(environment.attackProgress) };
+                        updates.attackProgress!.credentials['root@10.10.0.50'] = 'DbP@ss2024!';
+                    } else if (!environment.attackProgress.compromised.includes('10.10.0.50')) {
+                        actionMessage = 'ssh root@10.10.0.50'; // Pivot
+                        updates = { attackProgress: R.clone(environment.attackProgress) };
+                        updates.attackProgress!.compromised.push('10.10.0.50');
+                    }
+                } else {
+                     // Blue Team AI for Scenario 9
+                     // Check logs logic
+                     if (!environment.defenseProgress.patchedVulnerabilities.includes('LFI')) {
+                         actionMessage = 'grep "view.php" /var/log/nginx/access.log';
+                         // Simulate spotting it
+                         if (Math.random() > 0.6) {
+                             updates = { defenseProgress: R.clone(environment.defenseProgress) };
+                             updates.defenseProgress!.patchedVulnerabilities.push('LFI');
+                         }
+                     } else {
+                         // Block pivoteo
+                         const fw = environment.networks.dmz.firewall;
+                         if (!fw.rules.some(r => r.destPort === 3306 && r.action === 'deny')) {
+                            actionMessage = 'sudo ufw deny out 3306';
+                            updates = { networks: R.clone(environment.networks) };
+                            updates.networks!['dmz'].firewall.rules.push({ id: 'deny-mysql-out', action: 'deny', destPort: 3306, protocol: 'tcp' });
+                         }
+                     }
                 }
             } else {
-                // AI is Defender
-                const load = environment.networks.dmz.hosts[0]?.systemState?.cpuLoad || 5;
-                if (load > 80) {
-                     actionMessage = 'sudo ufw deny from 192.168.1.100';
-                     updates = { defenseProgress: R.clone(environment.defenseProgress), networks: R.clone(environment.networks) };
-                     updates.defenseProgress!.blockedIPs.push('192.168.1.100');
-                     updates.networks!['dmz'].hosts[0].systemState!.cpuLoad = 5; // Mitigate
-                     updates.networks!['dmz'].firewall.rules.push({ id: 'deny-ai', action: 'deny', sourceIP: '192.168.1.100', protocol: 'any'});
-                } else {
-                    const rand = Math.random();
-                    if (rand > 0.5) actionMessage = 'tail -f /var/log/auth.log';
-                    else actionMessage = 'top';
-                }
+                // Default / Random behavior for other scenarios
+                const rand = Math.random();
+                if (rand > 0.7) actionMessage = aiTeam === 'red' ? 'nmap -sV target' : 'tail -f /var/log/auth.log';
             }
 
             // Execute AI Action
@@ -956,7 +1075,7 @@ export const SimulationProvider: React.FC<SimulationProviderProps> = ({ children
                 }
             }
             
-        }, 12000); // Run every 12 seconds
+        }, 10000); // Run every 10 seconds
 
         return () => clearInterval(aiLoop);
     }, [isAiActive, activeScenario, team, environment, sessionId, updateDbState]);
