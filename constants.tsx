@@ -829,7 +829,7 @@ export const COMMAND_LIBRARY: CommandLibraryData = {
               { "command": "reset", "description": "Elimina todas las reglas" },
               { "command": "reload", "description": "Recarga las reglas sin interrumpir conexiones" }
             ],
-            "bestPractices": [
+            "securityBestPractices": [
               "✅ Siempre permitir SSH ANTES de activar el firewall",
               "✅ Usar el principio de menor privilegio (denegar todo, permitir lo necesario)",
               "✅ Documentar cada regla con comentarios",
@@ -1363,7 +1363,7 @@ export const COMMAND_LIBRARY: CommandLibraryData = {
               "step2": "Verificar regularmente: sha256sum -c baseline.txt",
               "step3": "Investigar diferencias si el hash no coincide"
             },
-            "bestPractices": [
+            "securityBestPractices": [
               "Crear hashes de archivos críticos después de instalación limpia",
               "Almacenar hashes en ubicación segura (fuera del servidor)",
               "Automatizar verificación con cron",
