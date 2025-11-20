@@ -65,6 +65,7 @@ export const Icon: React.FC<IconProps> = ({ name, className, ...props }) => {
         'bot': <><rect width="18" height="10" x="3" y="11" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" x2="8" y1="16" y2="16"/><line x1="16" x2="16" y1="16" y2="16"/></>,
         'settings': <><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></>,
         'globe': <><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></>,
+        'zap': <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
     };
 
     return (
@@ -212,6 +213,36 @@ const INITIAL_ENV_SCENARIO_7: VirtualEnvironment = {
     timeline: []
 };
 
+const INITIAL_ENV_SCENARIO_8: VirtualEnvironment = {
+    networks: {
+        dmz: {
+            hosts: [{
+                ip: '10.0.20.10',
+                hostname: 'PORTAL-WEB',
+                os: 'linux',
+                services: {
+                    22: { name: 'ssh', version: 'OpenSSH 8.2', state: 'open', vulnerabilities: [] },
+                    80: { name: 'http', version: 'Nginx 1.18', state: 'open', vulnerabilities: [] }
+                },
+                users: [
+                    { username: 'admin', password: 'P@ssw0rd', privileges: 'user' },
+                    { username: 'root', password: 'toor', privileges: 'root' }
+                ],
+                files: [
+                     { path: '/var/www/html/index.php', permissions: '644', hash: 'orig', content: '<h1>Portal Corporativo</h1>' },
+                     { path: '/var/log/auth.log', permissions: '640', hash: 'log', content: '' }
+                ],
+                systemState: { cpuLoad: 95, memoryUsage: 80, networkConnections: 5000, failedLogins: 150 }
+            }],
+            firewall: { enabled: true, rules: [] },
+            ids: { enabled: true, signatures: [], alerts: [] }
+        }
+    },
+    attackProgress: { reconnaissance: [], compromised: [], credentials: {}, persistence: [] },
+    defenseProgress: { hardenedHosts: [], blockedIPs: [], patchedVulnerabilities: [] },
+    timeline: []
+};
+
 export const TRAINING_SCENARIOS: (TrainingScenario | InteractiveScenario)[] = [
     {
         id: 'escenario7',
@@ -237,6 +268,30 @@ export const TRAINING_SCENARIOS: (TrainingScenario | InteractiveScenario)[] = [
         hints: [
             { trigger: (env) => !env.attackProgress.reconnaissance.includes('10.0.10.5'), message: "Rojo: Usa 'nmap 10.0.10.5' para descubrir puertos abiertos." },
             { trigger: (env) => !env.networks.dmz.firewall.enabled, message: "Azul: El firewall está desactivado. Usa 'sudo ufw enable' y revisa el estado." }
+        ],
+        evaluation: () => ({ completed: false, score: 0, feedback: [] })
+    },
+    {
+        id: 'escenario8',
+        isInteractive: true,
+        icon: 'activity',
+        color: 'bg-orange-500',
+        title: 'Escenario 8: Furia en la Red',
+        subtitle: 'Respuesta a Incidentes: DoS',
+        description: 'El portal corporativo (10.0.20.10) está bajo un ataque masivo de Denegación de Servicio. El CPU está saturado y los usuarios reportan caída del servicio. Identifica la fuente y mitiga el ataque configurando el firewall.',
+        difficulty: 'intermediate',
+        team: 'both',
+        initialEnvironment: INITIAL_ENV_SCENARIO_8,
+        objectives: [
+            { id: 'blue-1', description: 'Identificar la IP atacante (top / ss)', points: 20, required: true, validator: (env) => true }, // Implicit via detection
+            { id: 'blue-2', description: 'Bloquear IP atacante (ufw deny from ...)', points: 40, required: true, validator: (env) => env.defenseProgress.blockedIPs.includes('192.168.1.100') },
+            { id: 'blue-3', description: 'Restaurar servicio (CPU < 50%)', points: 40, required: true, validator: (env) => (env.networks.dmz.hosts[0].systemState?.cpuLoad || 0) < 50 },
+            { id: 'red-1', description: 'Ejecutar ataque DoS (hping3)', points: 50, required: true, validator: (env) => (env.networks.dmz.hosts[0].systemState?.cpuLoad || 0) > 90 },
+            { id: 'red-2', description: 'Instalar backdoor (echo ... >> index.php)', points: 50, required: true, validator: (env) => env.attackProgress.persistence.includes('backdoor') }
+        ],
+        hints: [
+            { trigger: (env) => (env.networks.dmz.hosts[0].systemState?.cpuLoad || 0) > 80, message: "Azul: El sistema está lento. Ejecuta 'top' para ver el consumo de CPU." },
+            { trigger: (env) => env.defenseProgress.blockedIPs.length === 0, message: "Azul: Usa 'ss -ant' o 'netstat' para ver muchas conexiones de una misma IP. Bloquéala con 'sudo ufw deny from [IP]'." }
         ],
         evaluation: () => ({ completed: false, score: 0, feedback: [] })
     }
@@ -273,6 +328,11 @@ export const SCENARIO_HELP_TEXTS: { [key: string]: { red: string; blue: string; 
         red: "<p class='mt-2 text-red-300'>Objetivo: Acceder al servidor 10.0.10.5. Prueba si el usuario 'root' tiene una contraseña débil o si el servicio SSH permite login de root.</p>", 
         blue: "<p class='mt-2 text-blue-300'>Objetivo: Asegurar el servidor 10.0.10.5. Revisa /etc/ssh/sshd_config y asegúrate de que el firewall esté activo.</p>",
         general: "<p class='text-yellow-200'>Escenario 7: Un servidor mal configurado es un riesgo crítico.</p>"
+    },
+    'escenario8': {
+        red: "<p class='mt-2 text-red-300'>Objetivo: Saturar el servidor 10.0.20.10. Usa 'hping3' para ejecutar un ataque DoS. Intenta colocar persistencia mientras el equipo azul está distraído.</p>",
+        blue: "<p class='mt-2 text-blue-300'>Objetivo: Restaurar el servicio. Identifica la IP que está causando el tráfico masivo con 'ss' o 'netstat' y bloquéala con 'ufw'.</p>",
+        general: "<p class='text-yellow-200'>Escenario 8: Denegación de Servicio (DoS) y respuesta a incidentes.</p>"
     }
 };
 
@@ -298,6 +358,27 @@ FASE 3: DEFENSA (AZUL)
 - Activar Firewall:
   1. 'sudo ufw allow 22/tcp' (¡Importante para no bloquearse!)
   2. 'sudo ufw enable'
+`;
+
+export const SCENARIO_8_GUIDE = `
+GUÍA EXPERTA - ESCENARIO 8: FURIA EN LA RED
+
+SITUACIÓN: Servidor 10.0.20.10 bajo ataque DoS masivo y fuerza bruta.
+
+FASE 1: ANÁLISIS DE INCIDENTE (AZUL)
+- Ejecutar 'top': Verificar carga de CPU (>90% es crítico).
+- Ejecutar 'ss -ant': Verificar conexiones establecidas. Buscar IPs repetidas.
+- Ejecutar 'tail -f /var/log/auth.log': Identificar intentos de login fallidos.
+
+FASE 2: MITIGACIÓN (AZUL)
+- Identificar IP maliciosa (simulada: 192.168.1.100).
+- Bloquear IP: 'sudo ufw deny from 192.168.1.100'.
+- Verificar caída de carga: Ejecutar 'top' nuevamente.
+
+FASE 3: ATAQUE (ROJO)
+- Ejecutar DoS: 'hping3 --flood -S 10.0.20.10'.
+- Aprovechar la distracción para instalar persistencia:
+  'echo "backdoor" >> /var/www/html/index.php'
 `;
 
 export const COMMAND_LIBRARY: CommandLibraryData = {
