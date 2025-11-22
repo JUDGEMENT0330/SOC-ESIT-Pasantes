@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { DualTerminalView } from './components/DualTerminalView';
 import { Auth } from './components/Auth';
