@@ -4,7 +4,7 @@ import type { VirtualEnvironment, LogEntry, SessionData, TerminalLine, PromptSta
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { RED_TEAM_HELP_TEXT, BLUE_TEAM_HELP_TEXT, GENERAL_HELP_TEXT, SCENARIO_HELP_TEXTS, TRAINING_SCENARIOS, SCENARIO_7_GUIDE, SCENARIO_8_GUIDE, SCENARIO_9_GUIDE } from './constants';
 import * as R from 'https://aistudiocdn.com/ramda@^0.32.0';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "https://esm.sh/@google/genai";
 
 // ============================================================================
 // DB State Type (Matches actual Supabase schema)
@@ -833,7 +833,10 @@ export const SimulationProvider: React.FC<{ sessionData: SessionData; children: 
 
     const startScenario = async (scenarioId: string) => {
         const scenario = TRAINING_SCENARIOS.find(s => s.id === scenarioId);
-        if (!scenario || !('isInteractive' in scenario)) return false;
+        // Correctly narrow the type to InteractiveScenario.
+        // TrainingScenario has 'isInteractive' as optional false, while InteractiveScenario has 'isInteractive' as true.
+        // Checking for truthiness of isInteractive ensures it is an InteractiveScenario.
+        if (!scenario || !scenario.isInteractive) return false;
         
         const newEnv = R.clone(scenario.initialEnvironment);
         setEnvironment(newEnv);
