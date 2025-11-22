@@ -64,7 +64,7 @@ export const Icon: React.FC<IconProps> = ({ name, className, ...props }) => {
         'star': <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>,
         'bot': <><rect width="18" height="10" x="3" y="11" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" x2="8" y1="16" y2="16"/><line x1="16" x2="16" y1="16" y2="16"/></>,
         'settings': <><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></>,
-        'globe': <><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></>,
+        'globe': <><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z"/></>,
         'zap': <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
     };
 
@@ -331,7 +331,8 @@ export const incidentReportScenario: InteractiveScenario = {
                         { path: '/var/www/html/admin.php', permissions: '644', content: '<?php\n// Admin panel\nif($_SESSION["admin"]) { echo "Welcome Admin"; }\n?>', hash: 'admin_hash_456' },
                         { path: '/var/log/apache2/access.log', permissions: '640', content: '', hash: 'log_hash_789' },
                         { path: '/var/log/apache2/error.log', permissions: '640', content: '', hash: 'log_hash_790' },
-                        { path: '/home/blue-team/incident_report.txt', permissions: '600', content: '', hash: 'report_hash_001' }
+                        { path: '/home/blue-team/incident_report.txt', permissions: '600', content: '', hash: 'report_hash_001' },
+                        { path: '/home/blue-team/red_team_report.txt', permissions: '600', content: '', hash: 'report_hash_002' }
                     ],
                     systemState: {
                         cpuLoad: 8.0,
