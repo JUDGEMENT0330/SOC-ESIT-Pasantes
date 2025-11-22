@@ -791,14 +791,48 @@ export const SimulationProvider: React.FC<{ sessionData: SessionData; children: 
                 .eq('session_id', sessionData.sessionId)
                 .order('timestamp', { ascending: true });
 
-            if (stateData && stateData.active_scenario) {
-                setActiveScenarioId(stateData.active_scenario);
-                const scenario = TRAINING_SCENARIOS.find(s => s.id === stateData.active_scenario) as InteractiveScenario;
-                if (scenario) {
-                    setEnvironment(mapDbRowToEnvironment(stateData, scenario));
-                    setTerminals(mapDbRowToTerminals(stateData));
+            let initialTerminals: TerminalState[] = [];
+
+            if (stateData) {
+                if (stateData.active_scenario) {
+                    setActiveScenarioId(stateData.active_scenario);
+                    const scenario = TRAINING_SCENARIOS.find(s => s.id === stateData.active_scenario) as InteractiveScenario;
+                    if (scenario) {
+                        setEnvironment(mapDbRowToEnvironment(stateData, scenario));
+                    }
                 }
+                initialTerminals = mapDbRowToTerminals(stateData);
             }
+            
+            // Ensure terminals exist even if no scenario is active (New Session fix)
+            if (initialTerminals.length === 0) {
+                 initialTerminals = [
+                    {
+                        id: 'red-1',
+                        name: 'Terminal Rojo 1',
+                        output: [{ text: "Sesión iniciada. Seleccione un escenario en 'Capacitación' o use 'start-scenario [id]'.", type: 'output' }],
+                        prompt: { user: 'pasante-red', host: 'kali', dir: '~' },
+                        history: [],
+                        historyIndex: -1,
+                        input: '',
+                        mode: 'normal',
+                        isBusy: false
+                    },
+                    {
+                        id: 'blue-1',
+                        name: 'Terminal Azul 1',
+                        output: [{ text: "Sesión iniciada. Seleccione un escenario en 'Capacitación' o use 'start-scenario [id]'.", type: 'output' }],
+                        prompt: { user: 'pasante-blue', host: 'soc-valtorix', dir: '~' },
+                        history: [],
+                        historyIndex: -1,
+                        input: '',
+                        mode: 'normal',
+                        isBusy: false
+                    }
+                ];
+            }
+
+            setTerminals(initialTerminals);
             
             if (logData) setLogs(logData as LogEntry[]);
         };
@@ -833,10 +867,7 @@ export const SimulationProvider: React.FC<{ sessionData: SessionData; children: 
 
     const startScenario = async (scenarioId: string) => {
         const scenario = TRAINING_SCENARIOS.find(s => s.id === scenarioId);
-        // Correctly narrow the type to InteractiveScenario.
-        // TrainingScenario has 'isInteractive' as optional false, while InteractiveScenario has 'isInteractive' as true.
-        // Checking for truthiness of isInteractive ensures it is an InteractiveScenario.
-        if (!scenario || !scenario.isInteractive) return false;
+        if (!scenario || !('isInteractive' in scenario)) return false;
         
         const newEnv = R.clone(scenario.initialEnvironment);
         setEnvironment(newEnv);
@@ -884,7 +915,8 @@ export const SimulationProvider: React.FC<{ sessionData: SessionData; children: 
     };
 
     const processCommand = async (terminalId: string, cmdString: string) => {
-        if (!cmdString.trim() || !environment || !activeScenario) return;
+        if (!cmdString.trim()) return; 
+        // Removed strict check for environment/activeScenario to allow meta-commands.
 
         const terminalIndex = terminals.findIndex(t => t.id === terminalId);
         if (terminalIndex === -1) return;
@@ -904,13 +936,18 @@ export const SimulationProvider: React.FC<{ sessionData: SessionData; children: 
 
         let result: CommandResult = { output: [{ text: `Comando no encontrado: ${cmdName}`, type: 'error' }] };
 
-        if (handler) {
+        // Allow limited commands if no environment is loaded
+        const envIndependentCommands = ['start-scenario', 'help', 'clear', 'marca', 'whoami', 'exit'];
+        
+        if (!environment && !envIndependentCommands.includes(cmdName)) {
+             result = { output: [{ text: "Error: No hay un escenario activo. Use 'start-scenario <id>' o seleccione uno en la pestaña Capacitación.", type: 'error' }] };
+        } else if (handler) {
             try {
                 const context: CommandContext = {
                     userTeam: terminalId.startsWith('red') ? 'red' : 'blue',
                     terminalState: currentTerminal,
-                    environment,
-                    activeScenario,
+                    environment: environment!, // Safe force-cast for independent commands
+                    activeScenario: activeScenario!,
                     setEnvironment,
                     startScenario
                 };
@@ -940,9 +977,6 @@ export const SimulationProvider: React.FC<{ sessionData: SessionData; children: 
 
         if (result.newEnvironment) {
             setEnvironment(result.newEnvironment);
-            
-            // Check objectives and log if completed
-            // This logic could be expanded
         }
 
         // 4. Sync to DB
