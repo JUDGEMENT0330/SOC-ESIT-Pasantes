@@ -788,6 +788,37 @@ const scenarioEvaluations = [
             ],
             total: '120 (+15 Bonus)'
         }
+    },
+    {
+        title: 'Escenario 11: El Primer Reporte',
+        blueTeam: {
+          headers: ["Tarea", "Puntos"],
+          rows: [
+            ["Detección de escaneo", "10"],
+            ["Detección de SQL Injection", "15"],
+            ["Bloqueo de IP atacante", "20"],
+            ["Detención de servicios", "15"],
+            ["Recolección de evidencias", "20"],
+            ["Preservación de logs", "15"],
+            ["Aplicación de parches", "20"],
+            ["Reporte ESIT completo", "35"],
+            ["Análisis forense avanzado (Bonus)", "+15"]
+          ],
+          total: "150 (+15 Bonus)"
+        },
+        redTeam: {
+          headers: ["Tarea", "Puntos"],
+          rows: [
+            ["Reconocimiento", "10"],
+            ["SQL Injection exitoso", "25"],
+            ["Acceso al panel admin", "20"],
+            ["Despliegue de webshell", "25"],
+            ["Exfiltración de datos", "20"],
+            ["Reporte técnico completo", "30"],
+            ["Cobertura de rastros (Bonus)", "+10"]
+          ],
+          total: "130 (+10 Bonus)"
+        }
     }
 ];
 
