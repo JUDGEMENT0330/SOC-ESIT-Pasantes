@@ -82,7 +82,7 @@ const mapTerminalsToDbRow = (terminals: TerminalState[]): Partial<SimulationStat
 const mapDbRowToTerminals = (row: SimulationStateRow): TerminalState[] => {
     const redTerminals: TerminalState[] = [];
     const blueTerminals: TerminalState[] = [];
-    const defaultRedPrompt: PromptState = { user: 'pasante-red', host: 'soc-valtorix', dir: '~' };
+    const defaultRedPrompt: PromptState = { user: 'pasante-red', host: 'kali', dir: '~' };
     const defaultBluePrompt: PromptState = { user: 'pasante-blue', host: 'soc-valtorix', dir: '~' };
 
     const redData = row.terminal_output_red as any[] | undefined;
@@ -792,6 +792,7 @@ export const SimulationProvider: React.FC<{ sessionData: SessionData; children: 
                 .order('timestamp', { ascending: true });
 
             let initialTerminals: TerminalState[] = [];
+            let needsUpdate = false;
 
             if (stateData) {
                 if (stateData.active_scenario) {
@@ -830,11 +831,18 @@ export const SimulationProvider: React.FC<{ sessionData: SessionData; children: 
                         isBusy: false
                     }
                 ];
+                needsUpdate = true;
             }
 
             setTerminals(initialTerminals);
             
             if (logData) setLogs(logData as LogEntry[]);
+
+            // FIX: Persist defaults if they were generated, ensuring they appear for the user
+            if (needsUpdate && stateData) {
+                 const dbRowTerminals = mapTerminalsToDbRow(initialTerminals);
+                 await supabase.from('simulation_state').update(dbRowTerminals).eq('session_id', sessionData.sessionId);
+            }
         };
 
         initSession();
@@ -867,9 +875,10 @@ export const SimulationProvider: React.FC<{ sessionData: SessionData; children: 
 
     const startScenario = async (scenarioId: string) => {
         const scenario = TRAINING_SCENARIOS.find(s => s.id === scenarioId);
-        if (!scenario || !('isInteractive' in scenario)) return false;
+        if (!scenario || !('isInteractive' in scenario) || !scenario.isInteractive) return false;
         
-        const newEnv = R.clone(scenario.initialEnvironment);
+        const interactiveScenario = scenario as InteractiveScenario;
+        const newEnv = R.clone(interactiveScenario.initialEnvironment);
         setEnvironment(newEnv);
         setActiveScenarioId(scenarioId);
         setLogs([]);
@@ -916,12 +925,21 @@ export const SimulationProvider: React.FC<{ sessionData: SessionData; children: 
 
     const processCommand = async (terminalId: string, cmdString: string) => {
         if (!cmdString.trim()) return; 
-        // Removed strict check for environment/activeScenario to allow meta-commands.
-
+        
         const terminalIndex = terminals.findIndex(t => t.id === terminalId);
-        if (terminalIndex === -1) return;
+        // If terminal doesn't exist locally but we want to simulate AI action, we allow it if AI
+        const isAiAction = terminalId.includes('-ai-');
+        let currentTerminal = terminals[terminalIndex];
 
-        const currentTerminal = terminals[terminalIndex];
+        if (!currentTerminal && isAiAction) {
+             // Mock terminal for AI internal use to allow logic to proceed if needed,
+             // or simply return. For now, if AI tries to use a non-existent terminal, we skip visual output but maybe should process logic.
+             // Better: AI should target existing terminals or we add logic to create a hidden context.
+             // Simplification: We only process if terminal exists.
+             return; 
+        }
+        if (!currentTerminal) return;
+
         
         // 1. Echo command locally immediately
         const newOutput = [...currentTerminal.output, { text: cmdString, type: 'command' } as TerminalLine];
@@ -1026,6 +1044,54 @@ export const SimulationProvider: React.FC<{ sessionData: SessionData; children: 
     };
 
     const toggleAiOpponent = () => setIsAiActive(!isAiActive);
+
+    // AI Opponent Logic Loop
+    useEffect(() => {
+        let aiInterval: NodeJS.Timeout;
+
+        if (isAiActive && environment && activeScenarioId) {
+            aiInterval = setInterval(async () => {
+                // Determine AI Identity (Opposite of user)
+                const aiTeam = sessionData.team === 'red' ? 'blue' : 'red';
+                
+                // Try to find an existing terminal for the AI to "use" visually
+                // We pick the first terminal of the opposing team
+                const targetTerminal = terminals.find(t => t.id.startsWith(aiTeam));
+                
+                if (targetTerminal) {
+                    // Pick a relevant command based on team
+                    let cmd = '';
+                    if (aiTeam === 'red') {
+                        // Aggressive Red Team Actions
+                        const cmds = [
+                            'nmap -sV 10.0.10.5', 
+                            'hydra -l root -P rockyou.txt ssh://10.0.10.5', 
+                            'ls -la /var/www/html',
+                            'curl http://10.0.10.5/login.php',
+                            'whoami'
+                        ];
+                        cmd = cmds[Math.floor(Math.random() * cmds.length)];
+                    } else {
+                        // Aggressive Blue Team Monitoring
+                        const cmds = [
+                            'sudo ufw status', 
+                            'journalctl -f', 
+                            'ps aux', 
+                            'netstat -tulnp',
+                            'tail -f /var/log/auth.log'
+                        ];
+                        cmd = cmds[Math.floor(Math.random() * cmds.length)];
+                    }
+                    
+                    // Execute
+                    // Note: This relies on terminals being in state. Since this effect has terminals in deps,
+                    // it will reset interval on terminal change, which acts as a natural delay between user and AI actions.
+                    await processCommand(targetTerminal.id, cmd);
+                }
+            }, 8000); // 8 seconds loop for "aggressive" feel without overwhelming DB
+        }
+        return () => clearInterval(aiInterval);
+    }, [isAiActive, environment, activeScenarioId, sessionData.team, terminals]);
 
     return (
         <SimulationContext.Provider value={{
