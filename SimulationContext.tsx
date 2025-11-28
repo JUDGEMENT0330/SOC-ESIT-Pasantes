@@ -65,23 +65,30 @@ const TRAINING_SCENARIOS: InteractiveScenario[] = [
     }
 ];
 
-// Mock Supabase Client for Compilation
+// Mock Supabase Client for Compilation (Fixes "subscribe is not a function")
+const createMockChannel = () => {
+    // Recursive object to allow infinite .on() chaining
+    const channelMock: any = {
+        on: () => channelMock,
+        subscribe: () => channelMock,
+        unsubscribe: () => Promise.resolve()
+    };
+    return channelMock;
+};
+
 const supabase = {
-    channel: (name: string) => ({
-        on: () => ({ on: () => ({ subscribe: () => {} }) }),
-        subscribe: () => {}
-    }),
+    channel: (name: string) => createMockChannel(),
     removeChannel: () => {},
     from: (table: string) => ({
         select: (cols: string) => ({
             eq: (col: string, val: any) => ({
-                single: async () => ({ data: null }),
-                order: () => Promise.resolve({ data: [] })
+                single: async () => ({ data: null, error: null }),
+                order: async () => ({ data: [], error: null })
             })
         }),
-        update: (data: any) => ({ eq: () => Promise.resolve({ error: null }) }),
-        insert: (data: any) => Promise.resolve({ error: null }),
-        delete: () => ({ eq: () => Promise.resolve({ error: null }) })
+        update: (data: any) => ({ eq: async () => ({ error: null }) }),
+        insert: async (data: any) => ({ error: null }),
+        delete: () => ({ eq: async () => ({ error: null }) })
     })
 };
 
